@@ -1015,32 +1015,9 @@
         try {
             const fileName = filePath.split(/[\\/]/).pop().replace(/\.[^/.]+$/, "");
             
-            // Останавливаем и удаляем предыдущий звук, если есть
-            const oldSoundData = this.soundEffects.get(padIndex);
-            if (oldSoundData && oldSoundData.sound) {
-                try {
-                    oldSoundData.sound.unload();
-                } catch (e) {
-                    console.warn('Error unloading old sound:', e);
-                }
-            }
-            
-            const sound = new Howl({
-                src: [filePath],
-                volume: this.effectsVolume,
-                html5: true,
-                onloaderror: (id, error) => {
-                    this.updateStatus('Ошибка загрузки эффекта', 'error');
-                    console.error('Sound load error:', error);
-                },
-                onplayerror: (id, error) => {
-                    this.updateStatus('Ошибка воспроизведения эффекта', 'error');
-                    console.error('Sound play error:', error);
-                }
-            });
-
+            // Просто сохраняем информацию о звуке, но не загружаем его
             this.soundEffects.set(padIndex, {
-                sound: sound,
+                sound: null, // Загрузим при первом воспроизведении
                 name: fileName,
                 path: filePath
             });
@@ -1062,55 +1039,72 @@
 
     playSoundEffect(padIndex) {
         const soundData = this.soundEffects.get(padIndex);
-        if (soundData && soundData.sound) {
-            const pad = document.querySelector(`.sound-pad[data-index="${padIndex}"]`);
-            if (pad) {
-                pad.classList.add('playing');
-                
-                // Визуальная обратная связь
-                this.animatePadPress(pad);
-            }
-            
+        if (!soundData || !soundData.path) {
+            this.updateStatus('Пад не настроен', 'warning');
+            return;
+        }
+
+        const playSound = (sound, soundData, pad) => {
             try {
-                const soundId = soundData.sound.play();
-                const duration = soundData.sound.duration();
+                const soundId = sound.play();
+                const duration = sound.duration();
                 
-                // Запускаем отслеживание прогресса пада
+                if (pad) {
+                    pad.classList.add('playing');
+                }
+                
                 if (duration && duration > 0) {
                     this.startPadProgress(padIndex, duration);
                 }
                 
-                // Отслеживаем окончание воспроизведения для удаления класса playing
                 if (soundId !== undefined) {
-                    soundData.sound.once('end', () => {
+                    sound.once('end', () => {
                         this.stopPadProgress(padIndex);
-                        if (pad) {
-                            pad.classList.remove('playing');
-                        }
+                        if (pad) pad.classList.remove('playing');
                     }, soundId);
-                } else {
-                    // Если play() не вернул ID, используем таймаут как fallback
-                    if (duration && duration > 0) {
-                        setTimeout(() => {
-                            this.stopPadProgress(padIndex);
-                            if (pad) {
-                                pad.classList.remove('playing');
-                            }
-                        }, duration * 1000 + 100);
-                    }
+                } else if (duration && duration > 0) {
+                    setTimeout(() => {
+                        this.stopPadProgress(padIndex);
+                        if (pad) pad.classList.remove('playing');
+                    }, duration * 1000 + 100);
                 }
                 
                 this.updateStatus(`Эффект: ${soundData.name}`, 'success');
             } catch (error) {
                 console.error('Error playing sound effect:', error);
                 this.stopPadProgress(padIndex);
-                if (pad) {
-                    pad.classList.remove('playing');
-                }
+                if (pad) pad.classList.remove('playing');
                 this.updateStatus('Ошибка воспроизведения эффекта', 'error');
             }
+        };
+
+        const pad = document.querySelector(`.sound-pad[data-index="${padIndex}"]`);
+        this.animatePadPress(pad);
+
+        if (soundData.sound) {
+            // Звук уже загружен, просто воспроизводим
+            playSound(soundData.sound, soundData, pad);
         } else {
-            this.updateStatus('Пад не настроен', 'warning');
+            // Загружаем звук при первом воспроизведении
+            this.updateStatus(`Загрузка: ${soundData.name}...`);
+            const sound = new Howl({
+                src: [soundData.path],
+                volume: this.effectsVolume,
+                html5: true,
+                onload: () => {
+                    soundData.sound = sound; // Сохраняем загруженный звук
+                    this.updateStatus(`Готово: ${soundData.name}`);
+                    playSound(sound, soundData, pad);
+                },
+                onloaderror: (id, error) => {
+                    this.updateStatus(`Ошибка загрузки: ${soundData.name}`, 'error');
+                    console.error('Sound load error:', error);
+                },
+                onplayerror: (id, error) => {
+                    this.updateStatus('Ошибка воспроизведения эффекта', 'error');
+                    console.error('Sound play error:', error);
+                }
+            });
         }
     }
     

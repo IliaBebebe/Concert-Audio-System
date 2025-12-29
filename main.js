@@ -116,6 +116,7 @@ function createWindow() {
 
   // Загружаем HTML
   const htmlPath = path.join(__dirname, 'index.html');
+  console.log(`Loading HTML from: ${htmlPath}`);
   mainWindow.loadFile(htmlPath).catch((error) => {
     console.error('Error loading HTML:', error);
     // Fallback - показываем окно даже при ошибке
