@@ -1,0 +1,90 @@
+{
+  "name": "theatre-sound-mixer",
+  "version": "1.0.0",
+  "description": "Professional sound mixer for theatre productions - Concert Audio System (CAS)",
+  "main": "main.js",
+  "author": "Concert Audio System",
+  "scripts": {
+    "postinstall": "node -e \"const fs=require('fs');const path=require('path');if(fs.existsSync('node_modules/howler/dist/howler.min.js')){fs.mkdirSync('assets',{recursive:true});fs.copyFileSync('node_modules/howler/dist/howler.min.js','assets/howler.min.js');console.log('Howler.js copied to assets/');}\"",
+    "start": "electron .",
+    "build": "electron-builder",
+    "build-win": "electron-builder --win --dir --x64",
+    "build-simple": "node build-simple.js",
+    "dev": "electron . --dev"
+  },
+  "devDependencies": {
+    "electron": "^22.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "dependencies": {
+    "howler": "^2.2.3",
+    "music-metadata": "^11.10.0"
+  },
+  "build": {
+    "appId": "com.concertaudiosystem.cas",
+    "productName": "Concert Audio System",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "**/*",
+      "!music/**/*",
+      "!dist/**/*",
+      "!*.md",
+      "!.git/**/*",
+      "!.gitignore",
+      "!node_modules/**/*",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+    ],
+    "extraFiles": [
+      {
+        "from": "assets",
+        "to": "assets",
+        "filter": [
+          "**/*",
+          "!*.psd",
+          "!*.ai"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "requestedExecutionLevel": "asInvoker",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Concert Audio System",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "menuCategory": "Audio"
+    },
+    "compression": "normal",
+    "asar": false,
+    "electronDownload": {
+      "cache": ".electron-cache"
+    }
+  },
+  "license": "MIT"
+}

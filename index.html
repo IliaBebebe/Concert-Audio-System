@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Professional sound mixer for theatre productions - Concert Audio System (CAS)">
+    <title>Concert Audio System (CAS)</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="assets/howler.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Левая панель - плейлисты -->
+        <div class="left-panel">
+            <div class="header">
+                <img src="assets/big-logo.png" alt="Theatre Sound Mixer" class="logo" id="logo">
+                <h1>CONCERT AUDIO SYSTEM</h1>
+
+                <div class="version">1.0.0</div>
+                <div class="current-time" id="currentTime">--:--:--</div>
+                <div class="status" id="status">Готов к работе</div>
+            </div>
+            
+            <div class="section">
+                <h2>ПЛЕЙЛИСТЫ</h2>
+                <button class="btn-refresh" id="refreshPlaylists">🔄 Обновить</button>
+                <div class="playlists-container" id="playlistsContainer">
+                    <!-- Плейлисты будут здесь -->
+                </div>
+            </div>
+        </div>
+        <div class="resizer vertical" data-resizer="left"></div>
+
+        <!-- Центральная панель - треки и пады -->
+        <div class="center-panel">
+            <!-- Секция треков -->
+            <div class="tracks-section">
+                <div class="section-header">
+                    <h2>ТРЕКИ В ПЛЕЙЛИСТЕ</h2>
+                    <span class="playlist-name" id="currentPlaylistName">(не выбран)</span>
+                </div>
+                <div class="tracks-container" id="tracksContainer">
+                    <!-- Треки будут здесь -->
+                </div>
+                <div class="track-search">
+                    <input type="text" id="trackSearchInput" placeholder="Поиск треков...">
+                </div>
+                <div class="player-controls">
+                    <button class="control-btn" id="prevTrack">⏮</button>
+                    <button class="control-btn play-btn" id="playBtn">▶</button>
+                    <button class="control-btn" id="pauseBtn">⏸</button>
+                    <button class="control-btn" id="nextTrack">⏭</button>
+                    <button class="control-btn stop-btn" id="stopBtn">⏹</button>
+                </div>
+                
+                <!-- Настройки воспроизведения -->
+                <div class="playback-settings">
+                    <h3>РЕЖИМ ВОСПРОИЗВЕДЕНИЯ</h3>
+                    <div class="playback-options">
+                        <label class="radio-label">
+                            <input type="radio" name="playbackMode" value="sequential" checked>
+                            <span class="radio-custom"></span>
+                            Автоматически следующий
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="playbackMode" value="loop">
+                            <span class="radio-custom"></span>
+                            Зациклить трек
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="playbackMode" value="single">
+                            <span class="radio-custom"></span>
+                            Только текущий
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="resizer horizontal" data-resizer="center"></div>
+
+            <!-- Секция саунд-падов -->
+            <div class="pads-section">
+                <div class="section-header">
+                    <h2>ЗВУКОВЫЕ ЭФФЕКТЫ</h2>
+                    <span class="pad-status" id="padStatus">Выберите пад правой кнопкой</span>
+                </div>
+                <div class="sound-pads-grid" id="soundPadsGrid">
+                    <!-- Саунд-пады будут здесь -->
+                </div>
+                <div class="pads-controls">
+                    <button class="pads-btn" id="assignSound">Назначить звук</button>
+                    <button class="pads-btn" id="clearPad">Очистить пад</button>
+                    <button class="pads-btn stop-all-btn" id="stopAllEffects">Стоп все</button>
+                </div>
+            </div>
+        </div>
+        <div class="resizer vertical" data-resizer="right"></div>
+
+        <!-- Правая панель - управление -->
+        <div class="right-panel">
+            <!-- Текущий трек -->
+            <div class="now-playing">
+                <h3>СЕЙЧАС ИГРАЕТ</h3>
+                <div class="current-track" id="currentTrack">Трек не выбран</div>
+                <div class="track-counter" id="trackCounter">— / —</div>
+            </div>
+
+            <!-- Прогресс-бар -->
+            <div class="progress-section">
+                <div class="time-display">
+                    <span id="currentTimeDisplay">0:00</span> / <span id="totalTimeDisplay">0:00</span> • <span id="remainingTimeDisplay">-0:00</span>
+                </div>
+                <input type="range" class="progress-bar" id="progressBar" min="0" max="100" value="0">
+            </div>
+
+            <!-- Громкость -->
+            <div class="volume-section">
+                <div class="quick-controls">
+                    <button class="pads-btn" id="panicMuteBtn">🔇 Mute (паника)</button>
+                    <button class="pads-btn" id="lockUiBtn">🔒 Блокировка</button>
+                </div>
+                <div class="volume-control">
+                    <label>🎵 Громкость музыки</label>
+                    <div class="vu-meter-container">
+                        <div class="vu-meter" id="musicVuMeter">
+                            <div class="vu-bar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="volume-display">
+                        <span class="volume-value" id="musicVolumeValue">70%</span>
+                        <input type="range" class="volume-slider" id="musicVolume" min="0" max="100" value="70">
+                    </div>
+                </div>
+                <div class="volume-control">
+                    <label>🎛️ Громкость эффектов</label>
+                    <div class="vu-meter-container">
+                        <div class="vu-meter" id="effectsVuMeter">
+                            <div class="vu-bar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="volume-display">
+                        <span class="volume-value" id="effectsVolumeValue">70%</span>
+                        <input type="range" class="volume-slider" id="effectsVolume" min="0" max="100" value="70">
+                    </div>
+                </div>
+            </div>
+
+            <!-- История воспроизведения -->
+            <div class="history-section">
+                <h3>ИСТОРИЯ</h3>
+                <div class="history-container" id="historyContainer">
+                    <div class="history-empty">История пуста</div>
+                </div>
+            </div>
+
+            <!-- Таймер обратного отсчета -->
+            <div class="countdown-section">
+                <h3>ТАЙМЕР</h3>
+                <div class="countdown-display" id="countdownDisplay">00:00</div>
+                <div class="countdown-controls">
+                    <input type="number" class="countdown-input" id="countdownMinutes" min="0" max="59" value="0" placeholder="М">
+                    <span>:</span>
+                    <input type="number" class="countdown-input" id="countdownSeconds" min="0" max="59" value="0" placeholder="С">
+                    <button class="countdown-btn" id="countdownStart">▶</button>
+                    <button class="countdown-btn" id="countdownStop">⏹</button>
+                    <button class="countdown-btn" id="countdownReset">↺</button>
+                </div>
+            </div>
+
+            <!-- Статистика сессии -->
+            <div class="session-stats">
+                <h4>СТАТИСТИКА</h4>
+                <div class="stats-item">
+                    <span class="stats-label">Треков воспроизведено:</span>
+                    <span class="stats-value" id="tracksPlayedCount">0</span>
+                </div>
+                <div class="stats-item">
+                    <span class="stats-label">Время работы:</span>
+                    <span class="stats-value" id="sessionTime">00:00:00</span>
+                </div>
+            </div>
+
+            <!-- Горячие клавиши -->
+            <div class="hotkeys-info">
+                <h4>Горячие клавиши:</h4>
+                <div>Пробел - пауза/продолжить</div>
+                <div>Esc - остановить</div>
+                <div>← → переключение треков</div>
+                <div>↑ ↓ - громкость музыки</div>
+                <div>Shift+↑↓ - громкость эффектов</div>
+                <div>Колесико мыши - громкость</div>
+                <div>1-12 - звуковые пады</div>
+                <div>L - блокировка интерфейса</div>
+                <div>M - mute (паника)</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="renderer.mjs" type="module"></script>
+</body>
+</html>
