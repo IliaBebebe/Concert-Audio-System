@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectMusicFolder: () => ipcRenderer.invoke('select-music-folder'),
   setMusicFolder: (folderPath) => ipcRenderer.invoke('set-music-folder', folderPath),
   getConfig: () => ipcRenderer.invoke('get-config'),
-  getAudioMetadata: (filePath) => ipcRenderer.invoke('get-audio-metadata', filePath)
+  getAudioMetadata: (filePath) => ipcRenderer.invoke('get-audio-metadata', filePath),
+  selectMusicFolderAndOpenMain: () => ipcRenderer.invoke('select-music-folder-and-open-main')
 });

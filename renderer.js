@@ -229,12 +229,8 @@
         this.updateCountdownDisplay(); // Инициализация отображения таймера
         await this.loadStoredData();
         
-        // Если это первый запуск или папка не настроена, показываем настройку
-        if (this.config.firstRun || !this.config.musicFolder) {
-            await this.showFirstTimeSetup();
-        } else {
-            await this.refreshPlaylists();
-        }
+        // Теперь мы всегда просто обновляем плейлисты
+        await this.refreshPlaylists();
     }
 
     async loadConfig() {
@@ -242,7 +238,7 @@
             this.config = await window.electronAPI.getConfig();
         } catch (error) {
             console.error('Error loading config:', error);
-            this.config = { firstRun: true, musicFolder: null };
+            this.config = { firstRun: false, musicFolder: null };
         }
     }
 
@@ -340,63 +336,6 @@
         this.displayTracks(); // перерисуем список
     }
 
-    // Настройка при первом запуске
-    async showFirstTimeSetup() {
-        const container = document.getElementById('playlistsContainer');
-        container.innerHTML = `
-            <div class="first-time-setup">
-                <div class="setup-header">
-                    <h3>🎵 Добро пожаловать в Theatre Sound Mixer!</h3>
-                    <p>Для начала работы выберите папку с вашей музыкой</p>
-                </div>
-                <div class="setup-content">
-                    <p>В этой папке должны находиться плейлисты (подпапки) с аудиофайлами.</p>
-                    <p><strong>Структура папки:</strong></p>
-                    <div class="folder-example">
-                        <strong>Ваша_папка/</strong>
-                        <div class="folder-structure">
-                            ├── <strong>Плейлист 1/</strong><br>
-                            │   ├── трек1.mp3<br>
-                            │   └── трек2.mp3<br>
-                            └── <strong>Плейлист 2/</strong><br>
-                                ├── песня1.wav<br>
-                                └── песня2.mp3
-                        </div>
-                    </div>
-                    <button class="setup-btn" id="selectFolderBtn">📁 Выбрать папку с музыкой</button>
-                </div>
-            </div>
-        `;
-        
-        document.getElementById('selectFolderBtn').addEventListener('click', () => this.setupMusicFolder());
-        this.updateStatus('Настройте папку с музыкой для начала работы');
-    }
-
-    async setupMusicFolder() {
-        try {
-            this.updateStatus('Выбор папки с музыкой...');
-            const result = await window.electronAPI.selectMusicFolder();
-            
-            if (result.success) {
-                // Сохраняем путь
-                const saveResult = await window.electronAPI.setMusicFolder(result.path);
-                
-                if (saveResult.success) {
-                    await this.loadConfig();
-                    this.updateStatus(`Папка настроена: ${result.path}`);
-                    await this.refreshPlaylists();
-                } else {
-                    throw new Error('Ошибка сохранения настроек');
-                }
-            } else {
-                this.updateStatus('Папка не выбрана');
-            }
-        } catch (error) {
-            this.updateStatus('Ошибка настройки папки');
-            console.error('Error setting up music folder:', error);
-        }
-    }
-
     async changeMusicFolder() {
         try {
             this.updateStatus('Изменение папки с музыкой...');
@@ -434,11 +373,7 @@
                     this.updateStatus(`Найдено плейлистов: ${result.data.length}`);
                 }
             } else {
-                if (result.needsSetup) {
-                    this.displayNeedsSetup(result.error);
-                } else {
-                    this.displayPlaylistError(result.error);
-                }
+                this.displayPlaylistError(result.error);
             }
         } catch (error) {
             this.displayPlaylistError(error.message);
@@ -460,20 +395,6 @@
         
         document.getElementById('changeFolderBtn').addEventListener('click', () => this.changeMusicFolder());
         this.updateStatus('Плейлисты не найдены в текущей папке');
-    }
-
-    displayNeedsSetup(error) {
-        const container = document.getElementById('playlistsContainer');
-        container.innerHTML = `
-            <div class="needs-setup">
-                <p>⚠️ ${error}</p>
-                <p class="hint">Необходимо настроить папку с музыкой</p>
-                <button class="action-btn" id="setupNowBtn">⚙️ Настроить сейчас</button>
-            </div>
-        `;
-        
-        document.getElementById('setupNowBtn').addEventListener('click', () => this.showFirstTimeSetup());
-        this.updateStatus(`Требуется настройка: ${error}`);
     }
 
     displayPlaylistError(error) {

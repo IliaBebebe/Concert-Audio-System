@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs').promises;
 
 let mainWindow;
+let welcomeWindow;
 
 // Путь к файлу конфигурации
 const configPath = path.join(app.getPath('userData'), 'config.json');
@@ -86,6 +87,29 @@ async function saveConfig(config) {
   } catch (error) {
     return false;
   }
+}
+
+function createWelcomeWindow() {
+  welcomeWindow = new BrowserWindow({
+    width: 600,
+    height: 400,
+    resizable: false,
+    frame: false,
+    center: true,
+    show: false,
+    backgroundColor: '#0f0f0f',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+      sandbox: false
+    }
+  });
+
+  welcomeWindow.loadFile('welcome.html');
+  welcomeWindow.once('ready-to-show', () => {
+    welcomeWindow.show();
+  });
 }
 
 // Создание окна (упрощенная версия для локального использования)
@@ -189,12 +213,21 @@ function createWindow() {
 }
 
 // Запуск приложения
-app.whenReady().then(() => {
-  createWindow();
+app.whenReady().then(async () => {
+  const config = await loadConfig();
+  if (config.firstRun || !config.musicFolder) {
+    createWelcomeWindow();
+  } else {
+    createWindow();
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      if (config.firstRun || !config.musicFolder) {
+        createWelcomeWindow();
+      } else {
+        createWindow();
+      }
     } else if (mainWindow) {
       mainWindow.focus();
     }
@@ -296,6 +329,33 @@ ipcMain.handle('select-music-folder', async () => {
       return { success: true, path: result.filePaths[0] };
     }
     
+    return { success: false, error: 'Папка не выбрана' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('select-music-folder-and-open-main', async () => {
+  const focusedWindow = BrowserWindow.getFocusedWindow();
+  try {
+    const result = await dialog.showOpenDialog(focusedWindow, {
+      title: 'Выберите папку с музыкой',
+      properties: ['openDirectory']
+    });
+
+    if (!result.canceled && result.filePaths.length > 0) {
+      const folderPath = result.filePaths[0];
+      const config = await loadConfig();
+      config.musicFolder = folderPath;
+      config.firstRun = false;
+      await saveConfig(config);
+      
+      createWindow();
+      if (welcomeWindow) {
+        welcomeWindow.close();
+      }
+      return { success: true };
+    }
     return { success: false, error: 'Папка не выбрана' };
   } catch (error) {
     return { success: false, error: error.message };
