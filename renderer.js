@@ -26,6 +26,8 @@
         
         // Debouncing для обновления громкости
         this.volumeUpdateTimeout = null;
+        this.musicVolumeTimeout = null;
+        this.effectsVolumeTimeout = null;
         
         // Интервал для часов
         this.clockInterval = null;
@@ -34,6 +36,8 @@
         this.vuMeterInterval = null;
         this.lastMusicLevel = 0;
         this.lastEffectsLevel = 0;
+        this.musicVuBar = null;
+        this.effectsVuBar = null;
         
         // Прогресс падов
         this.padProgressIntervals = new Map();
@@ -67,6 +71,9 @@
     }
     
     initVuMeters() {
+        // Кэшируем ссылки на DOM элементы
+        this.musicVuBar = document.querySelector('#musicVuMeter .vu-bar');
+        this.effectsVuBar = document.querySelector('#effectsVuMeter .vu-bar');
         this.startVuMeters();
     }
 
@@ -85,12 +92,9 @@
             clearInterval(this.vuMeterInterval);
             this.vuMeterInterval = null;
         }
-        
-        const musicVuBar = document.querySelector('#musicVuMeter .vu-bar');
-        const effectsVuBar = document.querySelector('#effectsVuMeter .vu-bar');
-        
-        if (musicVuBar) musicVuBar.style.height = '0%';
-        if (effectsVuBar) effectsVuBar.style.height = '0%';
+
+        if (this.musicVuBar) this.musicVuBar.style.height = '0%';
+        if (this.effectsVuBar) this.effectsVuBar.style.height = '0%';
     }
 
     updateVuMeters() {
@@ -100,50 +104,48 @@
             const base = this.musicVolume * 0.7;
             const random = Math.random() * 0.3;
             musicLevel = Math.min(1, base + random);
-            
+
             if (this.musicPlayer.seek && this.musicPlayer.duration) {
                 const progress = this.musicPlayer.seek() / this.musicPlayer.duration();
                 const pulse = Math.sin(progress * Math.PI * 4) * 0.1;
                 musicLevel = Math.max(0, Math.min(1, musicLevel + pulse));
             }
         }
-        
+
         this.lastMusicLevel = this.lastMusicLevel * 0.7 + musicLevel * 0.3;
-        
-        const musicVuBar = document.querySelector('#musicVuMeter .vu-bar');
-        if (musicVuBar) {
-            musicVuBar.style.height = `${this.lastMusicLevel * 100}%`;
+
+        if (this.musicVuBar) {
+            this.musicVuBar.style.height = `${this.lastMusicLevel * 100}%`;
             const hue = 120 - (this.lastMusicLevel * 120);
-            musicVuBar.style.background = `linear-gradient(to top, hsl(${hue}, 100%, 50%), hsl(${hue * 0.8}, 100%, 60%))`;
+            this.musicVuBar.style.background = `linear-gradient(to top, hsl(${hue}, 100%, 50%), hsl(${hue * 0.8}, 100%, 60%))`;
         }
-        
+
         // Обновляем VU-метр для эффектов
         let effectsLevel = 0;
         let isEffectsPlaying = false;
-        
+
         this.soundEffects.forEach((soundData) => {
             if (soundData?.sound?.playing()) {
                 isEffectsPlaying = true;
             }
         });
-        
+
         if (isEffectsPlaying) {
             const base = this.effectsVolume * 0.6;
             const random = Math.random() * 0.4;
             effectsLevel = Math.min(1, base + random);
-            
+
             if (Math.random() > 0.7) {
                 effectsLevel = Math.min(1, effectsLevel + 0.3);
             }
         }
-        
+
         this.lastEffectsLevel = this.lastEffectsLevel * 0.6 + effectsLevel * 0.4;
-        
-        const effectsVuBar = document.querySelector('#effectsVuMeter .vu-bar');
-        if (effectsVuBar) {
-            effectsVuBar.style.height = `${this.lastEffectsLevel * 100}%`;
+
+        if (this.effectsVuBar) {
+            this.effectsVuBar.style.height = `${this.lastEffectsLevel * 100}%`;
             const hue = 60 - (this.lastEffectsLevel * 60);
-            effectsVuBar.style.background = `linear-gradient(to top, hsl(${hue}, 100%, 50%), hsl(${hue * 0.8}, 100%, 60%))`;
+            this.effectsVuBar.style.background = `linear-gradient(to top, hsl(${hue}, 100%, 50%), hsl(${hue * 0.8}, 100%, 60%))`;
         }
     }
 
@@ -456,7 +458,7 @@
     displayTracks() {
         const container = document.getElementById('tracksContainer');
         container.innerHTML = '';
-        
+
         const list = this.playlistTracks
             .map((t, i) => ({ t, i }))
             .filter(({ t }) => {
@@ -466,49 +468,54 @@
                 return name.includes(this.trackFilterQuery) || artist.includes(this.trackFilterQuery);
             });
 
+        // Используем DocumentFragment для оптимизации DOM
+        const fragment = document.createDocumentFragment();
+
         list.forEach(({ t: track, i: index }) => {
             const btn = document.createElement('button');
             btn.className = 'track-btn';
             if (index === this.currentTrackIndex) {
                 btn.classList.add('active');
             }
-            
+
             const trackContent = document.createElement('div');
             trackContent.className = 'track-content';
-            
+
             const trackInfo = document.createElement('div');
             trackInfo.className = 'track-info';
-            
+
             const trackName = document.createElement('span');
             trackName.className = 'track-name';
             trackName.textContent = `${index + 1}. ${track.name}`;
-            
+
             const trackArtist = document.createElement('span');
             trackArtist.className = 'track-artist';
             trackArtist.textContent = track.artist || 'Неизвестный исполнитель';
-            
+
             trackInfo.appendChild(trackName);
             trackInfo.appendChild(trackArtist);
-            
+
             const trackDuration = document.createElement('span');
             trackDuration.className = 'track-duration';
             trackDuration.textContent = track.duration ? this.formatTime(track.duration) : '--:--';
-            
+
             trackContent.appendChild(trackInfo);
             trackContent.appendChild(trackDuration);
             btn.appendChild(trackContent);
-            
+
             btn.addEventListener('click', () => this.playTrack(index));
-            container.appendChild(btn);
-            
+            fragment.appendChild(btn);
+
             if (!track.duration) {
                 this.loadTrackDuration(track, trackDuration);
             }
-            
+
             if (!track.artist) {
                 this.loadTrackMetadata(track, trackArtist);
             }
         });
+
+        container.appendChild(fragment);
     }
     
     async loadTrackDuration(track, durationElement) {
@@ -542,32 +549,19 @@
     }
     
     async loadTrackMetadata(track, artistElement) {
+        const defaultArtist = 'Неизвестный исполнитель';
         try {
             const result = await window.electronAPI.getAudioMetadata(track.path);
-            if (result.success && result.data) {
-                const artist = result.data.artist;
-                if (artist) {
-                    track.artist = Array.isArray(artist) ? artist.join(', ') : artist;
-                    if (artistElement) {
-                        artistElement.textContent = track.artist;
-                    }
-                } else {
-                    track.artist = 'Неизвестный исполнитель';
-                    if (artistElement) {
-                        artistElement.textContent = track.artist;
-                    }
-                }
-            } else {
-                track.artist = 'Неизвестный исполнитель';
-                if (artistElement) {
-                    artistElement.textContent = track.artist;
-                }
-            }
+            const artist = result?.success && result.data?.artist
+                ? (Array.isArray(result.data.artist) ? result.data.artist.join(', ') : result.data.artist)
+                : defaultArtist;
+            track.artist = artist;
         } catch (error) {
-            track.artist = 'Неизвестный исполнитель';
-            if (artistElement) {
-                artistElement.textContent = track.artist;
-            }
+            track.artist = defaultArtist;
+        }
+        
+        if (artistElement) {
+            artistElement.textContent = track.artist;
         }
     }
 
@@ -666,7 +660,11 @@
 
     stopMusic() {
         if (this.musicPlayer) {
-            this.musicPlayer.stop();
+            try {
+                this.musicPlayer.unload(); // unload вместо stop для освобождения памяти
+            } catch (e) {
+                console.warn('Ошибка при выгрузке:', e);
+            }
             this.musicPlayer = null;
         }
         this.isPlaying = false;
@@ -674,22 +672,16 @@
     }
 
     previousTrack() {
-        if (this.playlistTracks.length === 0) return;
-        
-        let newIndex = this.currentTrackIndex - 1;
-        if (newIndex < 0) {
-            newIndex = this.playlistTracks.length - 1;
-        }
-        this.playTrack(newIndex);
+        this._navigateTrack(-1);
     }
 
     nextTrack() {
+        this._navigateTrack(1);
+    }
+
+    _navigateTrack(direction) {
         if (this.playlistTracks.length === 0) return;
-        
-        let newIndex = this.currentTrackIndex + 1;
-        if (newIndex >= this.playlistTracks.length) {
-            newIndex = 0;
-        }
+        let newIndex = (this.currentTrackIndex + direction + this.playlistTracks.length) % this.playlistTracks.length;
         this.playTrack(newIndex);
     }
 
@@ -1057,21 +1049,23 @@
 
     setMusicVolume(volume) {
         this.musicVolume = volume;
-        
+
         const volumeValueEl = document.getElementById('musicVolumeValue');
         if (volumeValueEl) {
             volumeValueEl.textContent = `${Math.round(volume * 100)}%`;
         }
-        
-        if (this.volumeUpdateTimeout) {
-            clearTimeout(this.volumeUpdateTimeout);
+
+        if (this.musicVolumeTimeout) {
+            clearTimeout(this.musicVolumeTimeout);
         }
-        
-        this.volumeUpdateTimeout = setTimeout(() => {
+
+        this.musicVolumeTimeout = setTimeout(() => {
             if (this.musicPlayer) {
                 try {
                     this.musicPlayer.volume(volume);
-                } catch (error) {}
+                } catch (error) {
+                    console.warn('Ошибка установки громкости музыки:', error);
+                }
             }
             this.saveStoredData();
         }, 50);
@@ -1079,22 +1073,24 @@
 
     setEffectsVolume(volume) {
         this.effectsVolume = volume;
-        
+
         const volumeValueEl = document.getElementById('effectsVolumeValue');
         if (volumeValueEl) {
             volumeValueEl.textContent = `${Math.round(volume * 100)}%`;
         }
-        
-        if (this.volumeUpdateTimeout) {
-            clearTimeout(this.volumeUpdateTimeout);
+
+        if (this.effectsVolumeTimeout) {
+            clearTimeout(this.effectsVolumeTimeout);
         }
-        
-        this.volumeUpdateTimeout = setTimeout(() => {
+
+        this.effectsVolumeTimeout = setTimeout(() => {
             this.soundEffects.forEach(soundData => {
                 if (soundData?.sound) {
                     try {
                         soundData.sound.volume(volume);
-                    } catch (error) {}
+                    } catch (error) {
+                        console.warn('Ошибка установки громкости эффекта:', error);
+                    }
                 }
             });
             this.saveStoredData();

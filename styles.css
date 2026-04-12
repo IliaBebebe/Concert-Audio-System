@@ -160,21 +160,19 @@ body {
     max-height: 140px;
     height: auto;
     margin-bottom: 16px;
-    filter: 
-        brightness(0.95) 
+    filter:
+        brightness(0.95)
         drop-shadow(0 8px 24px rgba(74, 156, 255, 0.2))
         drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
     object-fit: contain;
-    transform: translateZ(0);
     transition: var(--transition-medium);
 }
 
 .logo:hover {
-    filter: 
-        brightness(1) 
+    filter:
+        brightness(1)
         drop-shadow(0 8px 32px rgba(74, 156, 255, 0.3))
         drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6));
-    transform: translateZ(10px);
 }
 
 .header h1 {
@@ -1759,14 +1757,27 @@ body {
         min-height: 44px;
         padding: 12px;
     }
-    
+
     .volume-slider, .progress-bar {
         height: 12px;
     }
-    
+
     .volume-slider::-webkit-slider-thumb,
     .progress-bar::-webkit-slider-thumb {
         width: 24px;
         height: 24px;
+    }
+}
+
+/* Уменьшение анимации для пользователей с предпочтением reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    
+    .vu-bar {
+        transition: none;
     }
 }

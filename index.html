@@ -17,14 +17,14 @@
                 <img src="assets/big-logo.png" alt="Theatre Sound Mixer" class="logo" id="logo">
                 <h1>CONCERT AUDIO SYSTEM</h1>
                 
-                <div class="version">1.0.0</div>
+                <div class="version">1.0.2</div>
                 <div class="current-time" id="currentTime">--:--:--</div>
                 <div class="status" id="status">Готов к работе</div>
             </div>
             
             <div class="section">
                 <h2><i class="fas fa-list"></i> ПЛЕЙЛИСТЫ</h2>
-                <button class="btn-refresh" id="refreshPlaylists">
+                <button class="btn-refresh" id="refreshPlaylists" aria-label="Обновить плейлисты">
                     <i class="fas fa-sync-alt"></i> Обновить
                 </button>
                 <div class="playlists-container" id="playlistsContainer">
@@ -42,9 +42,9 @@
                     <!-- Саунд-пады будут здесь -->
                 </div>
                 <div class="pads-controls">
-                    <button class="pads-btn" id="assignSound"><i class="fas fa-file-audio"></i> Назначить звук</button>
-                    <button class="pads-btn" id="clearPad"><i class="fas fa-trash"></i> Очистить пад</button>
-                    <button class="pads-btn stop-all-btn" id="stopAllEffects"><i class="fas fa-stop"></i> Стоп все</button>
+                    <button class="pads-btn" id="assignSound" aria-label="Назначить звук на пад"><i class="fas fa-file-audio"></i> Назначить звук</button>
+                    <button class="pads-btn" id="clearPad" aria-label="Очистить пад"><i class="fas fa-trash"></i> Очистить пад</button>
+                    <button class="pads-btn stop-all-btn" id="stopAllEffects" aria-label="Остановить все эффекты"><i class="fas fa-stop"></i> Стоп все</button>
                 </div>
             </div>
         </div>
@@ -63,14 +63,14 @@
                 </div>
                 <div class="track-search">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="trackSearchInput" placeholder="Поиск треков...">
+                    <input type="text" id="trackSearchInput" placeholder="Поиск треков..." aria-label="Поиск треков">
                 </div>
                 <div class="player-controls">
-                    <button class="control-btn" id="prevTrack"><i class="fas fa-step-backward"></i></button>
-                    <button class="control-btn play-btn" id="playBtn"><i class="fas fa-play"></i></button>
-                    <button class="control-btn" id="pauseBtn"><i class="fas fa-pause"></i></button>
-                    <button class="control-btn" id="nextTrack"><i class="fas fa-step-forward"></i></button>
-                    <button class="control-btn stop-btn" id="stopBtn"><i class="fas fa-stop"></i></button>
+                    <button class="control-btn" id="prevTrack" aria-label="Предыдущий трек"><i class="fas fa-step-backward"></i></button>
+                    <button class="control-btn play-btn" id="playBtn" aria-label="Воспроизвести"><i class="fas fa-play"></i></button>
+                    <button class="control-btn" id="pauseBtn" aria-label="Пауза"><i class="fas fa-pause"></i></button>
+                    <button class="control-btn" id="nextTrack" aria-label="Следующий трек"><i class="fas fa-step-forward"></i></button>
+                    <button class="control-btn stop-btn" id="stopBtn" aria-label="Остановить"><i class="fas fa-stop"></i></button>
                 </div>
                 
                 <!-- Настройки воспроизведения (компактно) -->
@@ -112,7 +112,7 @@
                 <div class="time-display">
                     <span id="currentTimeDisplay">0:00</span> / <span id="totalTimeDisplay">0:00</span> • <span id="remainingTimeDisplay">-0:00</span>
                 </div>
-                <input type="range" class="progress-bar" id="progressBar" min="0" max="100" value="0">
+                <input type="range" class="progress-bar" id="progressBar" min="0" max="100" value="0" aria-label="Прогресс воспроизведения">
             </div>
 
             <!-- Громкость -->
@@ -131,7 +131,7 @@
                             <span class="volume-value" id="musicVolumeValue">70%</span>
                         </div>
                         <div class="volume-slider-container vertical">
-                            <input type="range" class="volume-slider vertical" id="musicVolume" min="0" max="100" value="70" orient="vertical">
+                            <input type="range" class="volume-slider vertical" id="musicVolume" min="0" max="100" value="70" orient="vertical" aria-label="Громкость музыки">
                             <div class="vu-meter-container vertical">
                                 <div class="vu-meter" id="musicVuMeter">
                                     <div class="vu-bar"></div>
@@ -139,7 +139,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="volume-control">
                         <div class="volume-label">
                             <i class="fas fa-sliders-h"></i>
@@ -147,7 +147,7 @@
                             <span class="volume-value" id="effectsVolumeValue">70%</span>
                         </div>
                         <div class="volume-slider-container vertical">
-                            <input type="range" class="volume-slider vertical" id="effectsVolume" min="0" max="100" value="70" orient="vertical">
+                            <input type="range" class="volume-slider vertical" id="effectsVolume" min="0" max="100" value="70" orient="vertical" aria-label="Громкость эффектов">
                             <div class="vu-meter-container vertical">
                                 <div class="vu-meter" id="effectsVuMeter">
                                     <div class="vu-bar"></div>
@@ -161,14 +161,14 @@
             <!-- Таймер обратного отсчета -->
             <div class="countdown-section">
                 <h3><i class="fas fa-clock"></i> ТАЙМЕР</h3>
-                <div class="countdown-display" id="countdownDisplay">00:00</div>
+                <div class="countdown-display" id="countdownDisplay" aria-live="off">00:00</div>
                 <div class="countdown-controls">
-                    <input type="number" class="countdown-input" id="countdownMinutes" min="0" max="59" value="0" placeholder="М">
+                    <input type="number" class="countdown-input" id="countdownMinutes" min="0" max="59" value="0" placeholder="М" aria-label="Минуты">
                     <span>:</span>
-                    <input type="number" class="countdown-input" id="countdownSeconds" min="0" max="59" value="0" placeholder="С">
-                    <button class="countdown-btn" id="countdownStart"><i class="fas fa-play"></i></button>
-                    <button class="countdown-btn" id="countdownStop"><i class="fas fa-stop"></i></button>
-                    <button class="countdown-btn" id="countdownReset"><i class="fas fa-redo"></i></button>
+                    <input type="number" class="countdown-input" id="countdownSeconds" min="0" max="59" value="0" placeholder="С" aria-label="Секунды">
+                    <button class="countdown-btn" id="countdownStart" aria-label="Запустить таймер"><i class="fas fa-play"></i></button>
+                    <button class="countdown-btn" id="countdownStop" aria-label="Остановить таймер"><i class="fas fa-stop"></i></button>
+                    <button class="countdown-btn" id="countdownReset" aria-label="Сбросить таймер"><i class="fas fa-redo"></i></button>
                 </div>
             </div>
 
