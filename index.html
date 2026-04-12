@@ -7,89 +7,92 @@
     <title>Concert Audio System (CAS)</title>
     <link rel="stylesheet" href="styles.css">
     <script src="assets/howler.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="app-container">
-        <!-- Левая панель - плейлисты -->
+        <!-- Левая панель - плейлисты и пады -->
         <div class="left-panel">
             <div class="header">
                 <img src="assets/big-logo.png" alt="Theatre Sound Mixer" class="logo" id="logo">
                 <h1>CONCERT AUDIO SYSTEM</h1>
-
+                
                 <div class="version">1.0.0</div>
                 <div class="current-time" id="currentTime">--:--:--</div>
                 <div class="status" id="status">Готов к работе</div>
             </div>
             
             <div class="section">
-                <h2>ПЛЕЙЛИСТЫ</h2>
-                <button class="btn-refresh" id="refreshPlaylists">🔄 Обновить</button>
+                <h2><i class="fas fa-list"></i> ПЛЕЙЛИСТЫ</h2>
+                <button class="btn-refresh" id="refreshPlaylists">
+                    <i class="fas fa-sync-alt"></i> Обновить
+                </button>
                 <div class="playlists-container" id="playlistsContainer">
                     <!-- Плейлисты будут здесь -->
                 </div>
             </div>
-        </div>
-        <div class="resizer vertical" data-resizer="left"></div>
-
-        <!-- Центральная панель - треки и пады -->
-        <div class="center-panel">
-            <!-- Секция треков -->
-            <div class="tracks-section">
+            
+            <!-- Секция саунд-падов в левой панели -->
+            <div class="section">
                 <div class="section-header">
-                    <h2>ТРЕКИ В ПЛЕЙЛИСТЕ</h2>
-                    <span class="playlist-name" id="currentPlaylistName">(не выбран)</span>
-                </div>
-                <div class="tracks-container" id="tracksContainer">
-                    <!-- Треки будут здесь -->
-                </div>
-                <div class="track-search">
-                    <input type="text" id="trackSearchInput" placeholder="Поиск треков...">
-                </div>
-                <div class="player-controls">
-                    <button class="control-btn" id="prevTrack">⏮</button>
-                    <button class="control-btn play-btn" id="playBtn">▶</button>
-                    <button class="control-btn" id="pauseBtn">⏸</button>
-                    <button class="control-btn" id="nextTrack">⏭</button>
-                    <button class="control-btn stop-btn" id="stopBtn">⏹</button>
-                </div>
-                
-                <!-- Настройки воспроизведения -->
-                <div class="playback-settings">
-                    <h3>РЕЖИМ ВОСПРОИЗВЕДЕНИЯ</h3>
-                    <div class="playback-options">
-                        <label class="radio-label">
-                            <input type="radio" name="playbackMode" value="sequential" checked>
-                            <span class="radio-custom"></span>
-                            Автоматически следующий
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="playbackMode" value="loop">
-                            <span class="radio-custom"></span>
-                            Зациклить трек
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="playbackMode" value="single">
-                            <span class="radio-custom"></span>
-                            Только текущий
-                        </label>
-                    </div>
-                </div>
-            </div>
-            <div class="resizer horizontal" data-resizer="center"></div>
-
-            <!-- Секция саунд-падов -->
-            <div class="pads-section">
-                <div class="section-header">
-                    <h2>ЗВУКОВЫЕ ЭФФЕКТЫ</h2>
+                    <h2><i class="fas fa-sliders-h"></i> ЗВУКОВЫЕ ЭФФЕКТЫ</h2>
                     <span class="pad-status" id="padStatus">Выберите пад правой кнопкой</span>
                 </div>
                 <div class="sound-pads-grid" id="soundPadsGrid">
                     <!-- Саунд-пады будут здесь -->
                 </div>
                 <div class="pads-controls">
-                    <button class="pads-btn" id="assignSound">Назначить звук</button>
-                    <button class="pads-btn" id="clearPad">Очистить пад</button>
-                    <button class="pads-btn stop-all-btn" id="stopAllEffects">Стоп все</button>
+                    <button class="pads-btn" id="assignSound"><i class="fas fa-file-audio"></i> Назначить звук</button>
+                    <button class="pads-btn" id="clearPad"><i class="fas fa-trash"></i> Очистить пад</button>
+                    <button class="pads-btn stop-all-btn" id="stopAllEffects"><i class="fas fa-stop"></i> Стоп все</button>
+                </div>
+            </div>
+        </div>
+        <div class="resizer vertical" data-resizer="left"></div>
+
+        <!-- Центральная панель - только треки -->
+        <div class="center-panel">
+            <!-- Секция треков -->
+            <div class="tracks-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-music"></i> ТРЕКИ В ПЛЕЙЛИСТЕ</h2>
+                    <span class="playlist-name" id="currentPlaylistName">(не выбран)</span>
+                </div>
+                <div class="tracks-container" id="tracksContainer">
+                    <!-- Треки будут здесь -->
+                </div>
+                <div class="track-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="trackSearchInput" placeholder="Поиск треков...">
+                </div>
+                <div class="player-controls">
+                    <button class="control-btn" id="prevTrack"><i class="fas fa-step-backward"></i></button>
+                    <button class="control-btn play-btn" id="playBtn"><i class="fas fa-play"></i></button>
+                    <button class="control-btn" id="pauseBtn"><i class="fas fa-pause"></i></button>
+                    <button class="control-btn" id="nextTrack"><i class="fas fa-step-forward"></i></button>
+                    <button class="control-btn stop-btn" id="stopBtn"><i class="fas fa-stop"></i></button>
+                </div>
+                
+                <!-- Настройки воспроизведения (компактно) -->
+                <div class="playback-settings">
+                    <h3><i class="fas fa-cog"></i> РЕЖИМ ВОСПРОИЗВЕДЕНИЯ</h3>
+                    <div class="playback-options compact">
+                        <label class="radio-label">
+                            <input type="radio" name="playbackMode" value="sequential" checked>
+                            <span class="radio-custom"></span>
+                            <span class="radio-text">Следующий</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="playbackMode" value="loop">
+                            <span class="radio-custom"></span>
+                            <span class="radio-text">Зациклить</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="playbackMode" value="single">
+                            <span class="radio-custom"></span>
+                            <span class="radio-text">Один трек</span>
+                        </label>
+                    </div>
                 </div>
             </div>
         </div>
@@ -99,7 +102,7 @@
         <div class="right-panel">
             <!-- Текущий трек -->
             <div class="now-playing">
-                <h3>СЕЙЧАС ИГРАЕТ</h3>
+                <h3><i class="fas fa-headphones"></i> СЕЙЧАС ИГРАЕТ</h3>
                 <div class="current-track" id="currentTrack">Трек не выбран</div>
                 <div class="track-counter" id="trackCounter">— / —</div>
             </div>
@@ -115,82 +118,71 @@
             <!-- Громкость -->
             <div class="volume-section">
                 <div class="quick-controls">
-                    <button class="pads-btn" id="panicMuteBtn">🔇 Mute (паника)</button>
-                    <button class="pads-btn" id="lockUiBtn">🔒 Блокировка</button>
+                    <button class="pads-btn" id="panicMuteBtn">
+                        <i class="fas fa-volume-mute"></i> Mute (паника)
+                    </button>
                 </div>
-                <div class="volume-control">
-                    <label>🎵 Громкость музыки</label>
-                    <div class="vu-meter-container">
-                        <div class="vu-meter" id="musicVuMeter">
-                            <div class="vu-bar" style="width: 0%"></div>
+                
+                <div class="volume-controls-grid">
+                    <div class="volume-control">
+                        <div class="volume-label">
+                            <i class="fas fa-music"></i>
+                            <span>Музыка</span>
+                            <span class="volume-value" id="musicVolumeValue">70%</span>
+                        </div>
+                        <div class="volume-slider-container vertical">
+                            <input type="range" class="volume-slider vertical" id="musicVolume" min="0" max="100" value="70" orient="vertical">
+                            <div class="vu-meter-container vertical">
+                                <div class="vu-meter" id="musicVuMeter">
+                                    <div class="vu-bar"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="volume-display">
-                        <span class="volume-value" id="musicVolumeValue">70%</span>
-                        <input type="range" class="volume-slider" id="musicVolume" min="0" max="100" value="70">
-                    </div>
-                </div>
-                <div class="volume-control">
-                    <label>🎛️ Громкость эффектов</label>
-                    <div class="vu-meter-container">
-                        <div class="vu-meter" id="effectsVuMeter">
-                            <div class="vu-bar" style="width: 0%"></div>
+                    
+                    <div class="volume-control">
+                        <div class="volume-label">
+                            <i class="fas fa-sliders-h"></i>
+                            <span>Эффекты</span>
+                            <span class="volume-value" id="effectsVolumeValue">70%</span>
+                        </div>
+                        <div class="volume-slider-container vertical">
+                            <input type="range" class="volume-slider vertical" id="effectsVolume" min="0" max="100" value="70" orient="vertical">
+                            <div class="vu-meter-container vertical">
+                                <div class="vu-meter" id="effectsVuMeter">
+                                    <div class="vu-bar"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="volume-display">
-                        <span class="volume-value" id="effectsVolumeValue">70%</span>
-                        <input type="range" class="volume-slider" id="effectsVolume" min="0" max="100" value="70">
-                    </div>
-                </div>
-            </div>
-
-            <!-- История воспроизведения -->
-            <div class="history-section">
-                <h3>ИСТОРИЯ</h3>
-                <div class="history-container" id="historyContainer">
-                    <div class="history-empty">История пуста</div>
                 </div>
             </div>
 
             <!-- Таймер обратного отсчета -->
             <div class="countdown-section">
-                <h3>ТАЙМЕР</h3>
+                <h3><i class="fas fa-clock"></i> ТАЙМЕР</h3>
                 <div class="countdown-display" id="countdownDisplay">00:00</div>
                 <div class="countdown-controls">
                     <input type="number" class="countdown-input" id="countdownMinutes" min="0" max="59" value="0" placeholder="М">
                     <span>:</span>
                     <input type="number" class="countdown-input" id="countdownSeconds" min="0" max="59" value="0" placeholder="С">
-                    <button class="countdown-btn" id="countdownStart">▶</button>
-                    <button class="countdown-btn" id="countdownStop">⏹</button>
-                    <button class="countdown-btn" id="countdownReset">↺</button>
-                </div>
-            </div>
-
-            <!-- Статистика сессии -->
-            <div class="session-stats">
-                <h4>СТАТИСТИКА</h4>
-                <div class="stats-item">
-                    <span class="stats-label">Треков воспроизведено:</span>
-                    <span class="stats-value" id="tracksPlayedCount">0</span>
-                </div>
-                <div class="stats-item">
-                    <span class="stats-label">Время работы:</span>
-                    <span class="stats-value" id="sessionTime">00:00:00</span>
+                    <button class="countdown-btn" id="countdownStart"><i class="fas fa-play"></i></button>
+                    <button class="countdown-btn" id="countdownStop"><i class="fas fa-stop"></i></button>
+                    <button class="countdown-btn" id="countdownReset"><i class="fas fa-redo"></i></button>
                 </div>
             </div>
 
             <!-- Горячие клавиши -->
             <div class="hotkeys-info">
-                <h4>Горячие клавиши:</h4>
-                <div>Пробел - пауза/продолжить</div>
-                <div>Esc - остановить</div>
-                <div>← → переключение треков</div>
-                <div>↑ ↓ - громкость музыки</div>
-                <div>Shift+↑↓ - громкость эффектов</div>
-                <div>Колесико мыши - громкость</div>
-                <div>1-12 - звуковые пады</div>
-                <div>L - блокировка интерфейса</div>
-                <div>M - mute (паника)</div>
+                <h4><i class="fas fa-keyboard"></i> Горячие клавиши:</h4>
+                <div><i class="fas fa-key"></i> Пробел - пауза/продолжить</div>
+                <div><i class="fas fa-key"></i> Esc - остановить</div>
+                <div><i class="fas fa-key"></i> ← → переключение треков</div>
+                <div><i class="fas fa-key"></i> ↑ ↓ - громкость музыки</div>
+                <div><i class="fas fa-key"></i> Shift+↑↓ - громкость эффектов</div>
+                <div><i class="fas fa-key"></i> Колесико мыши - громкость</div>
+                <div><i class="fas fa-key"></i> 1-12 - звуковые пады</div>
+                <div><i class="fas fa-key"></i> M - mute (паника)</div>
             </div>
         </div>
     </div>

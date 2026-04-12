@@ -1,14 +1,15 @@
 {
   "name": "theatre-sound-mixer",
-  "version": "1.0.1",
+  "version": "1.0.2.1",
   "description": "Professional sound mixer for theatre productions - Concert Audio System (CAS)",
   "main": "main.js",
   "author": "Concert Audio System",
   "scripts": {
     "postinstall": "node -e \"const fs=require('fs');const path=require('path');if(fs.existsSync('node_modules/howler/dist/howler.min.js')){fs.mkdirSync('assets',{recursive:true});fs.copyFileSync('node_modules/howler/dist/howler.min.js','assets/howler.min.js');console.log('Howler.js copied to assets/');}\"",
     "start": "electron .",
-    "build": "electron-builder",
+    "build": "electron-builder --win nsis --x64",
     "build-win": "electron-builder --win --dir --x64",
+    "build-installer": "electron-builder --win nsis --x64",
     "build-simple": "node build-simple.js",
     "dev": "electron . --dev"
   },
@@ -61,24 +62,33 @@
     "win": {
       "target": [
         {
-          "target": "dir",
+          "target": "nsis",
           "arch": [
             "x64"
           ]
         }
       ],
       "requestedExecutionLevel": "asInvoker",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "icon": "assets/app-icon.ico"
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Concert Audio System",
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true,
-      "menuCategory": "Audio"
+      "menuCategory": "Audio",
+      "installerIcon": "assets/app-icon.ico",
+      "uninstallerIcon": "assets/app-icon.ico",
+      "installerSidebar": "assets/installer-sidebar.bmp",
+      "include": "build/installer.nsh",
+      "license": "build/license.txt",
+      "unicode": true
     },
     "compression": "normal",
     "asar": false,

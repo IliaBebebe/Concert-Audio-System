@@ -1,4 +1,4 @@
-﻿class TheatreSoundMixer {
+﻿﻿class TheatreSoundMixer {
     constructor() {
         this.musicPlayer = null;
         this.soundEffects = new Map();
@@ -8,6 +8,8 @@
         this.selectedPad = null;
         this.isPlaying = false;
         this.isPaused = false;
+        this.isMuted = false;
+        this.trackFilterQuery = '';
         
         // Режимы воспроизведения
         this.playbackMode = 'sequential';
@@ -19,7 +21,6 @@
         
         // Оптимизация производительности
         this.progressAnimationFrame = null;
-        this.progressInterval = null;
         this.lastTimeUpdate = null;
         this.statusUpdateTimeout = null;
         
@@ -29,26 +30,13 @@
         // Интервал для часов
         this.clockInterval = null;
         
-        // Web Audio API для реальных VU-метров
-        this.audioContext = null;
-        this.musicAnalyser = null;
-        this.effectsAnalyser = null;
-        this.musicGainNode = null;
-        this.effectsGainNode = null;
-        this.musicSourceNode = null;
-        this.effectsSourceNodes = new Map(); // Map<padIndex, sourceNode>
+        // VU-метры
+        this.vuMeterInterval = null;
+        this.lastMusicLevel = 0;
+        this.lastEffectsLevel = 0;
         
         // Прогресс падов
-        this.padProgressIntervals = new Map(); // Map<padIndex, intervalId>
-        
-        // История воспроизведения
-        this.playHistory = [];
-        this.maxHistoryItems = 20;
-        
-        // Статистика сессии
-        this.tracksPlayedCount = 0;
-        this.sessionStartTime = Date.now();
-        this.sessionTimeInterval = null;
+        this.padProgressIntervals = new Map();
         
         // Таймер обратного отсчета
         this.countdownTime = 0;
@@ -62,75 +50,114 @@
     }
     
     setupVisibilityHandlers() {
-        // Оптимизация: снижаем частоту обновлений когда окно не видно
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                // Когда окно скрыто, можно приостановить некоторые обновления
-                // Но не останавливаем аудио - оно должно продолжать играть
+                this.pauseVuMeters();
+                if (this.progressAnimationFrame) {
+                    cancelAnimationFrame(this.progressAnimationFrame);
+                    this.progressAnimationFrame = null;
+                }
             } else {
-                // Когда окно видно, обновляем интерфейс
-                this.updateTimeDisplays();
+                this.startVuMeters();
+                if (this.isPlaying && !this.isPaused) {
+                    this.startProgressTracking();
+                }
             }
         });
     }
     
-    initWebAudio() {
-        try {
-            // Пытаемся использовать Web Audio API для реальных VU-метров
-            // Howler.js использует свой AudioContext, но мы можем создать отдельный для анализа
-            // или использовать общий контекст через Howler.ctx
-            if (typeof Howl !== 'undefined' && Howl.ctx) {
-                // Используем AudioContext от Howler.js если доступен
-                this.audioContext = Howl.ctx;
-            } else {
-                // Создаем новый AudioContext
-                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    initVuMeters() {
+        this.startVuMeters();
+    }
+
+    startVuMeters() {
+        if (this.vuMeterInterval) {
+            clearInterval(this.vuMeterInterval);
+        }
+        
+        this.vuMeterInterval = setInterval(() => {
+            this.updateVuMeters();
+        }, 100);
+    }
+    
+    pauseVuMeters() {
+        if (this.vuMeterInterval) {
+            clearInterval(this.vuMeterInterval);
+            this.vuMeterInterval = null;
+        }
+        
+        const musicVuBar = document.querySelector('#musicVuMeter .vu-bar');
+        const effectsVuBar = document.querySelector('#effectsVuMeter .vu-bar');
+        
+        if (musicVuBar) musicVuBar.style.height = '0%';
+        if (effectsVuBar) effectsVuBar.style.height = '0%';
+    }
+
+    updateVuMeters() {
+        // Обновляем VU-метр для музыки
+        let musicLevel = 0;
+        if (this.musicPlayer && this.isPlaying && !this.isPaused) {
+            const base = this.musicVolume * 0.7;
+            const random = Math.random() * 0.3;
+            musicLevel = Math.min(1, base + random);
+            
+            if (this.musicPlayer.seek && this.musicPlayer.duration) {
+                const progress = this.musicPlayer.seek() / this.musicPlayer.duration();
+                const pulse = Math.sin(progress * Math.PI * 4) * 0.1;
+                musicLevel = Math.max(0, Math.min(1, musicLevel + pulse));
             }
+        }
+        
+        this.lastMusicLevel = this.lastMusicLevel * 0.7 + musicLevel * 0.3;
+        
+        const musicVuBar = document.querySelector('#musicVuMeter .vu-bar');
+        if (musicVuBar) {
+            musicVuBar.style.height = `${this.lastMusicLevel * 100}%`;
+            const hue = 120 - (this.lastMusicLevel * 120);
+            musicVuBar.style.background = `linear-gradient(to top, hsl(${hue}, 100%, 50%), hsl(${hue * 0.8}, 100%, 60%))`;
+        }
+        
+        // Обновляем VU-метр для эффектов
+        let effectsLevel = 0;
+        let isEffectsPlaying = false;
+        
+        this.soundEffects.forEach((soundData) => {
+            if (soundData?.sound?.playing()) {
+                isEffectsPlaying = true;
+            }
+        });
+        
+        if (isEffectsPlaying) {
+            const base = this.effectsVolume * 0.6;
+            const random = Math.random() * 0.4;
+            effectsLevel = Math.min(1, base + random);
             
-            // Создаем AnalyserNode для музыки
-            this.musicAnalyser = this.audioContext.createAnalyser();
-            this.musicAnalyser.fftSize = 256;
-            this.musicAnalyser.smoothingTimeConstant = 0.8;
-            
-            // Создаем AnalyserNode для эффектов
-            this.effectsAnalyser = this.audioContext.createAnalyser();
-            this.effectsAnalyser.fftSize = 256;
-            this.effectsAnalyser.smoothingTimeConstant = 0.8;
-            
-            // Создаем GainNode для музыки (для подключения к destination)
-            this.musicGainNode = this.audioContext.createGain();
-            this.musicGainNode.gain.value = this.musicVolume;
-            
-            // Создаем GainNode для эффектов
-            this.effectsGainNode = this.audioContext.createGain();
-            this.effectsGainNode.gain.value = this.effectsVolume;
-            
-            // Примечание: реальное подключение аудио-источников к AnalyserNode
-            // будет происходить динамически при воспроизведении
-        } catch (error) {
-            console.warn('Web Audio API not available, using fallback VU meters:', error);
-            this.audioContext = null;
+            if (Math.random() > 0.7) {
+                effectsLevel = Math.min(1, effectsLevel + 0.3);
+            }
+        }
+        
+        this.lastEffectsLevel = this.lastEffectsLevel * 0.6 + effectsLevel * 0.4;
+        
+        const effectsVuBar = document.querySelector('#effectsVuMeter .vu-bar');
+        if (effectsVuBar) {
+            effectsVuBar.style.height = `${this.lastEffectsLevel * 100}%`;
+            const hue = 60 - (this.lastEffectsLevel * 60);
+            effectsVuBar.style.background = `linear-gradient(to top, hsl(${hue}, 100%, 50%), hsl(${hue * 0.8}, 100%, 60%))`;
         }
     }
 
     setupResizers() {
         const appContainer = document.querySelector('.app-container');
-        const centerPanel = document.querySelector('.center-panel');
-        if (!appContainer || !centerPanel) return;
-        
         const minLeft = 260;
         const minRight = 260;
-        const minTracks = 180;
-        const minPads = 120;
-        const resizerSize = 6; // должен совпадать с CSS
+        const resizerSize = 6;
         
         const applyInitialSizes = () => {
             try {
                 const saved = JSON.parse(localStorage.getItem('tsmLayout') || '{}');
                 if (saved.leftWidth) appContainer.style.setProperty('--left-width', `${saved.leftWidth}px`);
                 if (saved.rightWidth) appContainer.style.setProperty('--right-width', `${saved.rightWidth}px`);
-                if (saved.tracksHeight) centerPanel.style.setProperty('--tracks-height', `${saved.tracksHeight}px`);
-                if (saved.padsHeight) centerPanel.style.setProperty('--pads-height', `${saved.padsHeight}px`);
             } catch {}
         };
         
@@ -146,14 +173,13 @@
         const startDrag = (type, e) => {
             e.preventDefault();
             const rect = appContainer.getBoundingClientRect();
-            const centerRect = centerPanel.getBoundingClientRect();
             
             const onMove = (ev) => {
                 if (type === 'left') {
                     let x = ev.clientX - rect.left;
                     const rightWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--right-width')) || 450;
                     const total = rect.width;
-                    const maxLeft = total - rightWidth - resizerSize - 300; // минимум для центра
+                    const maxLeft = total - rightWidth - resizerSize - 300;
                     x = Math.max(minLeft, Math.min(maxLeft, x));
                     appContainer.style.setProperty('--left-width', `${x}px`);
                 } else if (type === 'right') {
@@ -163,12 +189,6 @@
                     const maxRight = total - leftWidth - resizerSize - 300;
                     x = Math.max(minRight, Math.min(maxRight, x));
                     appContainer.style.setProperty('--right-width', `${x}px`);
-                } else if (type === 'center') {
-                    let y = ev.clientY - centerRect.top;
-                    const totalH = centerRect.height;
-                    const maxTracks = totalH - resizerSize - minPads;
-                    y = Math.max(minTracks, Math.min(maxTracks, y));
-                    centerPanel.style.setProperty('--tracks-height', `${y}px`);
                 }
             };
             
@@ -177,11 +197,9 @@
                 document.removeEventListener('mouseup', onUp);
                 const leftWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--left-width')) || 0;
                 const rightWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--right-width')) || 0;
-                const tracksHeight = parseFloat(getComputedStyle(centerPanel).getPropertyValue('--tracks-height')) || 0;
                 const sizes = {};
                 if (leftWidth) sizes.leftWidth = leftWidth;
                 if (rightWidth) sizes.rightWidth = rightWidth;
-                if (tracksHeight) sizes.tracksHeight = tracksHeight;
                 saveSizes(sizes);
             };
             
@@ -193,11 +211,6 @@
             const type = el.dataset.resizer;
             el.addEventListener('mousedown', (e) => startDrag(type, e));
         });
-        
-        const centerResizer = document.querySelector('.resizer.horizontal[data-resizer="center"]');
-        if (centerResizer) {
-            centerResizer.addEventListener('mousedown', (e) => startDrag('center', e));
-        }
         
         window.addEventListener('resize', () => {
             const rect = appContainer.getBoundingClientRect();
@@ -217,19 +230,14 @@
     }
 
     async initializeApp() {
-        // Сначала загружаем конфигурацию
         await this.loadConfig();
-        
         this.setupEventListeners();
         this.createSoundPads();
         this.setupResizers();
-        this.initWebAudio();
+        this.initVuMeters();
         this.startClock();
-        this.startSessionStats();
-        this.updateCountdownDisplay(); // Инициализация отображения таймера
+        this.updateCountdownDisplay();
         await this.loadStoredData();
-        
-        // Теперь мы всегда просто обновляем плейлисты
         await this.refreshPlaylists();
     }
 
@@ -237,47 +245,42 @@
         try {
             this.config = await window.electronAPI.getConfig();
         } catch (error) {
-            console.error('Error loading config:', error);
             this.config = { firstRun: false, musicFolder: null };
         }
     }
 
     setupEventListeners() {
-        // Плейлисты
         document.getElementById('refreshPlaylists').addEventListener('click', () => this.refreshPlaylists());
         
-        // Управление воспроизведением
         document.getElementById('playBtn').addEventListener('click', () => this.playMusic());
         document.getElementById('pauseBtn').addEventListener('click', () => this.pauseMusic());
         document.getElementById('stopBtn').addEventListener('click', () => this.stopMusic());
         document.getElementById('prevTrack').addEventListener('click', () => this.previousTrack());
         document.getElementById('nextTrack').addEventListener('click', () => this.nextTrack());
         
-        // Быстрые кнопки: паника mute и блокировка UI
         const panicBtn = document.getElementById('panicMuteBtn');
         if (panicBtn) panicBtn.addEventListener('click', () => this.togglePanicMute());
-        const lockBtn = document.getElementById('lockUiBtn');
-        if (lockBtn) lockBtn.addEventListener('click', () => this.toggleUiLock());
         
-        // Саунд-пады
         document.getElementById('assignSound').addEventListener('click', () => this.assignSoundToPad());
         document.getElementById('clearPad').addEventListener('click', () => this.clearSelectedPad());
         document.getElementById('stopAllEffects').addEventListener('click', () => this.stopAllEffects());
         
-        // Громкость
-        document.getElementById('musicVolume').addEventListener('input', (e) => this.setMusicVolume(e.target.value / 100));
-        document.getElementById('effectsVolume').addEventListener('input', (e) => this.setEffectsVolume(e.target.value / 100));
+        document.getElementById('musicVolume').addEventListener('input', (e) => {
+            this.setMusicVolume(e.target.value / 100);
+            this.updateVuMeters();
+        });
+        document.getElementById('effectsVolume').addEventListener('input', (e) => {
+            this.setEffectsVolume(e.target.value / 100);
+            this.updateVuMeters();
+        });
         
-        // Прогресс-бар
         document.getElementById('progressBar').addEventListener('input', (e) => this.seekMusic(e.target.value));
         
-        // Поиск треков
         const searchInput = document.getElementById('trackSearchInput');
         if (searchInput) {
             searchInput.addEventListener('input', (e) => this.filterTracks(e.target.value));
         }
         
-        // Таймер обратного отсчета
         const countdownStart = document.getElementById('countdownStart');
         const countdownStop = document.getElementById('countdownStop');
         const countdownReset = document.getElementById('countdownReset');
@@ -285,7 +288,6 @@
         if (countdownStop) countdownStop.addEventListener('click', () => this.stopCountdown());
         if (countdownReset) countdownReset.addEventListener('click', () => this.resetCountdown());
         
-        // Режимы воспроизведения
         document.querySelectorAll('input[name="playbackMode"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
                 this.playbackMode = e.target.value;
@@ -294,21 +296,8 @@
             });
         });
         
-        // Горячие клавиши
         document.addEventListener('keydown', (e) => this.handleHotkeys(e));
-        
-        // Горячие клавиши для громкости (колесико мыши)
         document.addEventListener('wheel', (e) => this.handleVolumeWheel(e), { passive: false });
-    }
-
-    // Блокировка интерфейса / паника mute
-    toggleUiLock() {
-        this.uiLocked = !this.uiLocked;
-        const btn = document.getElementById('lockUiBtn');
-        if (btn) {
-            btn.textContent = this.uiLocked ? '🔓 Разблокировать' : '🔒 Блокировка';
-        }
-        this.updateStatus(this.uiLocked ? 'Интерфейс заблокирован' : 'Интерфейс разблокирован');
     }
 
     togglePanicMute() {
@@ -319,21 +308,22 @@
             } catch {}
         }
         this.soundEffects.forEach(sd => {
-            if (sd && sd.sound) {
+            if (sd?.sound) {
                 try { sd.sound.mute(this.isMuted); } catch {}
             }
         });
         const btn = document.getElementById('panicMuteBtn');
         if (btn) {
-            btn.textContent = this.isMuted ? '🔈 Unmute' : '🔇 Mute (паника)';
+            btn.innerHTML = this.isMuted ? 
+                '<i class="fas fa-volume-up"></i> Unmute' : 
+                '<i class="fas fa-volume-mute"></i> Mute (паника)';
         }
         this.updateStatus(this.isMuted ? 'Звук выключен (паника)' : 'Звук включен');
     }
 
-    // Поиск/фильтр треков
     filterTracks(query) {
         this.trackFilterQuery = (query || '').toLowerCase().trim();
-        this.displayTracks(); // перерисуем список
+        this.displayTracks();
     }
 
     async changeMusicFolder() {
@@ -356,7 +346,6 @@
             }
         } catch (error) {
             this.updateStatus('Ошибка изменения папки');
-            console.error('Error changing music folder:', error);
         }
     }
 
@@ -386,10 +375,10 @@
         
         container.innerHTML = `
             <div class="no-playlists">
-                <p>🎵 Плейлисты не найдены</p>
+                <p><i class="fas fa-music"></i> Плейлисты не найдены</p>
                 <p class="hint">В ${folderName} нет плейлистов (подпапок с музыкой)</p>
                 <p class="hint">Создайте подпапки с музыкой или выберите другую папку</p>
-                <button class="action-btn" id="changeFolderBtn">📁 Изменить папку с музыкой</button>
+                <button class="action-btn" id="changeFolderBtn"><i class="fas fa-folder-open"></i> Изменить папку с музыкой</button>
             </div>
         `;
         
@@ -401,10 +390,10 @@
         const container = document.getElementById('playlistsContainer');
         container.innerHTML = `
             <div class="playlist-error">
-                <p>❌ Ошибка загрузки плейлистов</p>
+                <p><i class="fas fa-exclamation-triangle"></i> Ошибка загрузки плейлистов</p>
                 <p class="error-detail">${error}</p>
-                <button class="action-btn" id="retryBtn">🔄 Повторить</button>
-                <button class="action-btn" id="changeFolderBtn2">📁 Изменить папку</button>
+                <button class="action-btn" id="retryBtn"><i class="fas fa-redo"></i> Повторить</button>
+                <button class="action-btn" id="changeFolderBtn2"><i class="fas fa-folder-open"></i> Изменить папку</button>
             </div>
         `;
         
@@ -419,15 +408,15 @@
         
         container.innerHTML = `
             <div class="current-folder">
-                <span class="folder-path">📁 ${folderName}</span>
-                <button class="folder-change-btn" id="changeMusicFolderSmall">✏️</button>
+                <span class="folder-path"><i class="fas fa-folder"></i> ${folderName}</span>
+                <button class="folder-change-btn" id="changeMusicFolderSmall"><i class="fas fa-edit"></i></button>
             </div>
         `;
         
         playlists.forEach(playlist => {
             const btn = document.createElement('button');
             btn.className = 'playlist-btn';
-            btn.innerHTML = `🎵 ${playlist.name} <small>(${playlist.trackCount} треков)</small>`;
+            btn.innerHTML = `<i class="fas fa-list"></i> ${playlist.name} <small>(${playlist.trackCount} треков)</small>`;
             btn.addEventListener('click', () => this.loadPlaylist(playlist));
             container.appendChild(btn);
         });
@@ -461,7 +450,6 @@
             }
         } catch (error) {
             this.updateStatus('Ошибка загрузки плейлиста');
-            console.error('Error loading playlist:', error);
         }
     }
 
@@ -485,7 +473,6 @@
                 btn.classList.add('active');
             }
             
-            // Создаем структуру с названием, автором и длительностью
             const trackContent = document.createElement('div');
             trackContent.className = 'track-content';
             
@@ -514,12 +501,10 @@
             btn.addEventListener('click', () => this.playTrack(index));
             container.appendChild(btn);
             
-            // Загружаем длительность трека асинхронно, если еще не загружена
             if (!track.duration) {
                 this.loadTrackDuration(track, trackDuration);
             }
             
-            // Загружаем метаданные (автора) асинхронно, если еще не загружены
             if (!track.artist) {
                 this.loadTrackMetadata(track, trackArtist);
             }
@@ -550,7 +535,6 @@
                 }
             });
         } catch (error) {
-            console.warn('Could not load track duration:', error);
             if (durationElement) {
                 durationElement.textContent = 'N/A';
             }
@@ -580,7 +564,6 @@
                 }
             }
         } catch (error) {
-            console.warn('Could not load track metadata:', error);
             track.artist = 'Неизвестный исполнитель';
             if (artistElement) {
                 artistElement.textContent = track.artist;
@@ -606,12 +589,7 @@
                 this.isPaused = false;
                 this.updateStatus(`Воспроизведение: ${track.name}`);
                 this.startProgressTracking();
-                this.addToHistory(track);
-                this.tracksPlayedCount++;
-                this.updateTracksPlayedCount();
-                
-                // Подключаем к Web Audio API для реальных VU-метров
-                this.connectMusicToWebAudio();
+                this.updateVuMeters();
             },
             onpause: () => {
                 this.isPaused = true;
@@ -622,7 +600,6 @@
                 this.isPaused = false;
                 this.updateStatus('Остановлено');
                 this.stopProgressTracking();
-                this.disconnectMusicFromWebAudio();
             },
             onend: () => {
                 this.handleTrackEnd();
@@ -632,12 +609,9 @@
             },
             onloaderror: (id, error) => {
                 this.updateStatus('Ошибка загрузки трека', 'error');
-                console.error('Load error:', error);
             },
             onplayerror: (id, error) => {
                 this.updateStatus('Ошибка воспроизведения', 'error');
-                console.error('Play error:', error);
-                // Пытаемся перейти к следующему треку при ошибке
                 if (this.playbackMode === 'sequential') {
                     setTimeout(() => this.nextTrack(), 1000);
                 }
@@ -649,51 +623,8 @@
             currentTrackEl.textContent = track.name;
         }
         
-        // Обновляем метаданные Media Session
         this.updateMediaSessionMetadata(track.name);
-        
         this.highlightCurrentTrack();
-    }
-    
-    connectMusicToWebAudio() {
-        if (!this.audioContext || !this.musicAnalyser || !this.musicPlayer) return;
-        
-        try {
-            // Howler.js использует Web Audio API через свой AudioContext
-            // Пытаемся получить доступ к источнику звука
-            // Примечание: Howler.js может использовать HTML5 audio или Web Audio API
-            // Для реальных VU-метров нужно подключиться к реальному аудио-потоку
-            
-            // Если Howler использует Web Audio API, получаем источник
-            if (this.musicPlayer._sounds && this.musicPlayer._sounds.length > 0) {
-                const sound = this.musicPlayer._sounds[0];
-                // Пытаемся получить Web Audio источник
-                if (sound._node && sound._node.bufferSource) {
-                    // Подключаем к нашему AnalyserNode для анализа
-                    try {
-                        sound._node.bufferSource.connect(this.musicAnalyser);
-                        this.musicAnalyser.connect(this.audioContext.destination);
-                        this.musicSourceNode = sound._node.bufferSource;
-                    } catch (e) {
-                        // Если не получается подключить напрямую, используем fallback
-                        console.log('Using fallback VU meter for music');
-                    }
-                }
-            }
-        } catch (error) {
-            console.warn('Could not connect music to Web Audio API, using fallback:', error);
-        }
-    }
-    
-    disconnectMusicFromWebAudio() {
-        if (this.musicSourceNode) {
-            try {
-                this.musicSourceNode.disconnect();
-            } catch (e) {
-                // Игнорируем ошибки отключения
-            }
-            this.musicSourceNode = null;
-        }
     }
 
     handleTrackEnd() {
@@ -768,7 +699,6 @@
             const isActive = index === this.currentTrackIndex;
             track.classList.toggle('active', isActive);
             
-            // Прокручиваем к активному треку
             if (isActive) {
                 track.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
@@ -777,7 +707,6 @@
     }
 
     startProgressTracking() {
-        // Используем requestAnimationFrame для более плавного обновления
         const updateProgress = () => {
             if (this.musicPlayer && this.isPlaying && !this.isPaused) {
                 const seek = this.musicPlayer.seek();
@@ -790,7 +719,6 @@
                         progressBar.value = progress;
                     }
                     
-                    // Обновляем время только каждые 250ms для оптимизации
                     const now = Date.now();
                     if (!this.lastTimeUpdate || now - this.lastTimeUpdate >= 250) {
                         this.updateTimeDisplays();
@@ -798,9 +726,6 @@
                     }
                 }
             }
-            
-            // Обновляем VU-метры
-            this.updateVuMeters();
             
             if (this.isPlaying && !this.isPaused) {
                 this.progressAnimationFrame = requestAnimationFrame(updateProgress);
@@ -838,9 +763,7 @@
                         }
                     }
                 }
-            } catch (error) {
-                console.warn('Error updating time displays:', error);
-            }
+            } catch (error) {}
         }
     }
 
@@ -848,10 +771,6 @@
         if (this.progressAnimationFrame) {
             cancelAnimationFrame(this.progressAnimationFrame);
             this.progressAnimationFrame = null;
-        }
-        if (this.progressInterval) {
-            clearInterval(this.progressInterval);
-            this.progressInterval = null;
         }
         
         const progressBar = document.getElementById('progressBar');
@@ -863,9 +782,6 @@
         if (totalTimeDisplay) totalTimeDisplay.textContent = '0:00';
         
         this.lastTimeUpdate = null;
-        
-        // Сбрасываем VU-метры
-        this.updateVuMeters();
     }
 
     seekMusic(progress) {
@@ -878,7 +794,6 @@
                     this.updateTimeDisplays();
                 }
             } catch (error) {
-                console.error('Error seeking music:', error);
                 this.updateStatus('Ошибка перемотки', 'error');
             }
         }
@@ -892,19 +807,19 @@
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     }
 
-    // Саунд-пады
     selectPad(index) {
         document.querySelectorAll('.sound-pad').forEach(pad => {
             pad.classList.remove('selected');
         });
         
         const pad = document.querySelector(`.sound-pad[data-index="${index}"]`);
-        pad.classList.add('selected');
-        
-        this.selectedPad = index;
-        
-        const soundName = this.soundEffects.get(index)?.name || `Пад ${index + 1}`;
-        document.getElementById('padStatus').textContent = `Выбран: ${soundName}`;
+        if (pad) {
+            pad.classList.add('selected');
+            this.selectedPad = index;
+            
+            const soundName = this.soundEffects.get(index)?.name || `Пад ${index + 1}`;
+            document.getElementById('padStatus').textContent = `Выбран: ${soundName}`;
+        }
     }
 
     async assignSoundToPad() {
@@ -928,7 +843,6 @@
             }
         } catch (error) {
             this.updateStatus('Ошибка выбора файла');
-            console.error('Error selecting file:', error);
         }
     }
 
@@ -936,9 +850,8 @@
         try {
             const fileName = filePath.split(/[\\/]/).pop().replace(/\.[^/.]+$/, "");
             
-            // Просто сохраняем информацию о звуке, но не загружаем его
             this.soundEffects.set(padIndex, {
-                sound: null, // Загрузим при первом воспроизведении
+                sound: null,
                 name: fileName,
                 path: filePath
             });
@@ -954,7 +867,6 @@
             this.saveStoredData();
         } catch (error) {
             this.updateStatus('Ошибка назначения звука', 'error');
-            console.error('Error assigning sound:', error);
         }
     }
 
@@ -992,7 +904,6 @@
                 
                 this.updateStatus(`Эффект: ${soundData.name}`, 'success');
             } catch (error) {
-                console.error('Error playing sound effect:', error);
                 this.stopPadProgress(padIndex);
                 if (pad) pad.classList.remove('playing');
                 this.updateStatus('Ошибка воспроизведения эффекта', 'error');
@@ -1003,34 +914,29 @@
         this.animatePadPress(pad);
 
         if (soundData.sound) {
-            // Звук уже загружен, просто воспроизводим
             playSound(soundData.sound, soundData, pad);
         } else {
-            // Загружаем звук при первом воспроизведении
             this.updateStatus(`Загрузка: ${soundData.name}...`);
             const sound = new Howl({
                 src: [soundData.path],
                 volume: this.effectsVolume,
                 html5: true,
                 onload: () => {
-                    soundData.sound = sound; // Сохраняем загруженный звук
+                    soundData.sound = sound;
                     this.updateStatus(`Готово: ${soundData.name}`);
                     playSound(sound, soundData, pad);
                 },
                 onloaderror: (id, error) => {
                     this.updateStatus(`Ошибка загрузки: ${soundData.name}`, 'error');
-                    console.error('Sound load error:', error);
                 },
                 onplayerror: (id, error) => {
                     this.updateStatus('Ошибка воспроизведения эффекта', 'error');
-                    console.error('Sound play error:', error);
                 }
             });
         }
     }
     
     startPadProgress(padIndex, duration) {
-        // Останавливаем предыдущий интервал если есть
         this.stopPadProgress(padIndex);
         
         const pad = document.querySelector(`.sound-pad[data-index="${padIndex}"]`);
@@ -1047,7 +953,6 @@
             const elapsed = (Date.now() - startTime) / 1000;
             const progress = Math.min(100, (elapsed / duration) * 100);
             
-            // Обновляем прогресс-бар
             let progressBar = padEl.querySelector('.pad-progress-bar');
             if (!progressBar) {
                 progressBar = document.createElement('div');
@@ -1061,7 +966,7 @@
             }
         };
         
-        const intervalId = setInterval(updateProgress, 50); // Обновляем каждые 50ms
+        const intervalId = setInterval(updateProgress, 50);
         this.padProgressIntervals.set(padIndex, intervalId);
     }
     
@@ -1082,21 +987,23 @@
     }
     
     animatePadPress(pad) {
-        // Пад просто становится зеленым, без уменьшения
-        // Функция оставлена для возможных будущих анимаций
+        if (pad) {
+            pad.classList.add('pressed');
+            setTimeout(() => {
+                pad.classList.remove('pressed');
+            }, 150);
+        }
     }
 
     clearSelectedPad() {
         if (this.selectedPad !== null) {
             const padIndex = this.selectedPad;
             const soundData = this.soundEffects.get(padIndex);
-            if (soundData && soundData.sound) {
+            if (soundData?.sound) {
                 try {
                     soundData.sound.stop();
                     soundData.sound.unload();
-                } catch (error) {
-                    console.warn('Error unloading sound:', error);
-                }
+                } catch (error) {}
             }
             
             this.stopPadProgress(padIndex);
@@ -1128,14 +1035,12 @@
     stopAllEffects() {
         let stoppedCount = 0;
         this.soundEffects.forEach((soundData, padIndex) => {
-            if (soundData && soundData.sound) {
+            if (soundData?.sound) {
                 try {
                     soundData.sound.stop();
                     this.stopPadProgress(padIndex);
                     stoppedCount++;
-                } catch (error) {
-                    console.error('Error stopping sound effect:', error);
-                }
+                } catch (error) {}
             }
         });
         
@@ -1150,26 +1055,14 @@
         this.updateStatus(`Остановлено эффектов: ${stoppedCount}`, 'success');
     }
 
-    // Громкость с debouncing для оптимизации
     setMusicVolume(volume) {
         this.musicVolume = volume;
         
-        // Обновляем отображение сразу
         const volumeValueEl = document.getElementById('musicVolumeValue');
         if (volumeValueEl) {
             volumeValueEl.textContent = `${Math.round(volume * 100)}%`;
         }
         
-        // Обновляем GainNode для Web Audio API
-        if (this.musicGainNode) {
-            try {
-                this.musicGainNode.gain.value = volume;
-            } catch (error) {
-                console.warn('Error setting music gain node:', error);
-            }
-        }
-        
-        // Применяем громкость с небольшой задержкой для плавности
         if (this.volumeUpdateTimeout) {
             clearTimeout(this.volumeUpdateTimeout);
         }
@@ -1178,9 +1071,7 @@
             if (this.musicPlayer) {
                 try {
                     this.musicPlayer.volume(volume);
-                } catch (error) {
-                    console.error('Error setting music volume:', error);
-                }
+                } catch (error) {}
             }
             this.saveStoredData();
         }, 50);
@@ -1189,41 +1080,27 @@
     setEffectsVolume(volume) {
         this.effectsVolume = volume;
         
-        // Обновляем отображение сразу
         const volumeValueEl = document.getElementById('effectsVolumeValue');
         if (volumeValueEl) {
             volumeValueEl.textContent = `${Math.round(volume * 100)}%`;
         }
         
-        // Обновляем GainNode для Web Audio API
-        if (this.effectsGainNode) {
-            try {
-                this.effectsGainNode.gain.value = volume;
-            } catch (error) {
-                console.warn('Error setting effects gain node:', error);
-            }
-        }
-        
-        // Применяем громкость с задержкой
         if (this.volumeUpdateTimeout) {
             clearTimeout(this.volumeUpdateTimeout);
         }
         
         this.volumeUpdateTimeout = setTimeout(() => {
             this.soundEffects.forEach(soundData => {
-                if (soundData && soundData.sound) {
+                if (soundData?.sound) {
                     try {
                         soundData.sound.volume(volume);
-                    } catch (error) {
-                        console.error('Error setting effect volume:', error);
-                    }
+                    } catch (error) {}
                 }
             });
             this.saveStoredData();
         }, 50);
     }
 
-    // Режимы воспроизведения
     getPlaybackModeName() {
         switch (this.playbackMode) {
             case 'sequential': return 'Автоматически следующий';
@@ -1233,13 +1110,8 @@
         }
     }
 
-    // Горячие клавиши
     handleHotkeys(event) {
         if (event.target.tagName === 'INPUT') return;
-        if (this.uiLocked && !['KeyL', 'KeyM', 'Escape'].includes(event.code)) {
-            event.preventDefault();
-            return;
-        }
 
         switch (event.code) {
             case 'Space':
@@ -1254,10 +1126,6 @@
                 event.preventDefault();
                 this.stopMusic();
                 this.stopAllEffects();
-                break;
-            case 'KeyL':
-                event.preventDefault();
-                this.toggleUiLock();
                 break;
             case 'KeyM':
                 event.preventDefault();
@@ -1303,7 +1171,6 @@
         }
     }
     
-    // Обработка колесика мыши для громкости
     handleVolumeWheel(event) {
         const volumeSection = document.querySelector('.volume-section');
         if (!volumeSection) return;
@@ -1357,95 +1224,7 @@
             if (effectsSlider) effectsSlider.value = newVolume * 100;
         }
     }
-    
-    // Обновление VU-метров с реальными данными из Web Audio API
-    updateVuMeters() {
-        const musicVuMeter = document.getElementById('musicVuMeter');
-        if (musicVuMeter) {
-            const musicVuBar = musicVuMeter.querySelector('.vu-bar');
-            if (musicVuBar) {
-                let level = 0;
-                if (this.musicAnalyser && this.musicPlayer && this.isPlaying && !this.isPaused) {
-                    try {
-                        // Пытаемся получить реальные данные из AnalyserNode
-                        const dataArray = new Uint8Array(this.musicAnalyser.frequencyBinCount);
-                        this.musicAnalyser.getByteFrequencyData(dataArray);
-                        
-                        // Вычисляем средний уровень
-                        let sum = 0;
-                        let max = 0;
-                        for (let i = 0; i < dataArray.length; i++) {
-                            sum += dataArray[i];
-                            if (dataArray[i] > max) max = dataArray[i];
-                        }
-                        // Используем комбинацию среднего и максимума для более реалистичного отображения
-                        const average = sum / dataArray.length;
-                        const combined = (average * 0.7 + max * 0.3) / 255;
-                        // Нормализуем и применяем громкость
-                        level = (this.isMuted ? 0 : Math.min(1, combined * 1.5)) * this.musicVolume;
-                    } catch (error) {
-                        // Fallback на старый метод если Web Audio API не работает
-                        level = (this.isMuted ? 0 : this.musicVolume) * (0.7 + Math.random() * 0.3);
-                    }
-                } else {
-                    level = 0;
-                }
-                musicVuBar.style.width = `${Math.min(100, level * 100)}%`;
-            }
-        }
-        
-        const effectsVuMeter = document.getElementById('effectsVuMeter');
-        if (effectsVuMeter) {
-            const effectsVuBar = effectsVuMeter.querySelector('.vu-bar');
-            if (effectsVuBar) {
-                let level = 0;
-                if (this.effectsAnalyser) {
-                    // Проверяем, играют ли какие-то эффекты
-                    let isPlaying = false;
-                    this.soundEffects.forEach(soundData => {
-                        if (soundData && soundData.sound && soundData.sound.playing()) {
-                            isPlaying = true;
-                        }
-                    });
-                    
-                    if (isPlaying) {
-                        try {
-                            const dataArray = new Uint8Array(this.effectsAnalyser.frequencyBinCount);
-                            this.effectsAnalyser.getByteFrequencyData(dataArray);
-                            
-                            // Вычисляем средний уровень
-                            let sum = 0;
-                            let max = 0;
-                            for (let i = 0; i < dataArray.length; i++) {
-                                sum += dataArray[i];
-                                if (dataArray[i] > max) max = dataArray[i];
-                            }
-                            const average = sum / dataArray.length;
-                            const combined = (average * 0.7 + max * 0.3) / 255;
-                            level = (this.isMuted ? 0 : Math.min(1, combined * 1.5)) * this.effectsVolume;
-                        } catch (error) {
-                            // Fallback на старый метод
-                            level = (this.isMuted ? 0 : this.effectsVolume) * (0.7 + Math.random() * 0.3);
-                        }
-                    } else {
-                        level = 0;
-                    }
-                } else {
-                    // Fallback если Web Audio API не доступен
-                    let isPlaying = false;
-                    this.soundEffects.forEach(soundData => {
-                        if (soundData && soundData.sound && soundData.sound.playing()) {
-                            isPlaying = true;
-                        }
-                    });
-                    level = isPlaying ? (this.isMuted ? 0 : this.effectsVolume) * (0.7 + Math.random() * 0.3) : 0;
-                }
-                effectsVuBar.style.width = `${Math.min(100, level * 100)}%`;
-            }
-        }
-    }
 
-    // Переименование падов по двойному клику
     enablePadRenaming() {
         const grid = document.getElementById('soundPadsGrid');
         if (!grid) return;
@@ -1466,7 +1245,6 @@
         });
     }
 
-    // Сохранение/загрузка данных
     saveStoredData() {
         const data = {
             soundEffects: Array.from(this.soundEffects.entries()).map(([index, soundData]) => ({
@@ -1507,16 +1285,13 @@
                     }
                 }
             }
-        } catch (error) {
-            console.error('Error loading stored data:', error);
-        }
+        } catch (error) {}
     }
 
     updateStatus(message, type = 'info') {
         const statusElement = document.getElementById('status');
         if (!statusElement) return;
         
-        // Очищаем предыдущий таймаут
         if (this.statusUpdateTimeout) {
             clearTimeout(this.statusUpdateTimeout);
         }
@@ -1524,7 +1299,6 @@
         statusElement.textContent = message;
         statusElement.classList.add('pulse');
         
-        // Добавляем класс типа статуса для разных стилей
         statusElement.classList.remove('status-error', 'status-success', 'status-warning');
         if (type === 'error') {
             statusElement.classList.add('status-error');
@@ -1537,8 +1311,6 @@
         this.statusUpdateTimeout = setTimeout(() => {
             statusElement.classList.remove('pulse');
         }, 500);
-        
-        console.log(`Status [${type}]: ${message}`);
     }
 
     createSoundPads() {
@@ -1578,89 +1350,53 @@
         };
         
         updateTime();
-        // Используем более точный интервал для часов
         this.clockInterval = setInterval(updateTime, 1000);
-        
-        // Интеграция с Media Session API для лучшей поддержки ОС
         this.setupMediaSession();
     }
     
     setupMediaSession() {
-        // Media Session API поддерживается в Electron через Chromium
         if ('mediaSession' in navigator && 'MediaMetadata' in window) {
             try {
-                // Устанавливаем начальные метаданные
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: 'Theatre Sound Mixer',
                     artist: 'Concert Audio System',
                     album: 'Sound Mixing'
                 });
                 
-                // Обработчики действий медиа-сессии (глобальные горячие клавиши в ОС)
                 try {
                     navigator.mediaSession.setActionHandler('play', () => {
                         this.playMusic();
                     });
-                } catch (e) {
-                    // Игнорируем если не поддерживается
-                }
-                
-                try {
                     navigator.mediaSession.setActionHandler('pause', () => {
                         this.pauseMusic();
                     });
-                } catch (e) {
-                    // Игнорируем если не поддерживается
-                }
-                
-                try {
                     navigator.mediaSession.setActionHandler('stop', () => {
                         this.stopMusic();
                         this.stopAllEffects();
                     });
-                } catch (e) {
-                    // Игнорируем если не поддерживается
-                }
-                
-                try {
                     navigator.mediaSession.setActionHandler('previoustrack', () => {
                         this.previousTrack();
                     });
-                } catch (e) {
-                    // Игнорируем если не поддерживается
-                }
-                
-                try {
                     navigator.mediaSession.setActionHandler('nexttrack', () => {
                         this.nextTrack();
                     });
-                } catch (e) {
-                    // Игнорируем если не поддерживается
-                }
-            } catch (error) {
-                // Media Session API может быть не полностью поддерживаем в Electron
-                console.log('Media Session API partially supported');
-            }
+                } catch (e) {}
+            } catch (error) {}
         }
     }
     
     updateMediaSessionMetadata(trackName) {
         if ('mediaSession' in navigator && 'MediaMetadata' in window) {
             try {
-                // Создаем новый объект метаданных для обновления
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: trackName || 'Theatre Sound Mixer',
                     artist: 'Concert Audio System',
                     album: 'Sound Mixing'
                 });
-            } catch (error) {
-                // Игнорируем ошибки обновления метаданных
-                console.log('Could not update media session metadata');
-            }
+            } catch (error) {}
         }
     }
     
-    // Счетчик треков
     updateTrackCounter() {
         const counterEl = document.getElementById('trackCounter');
         if (counterEl && this.playlistTracks.length > 0) {
@@ -1672,53 +1408,6 @@
         }
     }
     
-    // История воспроизведения
-    addToHistory(track) {
-        const historyItem = {
-            name: track.name,
-            artist: track.artist || 'Неизвестный исполнитель',
-            time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-        };
-        
-        this.playHistory.unshift(historyItem);
-        if (this.playHistory.length > this.maxHistoryItems) {
-            this.playHistory.pop();
-        }
-        
-        this.updateHistoryDisplay();
-    }
-    
-    updateHistoryDisplay() {
-        const container = document.getElementById('historyContainer');
-        if (!container) return;
-        
-        if (this.playHistory.length === 0) {
-            container.innerHTML = '<div class="history-empty">История пуста</div>';
-            return;
-        }
-        
-        container.innerHTML = this.playHistory.map(item => {
-            const displayName = item.name.length > 25 ? item.name.substring(0, 25) + '...' : item.name;
-            return `
-                <div class="history-item" title="${item.name}">
-                    <div style="font-weight: 500;">${displayName}</div>
-                    <div style="font-size: 9px; color: var(--text-muted); margin-top: 2px;">
-                        ${item.artist} • ${item.time}
-                    </div>
-                </div>
-            `;
-        }).join('');
-        
-        // Добавляем обработчики клика для возврата к треку
-        container.querySelectorAll('.history-item').forEach((item, index) => {
-            item.addEventListener('click', () => {
-                // Можно добавить логику поиска и воспроизведения трека из истории
-                this.updateStatus(`История: ${this.playHistory[index].name}`);
-            });
-        });
-    }
-    
-    // Таймер обратного отсчета
     startCountdown() {
         const minutes = parseInt(document.getElementById('countdownMinutes').value) || 0;
         const seconds = parseInt(document.getElementById('countdownSeconds').value) || 0;
@@ -1744,7 +1433,6 @@
             if (this.countdownTime <= 0) {
                 this.stopCountdown();
                 this.updateStatus('Таймер завершен!', 'warning');
-                // Можно добавить звуковой сигнал
             }
         }, 1000);
     }
@@ -1782,35 +1470,6 @@
             displayEl.classList.add('warning');
         }
     }
-    
-    // Статистика сессии
-    startSessionStats() {
-        this.updateSessionTime();
-        this.sessionTimeInterval = setInterval(() => {
-            this.updateSessionTime();
-        }, 1000);
-    }
-    
-    updateSessionTime() {
-        const elapsed = Math.floor((Date.now() - this.sessionStartTime) / 1000);
-        const hours = Math.floor(elapsed / 3600);
-        const minutes = Math.floor((elapsed % 3600) / 60);
-        const seconds = elapsed % 60;
-        
-        const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        
-        const sessionTimeEl = document.getElementById('sessionTime');
-        if (sessionTimeEl) {
-            sessionTimeEl.textContent = timeString;
-        }
-    }
-    
-    updateTracksPlayedCount() {
-        const countEl = document.getElementById('tracksPlayedCount');
-        if (countEl) {
-            countEl.textContent = this.tracksPlayedCount;
-        }
-    }
 }
 
 // Инициализация приложения
@@ -1821,19 +1480,14 @@ document.addEventListener('DOMContentLoaded', () => {
 // Очистка ресурсов при закрытии окна
 window.addEventListener('beforeunload', () => {
     if (window.soundMixer) {
-        // Останавливаем все воспроизведение
         window.soundMixer.stopMusic();
         window.soundMixer.stopAllEffects();
         
-        // Очищаем интервалы
         if (window.soundMixer.clockInterval) {
             clearInterval(window.soundMixer.clockInterval);
         }
         if (window.soundMixer.progressAnimationFrame) {
             cancelAnimationFrame(window.soundMixer.progressAnimationFrame);
-        }
-        if (window.soundMixer.progressInterval) {
-            clearInterval(window.soundMixer.progressInterval);
         }
         if (window.soundMixer.volumeUpdateTimeout) {
             clearTimeout(window.soundMixer.volumeUpdateTimeout);
@@ -1844,44 +1498,36 @@ window.addEventListener('beforeunload', () => {
         if (window.soundMixer.countdownInterval) {
             clearInterval(window.soundMixer.countdownInterval);
         }
-        if (window.soundMixer.sessionTimeInterval) {
-            clearInterval(window.soundMixer.sessionTimeInterval);
+        if (window.soundMixer.vuMeterInterval) {
+            clearInterval(window.soundMixer.vuMeterInterval);
         }
         
-        // Выгружаем все звуки
         if (window.soundMixer.musicPlayer) {
             try {
                 window.soundMixer.musicPlayer.unload();
-            } catch (e) {
-                console.warn('Error unloading music player:', e);
-            }
+            } catch (e) {}
         }
         
         window.soundMixer.soundEffects.forEach((soundData) => {
-            if (soundData && soundData.sound) {
+            if (soundData?.sound) {
                 try {
                     soundData.sound.unload();
-                } catch (e) {
-                    console.warn('Error unloading sound effect:', e);
-                }
+                } catch (e) {}
             }
         });
         
-        // Сохраняем данные
         window.soundMixer.saveStoredData();
     }
 });
 
 // Обработка ошибок на уровне приложения
 window.addEventListener('error', (event) => {
-    console.error('Global error:', event.error);
     if (window.soundMixer) {
         window.soundMixer.updateStatus('Произошла ошибка приложения', 'error');
     }
 });
 
 window.addEventListener('unhandledrejection', (event) => {
-    console.error('Unhandled promise rejection:', event.reason);
     if (window.soundMixer) {
         window.soundMixer.updateStatus('Ошибка выполнения операции', 'error');
     }
