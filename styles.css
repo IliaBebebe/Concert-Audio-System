@@ -76,7 +76,7 @@ body {
 /* Градиентные фоны */
 .app-container {
     display: grid;
-    grid-template-columns: var(--left-width, 450px) 6px 1fr 6px var(--right-width, 450px);
+    grid-template-columns: minmax(260px, var(--left-width, 360px)) 6px minmax(280px, 1fr) 6px minmax(260px, var(--right-width, 340px));
     height: 100vh;
     gap: 0;
     background: 
@@ -367,6 +367,13 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+.playlist-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .playlist-btn:hover {

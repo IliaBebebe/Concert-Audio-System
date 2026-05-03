@@ -1,6 +1,6 @@
 {
   "name": "theatre-sound-mixer",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Professional sound mixer for theatre productions - Concert Audio System (CAS)",
   "main": "main.js",
   "author": "Concert Audio System",
@@ -10,7 +10,7 @@
     "build": "electron-builder --win nsis --x64",
     "build-win": "electron-builder --win --dir --x64",
     "build-installer": "electron-builder --win nsis --x64",
-    "build-simple": "node build-simple.js",
+    "build-simple": "electron-builder --win --dir --x64",
     "dev": "electron . --dev"
   },
   "devDependencies": {

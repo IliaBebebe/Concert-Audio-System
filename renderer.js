@@ -151,6 +151,7 @@
 
     setupResizers() {
         const appContainer = document.querySelector('.app-container');
+        if (!appContainer) return;
         const minLeft = 260;
         const minRight = 260;
         const resizerSize = 6;
@@ -179,14 +180,14 @@
             const onMove = (ev) => {
                 if (type === 'left') {
                     let x = ev.clientX - rect.left;
-                    const rightWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--right-width')) || 450;
+                    const rightWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--right-width')) || 340;
                     const total = rect.width;
                     const maxLeft = total - rightWidth - resizerSize - 300;
                     x = Math.max(minLeft, Math.min(maxLeft, x));
                     appContainer.style.setProperty('--left-width', `${x}px`);
                 } else if (type === 'right') {
                     let x = rect.right - ev.clientX;
-                    const leftWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--left-width')) || 450;
+                    const leftWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--left-width')) || 360;
                     const total = rect.width;
                     const maxRight = total - leftWidth - resizerSize - 300;
                     x = Math.max(minRight, Math.min(maxRight, x));
@@ -216,8 +217,8 @@
         
         window.addEventListener('resize', () => {
             const rect = appContainer.getBoundingClientRect();
-            const leftWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--left-width')) || 450;
-            const rightWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--right-width')) || 450;
+            const leftWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--left-width')) || 360;
+            const rightWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--right-width')) || 340;
             const minCenter = 300;
             const totalNeeded = leftWidth + rightWidth + 2 * resizerSize + minCenter;
             if (rect.width < totalNeeded) {
@@ -252,31 +253,31 @@
     }
 
     setupEventListeners() {
-        document.getElementById('refreshPlaylists').addEventListener('click', () => this.refreshPlaylists());
+        this.onClick('refreshPlaylists', () => this.refreshPlaylists());
         
-        document.getElementById('playBtn').addEventListener('click', () => this.playMusic());
-        document.getElementById('pauseBtn').addEventListener('click', () => this.pauseMusic());
-        document.getElementById('stopBtn').addEventListener('click', () => this.stopMusic());
-        document.getElementById('prevTrack').addEventListener('click', () => this.previousTrack());
-        document.getElementById('nextTrack').addEventListener('click', () => this.nextTrack());
+        this.onClick('playBtn', () => this.playMusic());
+        this.onClick('pauseBtn', () => this.pauseMusic());
+        this.onClick('stopBtn', () => this.stopMusic());
+        this.onClick('prevTrack', () => this.previousTrack());
+        this.onClick('nextTrack', () => this.nextTrack());
         
         const panicBtn = document.getElementById('panicMuteBtn');
         if (panicBtn) panicBtn.addEventListener('click', () => this.togglePanicMute());
         
-        document.getElementById('assignSound').addEventListener('click', () => this.assignSoundToPad());
-        document.getElementById('clearPad').addEventListener('click', () => this.clearSelectedPad());
-        document.getElementById('stopAllEffects').addEventListener('click', () => this.stopAllEffects());
+        this.onClick('assignSound', () => this.assignSoundToPad());
+        this.onClick('clearPad', () => this.clearSelectedPad());
+        this.onClick('stopAllEffects', () => this.stopAllEffects());
         
-        document.getElementById('musicVolume').addEventListener('input', (e) => {
+        document.getElementById('musicVolume')?.addEventListener('input', (e) => {
             this.setMusicVolume(e.target.value / 100);
             this.updateVuMeters();
         });
-        document.getElementById('effectsVolume').addEventListener('input', (e) => {
+        document.getElementById('effectsVolume')?.addEventListener('input', (e) => {
             this.setEffectsVolume(e.target.value / 100);
             this.updateVuMeters();
         });
         
-        document.getElementById('progressBar').addEventListener('input', (e) => this.seekMusic(e.target.value));
+        document.getElementById('progressBar')?.addEventListener('input', (e) => this.seekMusic(e.target.value));
         
         const searchInput = document.getElementById('trackSearchInput');
         if (searchInput) {
@@ -300,6 +301,13 @@
         
         document.addEventListener('keydown', (e) => this.handleHotkeys(e));
         document.addEventListener('wheel', (e) => this.handleVolumeWheel(e), { passive: false });
+    }
+
+    onClick(id, handler) {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('click', handler);
+        }
     }
 
     togglePanicMute() {
@@ -375,14 +383,17 @@
         const container = document.getElementById('playlistsContainer');
         const folderName = this.config.musicFolder ? this.config.musicFolder.split(/[\\/]/).pop() : 'папке';
         
-        container.innerHTML = `
-            <div class="no-playlists">
-                <p><i class="fas fa-music"></i> Плейлисты не найдены</p>
-                <p class="hint">В ${folderName} нет плейлистов (подпапок с музыкой)</p>
-                <p class="hint">Создайте подпапки с музыкой или выберите другую папку</p>
-                <button class="action-btn" id="changeFolderBtn"><i class="fas fa-folder-open"></i> Изменить папку с музыкой</button>
-            </div>
+        container.replaceChildren();
+        const wrapper = document.createElement('div');
+        wrapper.className = 'no-playlists';
+        wrapper.innerHTML = `
+            <p><i class="fas fa-music"></i> Плейлисты не найдены</p>
+            <p class="hint"></p>
+            <p class="hint">Создайте подпапки с музыкой или выберите другую папку</p>
+            <button class="action-btn" id="changeFolderBtn"><i class="fas fa-folder-open"></i> Изменить папку с музыкой</button>
         `;
+        wrapper.querySelector('.hint').textContent = `В ${folderName} нет плейлистов (подпапок с музыкой)`;
+        container.appendChild(wrapper);
         
         document.getElementById('changeFolderBtn').addEventListener('click', () => this.changeMusicFolder());
         this.updateStatus('Плейлисты не найдены в текущей папке');
@@ -390,14 +401,17 @@
 
     displayPlaylistError(error) {
         const container = document.getElementById('playlistsContainer');
-        container.innerHTML = `
-            <div class="playlist-error">
-                <p><i class="fas fa-exclamation-triangle"></i> Ошибка загрузки плейлистов</p>
-                <p class="error-detail">${error}</p>
-                <button class="action-btn" id="retryBtn"><i class="fas fa-redo"></i> Повторить</button>
-                <button class="action-btn" id="changeFolderBtn2"><i class="fas fa-folder-open"></i> Изменить папку</button>
-            </div>
+        container.replaceChildren();
+        const wrapper = document.createElement('div');
+        wrapper.className = 'playlist-error';
+        wrapper.innerHTML = `
+            <p><i class="fas fa-exclamation-triangle"></i> Ошибка загрузки плейлистов</p>
+            <p class="error-detail"></p>
+            <button class="action-btn" id="retryBtn"><i class="fas fa-redo"></i> Повторить</button>
+            <button class="action-btn" id="changeFolderBtn2"><i class="fas fa-folder-open"></i> Изменить папку</button>
         `;
+        wrapper.querySelector('.error-detail').textContent = error || 'Неизвестная ошибка';
+        container.appendChild(wrapper);
         
         document.getElementById('retryBtn').addEventListener('click', () => this.refreshPlaylists());
         document.getElementById('changeFolderBtn2').addEventListener('click', () => this.changeMusicFolder());
@@ -408,17 +422,33 @@
         const container = document.getElementById('playlistsContainer');
         const folderName = this.config.musicFolder ? this.config.musicFolder.split(/[\\/]/).pop() : 'Неизвестная папка';
         
-        container.innerHTML = `
-            <div class="current-folder">
-                <span class="folder-path"><i class="fas fa-folder"></i> ${folderName}</span>
-                <button class="folder-change-btn" id="changeMusicFolderSmall"><i class="fas fa-edit"></i></button>
-            </div>
-        `;
+        container.replaceChildren();
+        const currentFolder = document.createElement('div');
+        currentFolder.className = 'current-folder';
+        const folderPath = document.createElement('span');
+        folderPath.className = 'folder-path';
+        const folderIcon = document.createElement('i');
+        folderIcon.className = 'fas fa-folder';
+        folderPath.append(folderIcon, ` ${folderName}`);
+        const changeButton = document.createElement('button');
+        changeButton.className = 'folder-change-btn';
+        changeButton.id = 'changeMusicFolderSmall';
+        changeButton.setAttribute('aria-label', 'Изменить папку с музыкой');
+        changeButton.innerHTML = '<i class="fas fa-edit"></i>';
+        currentFolder.append(folderPath, changeButton);
+        container.appendChild(currentFolder);
         
         playlists.forEach(playlist => {
             const btn = document.createElement('button');
             btn.className = 'playlist-btn';
-            btn.innerHTML = `<i class="fas fa-list"></i> ${playlist.name} <small>(${playlist.trackCount} треков)</small>`;
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-list';
+            const name = document.createElement('span');
+            name.className = 'playlist-title';
+            name.textContent = playlist.name;
+            const count = document.createElement('small');
+            count.textContent = `(${playlist.trackCount} треков)`;
+            btn.append(icon, name, count);
             btn.addEventListener('click', () => this.loadPlaylist(playlist));
             container.appendChild(btn);
         });
@@ -768,10 +798,15 @@
         const progressBar = document.getElementById('progressBar');
         const currentTimeDisplay = document.getElementById('currentTimeDisplay');
         const totalTimeDisplay = document.getElementById('totalTimeDisplay');
+        const remainingTimeDisplay = document.getElementById('remainingTimeDisplay');
         
         if (progressBar) progressBar.value = 0;
         if (currentTimeDisplay) currentTimeDisplay.textContent = '0:00';
         if (totalTimeDisplay) totalTimeDisplay.textContent = '0:00';
+        if (remainingTimeDisplay) {
+            remainingTimeDisplay.textContent = '-0:00';
+            remainingTimeDisplay.classList.remove('warning', 'danger');
+        }
         
         this.lastTimeUpdate = null;
     }
@@ -1107,7 +1142,8 @@
     }
 
     handleHotkeys(event) {
-        if (event.target.tagName === 'INPUT') return;
+        const tagName = event.target?.tagName;
+        if (tagName === 'INPUT' || tagName === 'TEXTAREA' || event.target?.isContentEditable) return;
 
         switch (event.code) {
             case 'Space':
@@ -1156,12 +1192,32 @@
                 }
                 break;
             default:
-                if (event.code.startsWith('Digit') || event.code.startsWith('Numpad')) {
-                    const digit = parseInt(event.code.replace('Digit', '').replace('Numpad', ''));
-                    if (digit >= 1 && digit <= 12) {
-                        event.preventDefault();
-                        this.playSoundEffect(digit - 1);
-                    }
+                const padHotkeys = {
+                    Digit1: 0,
+                    Digit2: 1,
+                    Digit3: 2,
+                    Digit4: 3,
+                    Digit5: 4,
+                    Digit6: 5,
+                    Digit7: 6,
+                    Digit8: 7,
+                    Digit9: 8,
+                    Digit0: 9,
+                    Minus: 10,
+                    Equal: 11,
+                    Numpad1: 0,
+                    Numpad2: 1,
+                    Numpad3: 2,
+                    Numpad4: 3,
+                    Numpad5: 4,
+                    Numpad6: 5,
+                    Numpad7: 6,
+                    Numpad8: 7,
+                    Numpad9: 8
+                };
+                if (Object.prototype.hasOwnProperty.call(padHotkeys, event.code)) {
+                    event.preventDefault();
+                    this.playSoundEffect(padHotkeys[event.code]);
                 }
                 break;
         }
@@ -1311,6 +1367,7 @@
 
     createSoundPads() {
         const grid = document.getElementById('soundPadsGrid');
+        if (!grid) return;
         grid.innerHTML = '';
         
         for (let i = 0; i < 12; i++) {

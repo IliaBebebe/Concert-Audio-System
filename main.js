@@ -5,7 +5,7 @@ const fs = require('fs').promises;
 // Константы
 const DEFAULT_WINDOW_WIDTH = 1400;
 const DEFAULT_WINDOW_HEIGHT = 900;
-const MIN_WINDOW_WIDTH = 1200;
+const MIN_WINDOW_WIDTH = 1000;
 const MIN_WINDOW_HEIGHT = 700;
 const WELCOME_WINDOW_WIDTH = 600;
 const WELCOME_WINDOW_HEIGHT = 400;
@@ -21,10 +21,15 @@ const configPath = path.join(app.getPath('userData'), 'config.json');
 const windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
 
 // Режим разработки
-const isDev = process.argv.includes('--dev') || !app.isPackaged;
+const isDev = process.argv.includes('--dev');
 
 // Кэшированная конфигурация
 let cachedConfig = null;
+
+function isPathInside(childPath, parentPath) {
+  const relative = path.relative(path.resolve(parentPath), path.resolve(childPath));
+  return relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+}
 
 // Состояние окна
 let windowState = {
@@ -301,7 +306,7 @@ ipcMain.handle('read-directory', async (event, customPath) => {
     // Защита от path traversal
     const resolvedPath = path.resolve(dirPath);
     const resolvedBase = path.resolve(basePath);
-    if (customPath && !resolvedPath.startsWith(resolvedBase)) {
+    if (customPath && !isPathInside(resolvedPath, resolvedBase)) {
       return { success: false, error: 'Доступ запрещён: путь вне разрешённой директории' };
     }
 
@@ -344,11 +349,14 @@ ipcMain.handle('read-directory', async (event, customPath) => {
 ipcMain.handle('get-playlist-tracks', async (event, playlistPath) => {
   try {
     const config = await loadConfig();
+    if (!config.musicFolder || typeof playlistPath !== 'string') {
+      return { success: false, error: 'Папка с музыкой не выбрана' };
+    }
     const resolvedBase = path.resolve(config.musicFolder);
     const resolvedPath = path.resolve(playlistPath);
     
     // Защита от path traversal
-    if (!resolvedPath.startsWith(resolvedBase)) {
+    if (!isPathInside(resolvedPath, resolvedBase)) {
       return { success: false, error: 'Доступ запрещён: путь вне разрешённой директории' };
     }
     
@@ -361,11 +369,27 @@ ipcMain.handle('get-playlist-tracks', async (event, playlistPath) => {
 
 ipcMain.handle('open-file-dialog', async (event, options) => {
   try {
+    const safeOptions = {
+      title: typeof options?.title === 'string' ? options.title : undefined,
+      defaultPath: typeof options?.defaultPath === 'string' ? options.defaultPath : undefined,
+      buttonLabel: typeof options?.buttonLabel === 'string' ? options.buttonLabel : undefined,
+      filters: Array.isArray(options?.filters) ? options.filters : undefined,
+      properties: Array.isArray(options?.properties)
+        ? options.properties.filter((property) => [
+          'openFile',
+          'openDirectory',
+          'multiSelections',
+          'showHiddenFiles',
+          'createDirectory',
+          'promptToCreate'
+        ].includes(property))
+        : ['openFile']
+    };
     const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
     if (!win || win.isDestroyed()) {
       return { canceled: true, filePaths: [] };
     }
-    const result = await dialog.showOpenDialog(win, options);
+    const result = await dialog.showOpenDialog(win, safeOptions);
     return result;
   } catch (error) {
     return { canceled: true, filePaths: [] };
@@ -416,6 +440,10 @@ ipcMain.handle('select-music-folder-and-open-main', async () => {
 
 ipcMain.handle('set-music-folder', async (event, folderPath) => {
   try {
+    const stats = await fs.stat(folderPath);
+    if (!stats.isDirectory()) {
+      return { success: false, error: 'Указанный путь не является папкой' };
+    }
     const saved = await updateMusicFolder(folderPath);
     return { success: saved };
   } catch (error) {
@@ -431,6 +459,10 @@ ipcMain.handle('get-config', async () => {
 let parseFileFn = null;
 ipcMain.handle('get-audio-metadata', async (event, filePath) => {
   try {
+    const config = await loadConfig();
+    if (!config.musicFolder || !isPathInside(filePath, config.musicFolder)) {
+      return { success: false, error: 'Доступ запрещён: путь вне разрешённой директории' };
+    }
     // Проверяем существование файла
     try {
       await fs.access(filePath);
