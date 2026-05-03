@@ -1,6 +1,6 @@
 {
   "name": "theatre-sound-mixer",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Professional sound mixer for theatre productions - Concert Audio System (CAS)",
   "main": "main.js",
   "author": "Concert Audio System",
@@ -30,6 +30,7 @@
     },
     "files": [
       "**/*",
+      "!CAS Banner.png",
       "!music/**/*",
       "!dist/**/*",
       "!*.md",
@@ -85,7 +86,9 @@
       "menuCategory": "Audio",
       "installerIcon": "assets/app-icon.ico",
       "uninstallerIcon": "assets/app-icon.ico",
+      "installerHeader": "build/installerHeader.bmp",
       "installerSidebar": "assets/installer-sidebar.bmp",
+      "uninstallerSidebar": "assets/installer-sidebar.bmp",
       "include": "build/installer.nsh",
       "license": "build/license.txt",
       "unicode": true
