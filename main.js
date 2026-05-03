@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, screen, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 
@@ -22,6 +22,7 @@ const windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
 
 // Режим разработки
 const isDev = process.argv.includes('--dev');
+const appIconPath = path.join(__dirname, 'assets', 'app-icon.ico');
 
 // Кэшированная конфигурация
 let cachedConfig = null;
@@ -132,6 +133,7 @@ function createWelcomeWindow() {
     center: true,
     show: false,
     backgroundColor: '#0f0f0f',
+    icon: appIconPath,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -165,6 +167,7 @@ async function createWindow() {
     show: false,
     titleBarStyle: 'default',
     backgroundColor: '#0f0f0f',
+    icon: appIconPath,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -175,6 +178,8 @@ async function createWindow() {
       sandbox: false // TODO: установить true после тестирования
     }
   });
+
+  Menu.setApplicationMenu(null);
 
   // Загружаем HTML
   const htmlPath = path.join(__dirname, 'index.html');
@@ -251,6 +256,9 @@ async function createWindow() {
 
 // Запуск приложения
 app.whenReady().then(async () => {
+  app.setAppUserModelId('com.concertaudiosystem.cas');
+  Menu.setApplicationMenu(null);
+
   const config = await loadConfig();
   if (config.firstRun || !config.musicFolder) {
     createWelcomeWindow();

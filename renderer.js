@@ -38,6 +38,13 @@
         this.lastEffectsLevel = 0;
         this.musicVuBar = null;
         this.effectsVuBar = null;
+        this.audioContext = null;
+        this.musicAnalyser = null;
+        this.effectsAnalyser = null;
+        this.musicAnalyserData = null;
+        this.effectsAnalyserData = null;
+        this.connectedAudioNodes = new WeakSet();
+        this.audioSources = new WeakMap();
         
         // Прогресс падов
         this.padProgressIntervals = new Map();
@@ -74,7 +81,70 @@
         // Кэшируем ссылки на DOM элементы
         this.musicVuBar = document.querySelector('#musicVuMeter .vu-bar');
         this.effectsVuBar = document.querySelector('#effectsVuMeter .vu-bar');
+        this.setupAudioAnalysers();
         this.startVuMeters();
+    }
+
+    setupAudioAnalysers() {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+
+        if (!this.audioContext) {
+            this.audioContext = new AudioContextClass();
+        }
+
+        const createAnalyser = () => {
+            const analyser = this.audioContext.createAnalyser();
+            analyser.fftSize = 1024;
+            analyser.smoothingTimeConstant = 0.72;
+            analyser.connect(this.audioContext.destination);
+            return analyser;
+        };
+
+        this.musicAnalyser = this.musicAnalyser || createAnalyser();
+        this.effectsAnalyser = this.effectsAnalyser || createAnalyser();
+        this.musicAnalyserData = this.musicAnalyserData || new Uint8Array(this.musicAnalyser.fftSize);
+        this.effectsAnalyserData = this.effectsAnalyserData || new Uint8Array(this.effectsAnalyser.fftSize);
+    }
+
+    resumeAudioContext() {
+        if (this.audioContext?.state === 'suspended') {
+            this.audioContext.resume().catch(() => {});
+        }
+    }
+
+    connectHowlToAnalyser(howl, type) {
+        if (!howl) return;
+        this.setupAudioAnalysers();
+
+        const analyser = type === 'effects' ? this.effectsAnalyser : this.musicAnalyser;
+        if (!analyser || !Array.isArray(howl._sounds)) return;
+
+        howl._sounds.forEach((sound) => {
+            const node = sound?._node;
+            if (!node || this.connectedAudioNodes.has(node)) return;
+
+            try {
+                if (node instanceof HTMLAudioElement) {
+                    const source = this.audioSources.get(node) || this.audioContext.createMediaElementSource(node);
+                    this.audioSources.set(node, source);
+                    source.connect(analyser);
+                } else if (typeof node.connect === 'function') {
+                    node.connect(analyser);
+                }
+                this.connectedAudioNodes.add(node);
+            } catch (error) {
+                if (error?.name === 'InvalidStateError') {
+                    this.connectedAudioNodes.add(node);
+                }
+            }
+        });
+    }
+
+    closeAudioAnalysers() {
+        if (this.audioContext && this.audioContext.state !== 'closed') {
+            this.audioContext.close().catch(() => {});
+        }
     }
 
     startVuMeters() {
@@ -98,54 +168,39 @@
     }
 
     updateVuMeters() {
-        // Обновляем VU-метр для музыки
-        let musicLevel = 0;
-        if (this.musicPlayer && this.isPlaying && !this.isPaused) {
-            const base = this.musicVolume * 0.7;
-            const random = Math.random() * 0.3;
-            musicLevel = Math.min(1, base + random);
+        const getLevel = (analyser, buffer) => {
+            if (!analyser || !buffer || this.audioContext?.state !== 'running') return 0;
+            analyser.getByteTimeDomainData(buffer);
 
-            if (this.musicPlayer.seek && this.musicPlayer.duration) {
-                const progress = this.musicPlayer.seek() / this.musicPlayer.duration();
-                const pulse = Math.sin(progress * Math.PI * 4) * 0.1;
-                musicLevel = Math.max(0, Math.min(1, musicLevel + pulse));
+            let sum = 0;
+            for (let i = 0; i < buffer.length; i++) {
+                const centered = (buffer[i] - 128) / 128;
+                sum += centered * centered;
             }
-        }
 
-        this.lastMusicLevel = this.lastMusicLevel * 0.7 + musicLevel * 0.3;
+            const rms = Math.sqrt(sum / buffer.length);
+            return Math.min(1, rms * 3.8);
+        };
+
+        this.connectHowlToAnalyser(this.musicPlayer, 'music');
+        this.soundEffects.forEach((soundData) => this.connectHowlToAnalyser(soundData?.sound, 'effects'));
+
+        const musicTarget = this.isPlaying && !this.isPaused
+            ? getLevel(this.musicAnalyser, this.musicAnalyserData)
+            : 0;
+        const effectsTarget = Array.from(this.soundEffects.values()).some((soundData) => soundData?.sound?.playing())
+            ? getLevel(this.effectsAnalyser, this.effectsAnalyserData)
+            : 0;
+
+        this.lastMusicLevel = Math.max(musicTarget, this.lastMusicLevel * 0.82);
+        this.lastEffectsLevel = Math.max(effectsTarget, this.lastEffectsLevel * 0.78);
 
         if (this.musicVuBar) {
-            this.musicVuBar.style.height = `${this.lastMusicLevel * 100}%`;
-            const hue = 120 - (this.lastMusicLevel * 120);
-            this.musicVuBar.style.background = `linear-gradient(to top, hsl(${hue}, 100%, 50%), hsl(${hue * 0.8}, 100%, 60%))`;
+            this.musicVuBar.style.height = `${Math.round(this.lastMusicLevel * 100)}%`;
         }
-
-        // Обновляем VU-метр для эффектов
-        let effectsLevel = 0;
-        let isEffectsPlaying = false;
-
-        this.soundEffects.forEach((soundData) => {
-            if (soundData?.sound?.playing()) {
-                isEffectsPlaying = true;
-            }
-        });
-
-        if (isEffectsPlaying) {
-            const base = this.effectsVolume * 0.6;
-            const random = Math.random() * 0.4;
-            effectsLevel = Math.min(1, base + random);
-
-            if (Math.random() > 0.7) {
-                effectsLevel = Math.min(1, effectsLevel + 0.3);
-            }
-        }
-
-        this.lastEffectsLevel = this.lastEffectsLevel * 0.6 + effectsLevel * 0.4;
 
         if (this.effectsVuBar) {
-            this.effectsVuBar.style.height = `${this.lastEffectsLevel * 100}%`;
-            const hue = 60 - (this.lastEffectsLevel * 60);
-            this.effectsVuBar.style.background = `linear-gradient(to top, hsl(${hue}, 100%, 50%), hsl(${hue * 0.8}, 100%, 60%))`;
+            this.effectsVuBar.style.height = `${Math.round(this.lastEffectsLevel * 100)}%`;
         }
     }
 
@@ -214,6 +269,8 @@
             const type = el.dataset.resizer;
             el.addEventListener('mousedown', (e) => startDrag(type, e));
         });
+
+        this.setupBlockHeightPersistence();
         
         window.addEventListener('resize', () => {
             const rect = appContainer.getBoundingClientRect();
@@ -229,6 +286,61 @@
                 appContainer.style.setProperty('--left-width', `${newLeft}px`);
                 appContainer.style.setProperty('--right-width', `${newRight}px`);
             }
+        });
+    }
+
+    setupBlockHeightPersistence() {
+        const resizableBlocks = [
+            ['leftPlaylistsSection', '.left-panel > .section:nth-of-type(1)'],
+            ['leftPadsSection', '.left-panel > .section:nth-of-type(2)'],
+            ['playlistsContainer', '#playlistsContainer'],
+            ['soundPadsGrid', '#soundPadsGrid'],
+            ['tracksContainer', '#tracksContainer'],
+            ['nowPlaying', '.now-playing'],
+            ['progressSection', '.progress-section'],
+            ['volumeSection', '.volume-section'],
+            ['countdownSection', '.countdown-section'],
+            ['hotkeysInfo', '.hotkeys-info']
+        ];
+
+        let savedHeights = {};
+        try {
+            savedHeights = JSON.parse(localStorage.getItem('tsmBlockHeights') || '{}');
+        } catch {}
+
+        const saveHeights = () => {
+            try {
+                localStorage.setItem('tsmBlockHeights', JSON.stringify(savedHeights));
+            } catch {}
+        };
+
+        const saveTimers = new Map();
+        const observer = new ResizeObserver((entries) => {
+            entries.forEach((entry) => {
+                const key = entry.target.dataset.blockHeightKey;
+                if (!key) return;
+
+                clearTimeout(saveTimers.get(key));
+                saveTimers.set(key, setTimeout(() => {
+                    const height = Math.round(entry.contentRect.height);
+                    if (height > 40) {
+                        savedHeights[key] = height;
+                        saveHeights();
+                    }
+                }, 250));
+            });
+        });
+
+        resizableBlocks.forEach(([key, selector]) => {
+            const element = document.querySelector(selector);
+            if (!element) return;
+
+            element.dataset.blockHeightKey = key;
+            const savedHeight = Number(savedHeights[key]);
+            if (savedHeight > 40) {
+                element.style.height = `${savedHeight}px`;
+            }
+            observer.observe(element);
         });
     }
 
@@ -609,6 +721,8 @@
             volume: this.musicVolume,
             loop: this.playbackMode === 'loop',
             onplay: () => {
+                this.resumeAudioContext();
+                setTimeout(() => this.connectHowlToAnalyser(this.musicPlayer, 'music'), 0);
                 this.isPlaying = true;
                 this.isPaused = false;
                 this.updateStatus(`Воспроизведение: ${track.name}`);
@@ -629,6 +743,7 @@
                 this.handleTrackEnd();
             },
             onload: () => {
+                this.connectHowlToAnalyser(this.musicPlayer, 'music');
                 this.updateTimeDisplays();
             },
             onloaderror: (id, error) => {
@@ -674,6 +789,7 @@
     }
 
     playMusic() {
+        this.resumeAudioContext();
         if (this.musicPlayer && !this.isPlaying) {
             this.musicPlayer.play();
         } else if (this.musicPlayer && this.isPaused) {
@@ -906,7 +1022,9 @@
 
         const playSound = (sound, soundData, pad) => {
             try {
+                this.resumeAudioContext();
                 const soundId = sound.play();
+                setTimeout(() => this.connectHowlToAnalyser(sound, 'effects'), 0);
                 const duration = sound.duration();
                 
                 if (pad) {
@@ -950,6 +1068,7 @@
                 html5: true,
                 onload: () => {
                     soundData.sound = sound;
+                    this.connectHowlToAnalyser(sound, 'effects');
                     this.updateStatus(`Готово: ${soundData.name}`);
                     playSound(sound, soundData, pad);
                 },
@@ -1568,6 +1687,8 @@ window.addEventListener('beforeunload', () => {
                 } catch (e) {}
             }
         });
+
+        window.soundMixer.closeAudioAnalysers();
         
         window.soundMixer.saveStoredData();
     }
