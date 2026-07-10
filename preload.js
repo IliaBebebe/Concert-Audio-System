@@ -77,6 +77,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return ipcRenderer.invoke('get-audio-metadata', filePath);
   },
 
+  saveTrackMetadata: (filePath, metadata) => {
+    if (typeof filePath !== 'string') {
+      throw new Error('filePath must be a string');
+    }
+    if (typeof metadata !== 'object' || metadata === null) {
+      throw new Error('metadata must be an object');
+    }
+    return ipcRenderer.invoke('save-track-metadata', filePath, metadata);
+  },
+
+  clearTrackMetadata: (filePath) => {
+    if (typeof filePath !== 'string') {
+      throw new Error('filePath must be a string');
+    }
+    return ipcRenderer.invoke('clear-track-metadata', filePath);
+  },
+
   /**
    * Выбирает папку и открывает главное окно
    * @returns {Promise<{success: boolean, error?: string}>}

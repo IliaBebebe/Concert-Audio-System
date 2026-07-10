@@ -6,7 +6,10 @@ yarn-error.log*
 
 # Build output
 dist/
-build/
+build/*
+!build/installer.nsh
+!build/installerHeader.bmp
+!build/license.txt
 release/
 *.asar
 
@@ -72,15 +75,10 @@ AGENTS.md
 QWEN.md
 design_description.md
 CAS Banner.png
-assets/app-icon.ico
 assets/big-logo (2).png
+assets/fontawesome/
 
 # Hosted landing source is tracked separately in ../cas-landing
 landing/assets/
 landing/downloads/
 landing/styles.css
-
-# Local welcome experiments
-welcome.css
-welcome.html
-welcome.js

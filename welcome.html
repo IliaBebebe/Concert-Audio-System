@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Concert Audio System</title>
+    <link rel="stylesheet" href="welcome.css">
+</head>
+<body>
+    <div class="welcome-container">
+        <button id="closeWelcomeBtn" type="button" aria-label="Закрыть">×</button>
+        <img src="assets/big-logo.png" alt="Concert Audio System Logo" class="logo">
+        <h1 class="title">CONCERT AUDIO SYSTEM</h1>
+        <div class="button-container">
+            <button id="selectFolderBtn">📁 Выбрать папку с музыкой</button>
+        </div>
+        <p id="welcomeStatus" class="welcome-status" role="status" aria-live="polite"></p>
+    </div>
+    <script src="welcome.js"></script>
+</body>
+</html>

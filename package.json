@@ -1,11 +1,11 @@
 {
   "name": "theatre-sound-mixer",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "description": "Professional sound mixer for theatre productions - Concert Audio System (CAS)",
   "main": "main.js",
   "author": "Concert Audio System",
   "scripts": {
-    "postinstall": "node -e \"const fs=require('fs');const path=require('path');if(fs.existsSync('node_modules/howler/dist/howler.min.js')){fs.mkdirSync('assets',{recursive:true});fs.copyFileSync('node_modules/howler/dist/howler.min.js','assets/howler.min.js');console.log('Howler.js copied to assets/');}\"",
+    "postinstall": "node scripts/copy-assets.js",
     "start": "electron .",
     "build": "electron-builder --win nsis --x64",
     "build-win": "electron-builder --win --dir --x64",
@@ -14,12 +14,16 @@
     "dev": "electron . --dev"
   },
   "devDependencies": {
-    "electron": "^22.0.0",
-    "electron-builder": "^24.0.0"
+    "@fortawesome/fontawesome-free": "^6.7.2",
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3",
+    "howler": "^2.2.4"
   },
   "dependencies": {
-    "howler": "^2.2.3",
-    "music-metadata": "^11.10.0"
+    "music-metadata": "^11.13.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "build": {
     "appId": "com.concertaudiosystem.cas",
@@ -29,36 +33,19 @@
       "buildResources": "build"
     },
     "files": [
-      "**/*",
-      "!CAS Banner.png",
-      "!music/**/*",
-      "!dist/**/*",
-      "!*.md",
-      "!.git/**/*",
-      "!.gitignore",
-      "!node_modules/**/*",
-      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
-      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
-      "!**/node_modules/*.d.ts",
-      "!**/node_modules/.bin",
-      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
-      "!.editorconfig",
-      "!**/._*",
-      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
-      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
-      "!**/{appveyor.yml,.travis.yml,circle.yml}",
-      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
-    ],
-    "extraFiles": [
-      {
-        "from": "assets",
-        "to": "assets",
-        "filter": [
-          "**/*",
-          "!*.psd",
-          "!*.ai"
-        ]
-      }
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "metadata-worker.js",
+      "index.html",
+      "styles.css",
+      "welcome.html",
+      "welcome.js",
+      "welcome.css",
+      "assets/app-icon.ico",
+      "assets/big-logo.png",
+      "assets/howler.min.js",
+      "assets/fontawesome/**/*"
     ],
     "win": {
       "target": [
@@ -70,7 +57,7 @@
         }
       ],
       "requestedExecutionLevel": "asInvoker",
-      "signAndEditExecutable": false,
+      "signExecutable": false,
       "icon": "assets/app-icon.ico"
     },
     "nsis": {
@@ -93,8 +80,9 @@
       "license": "build/license.txt",
       "unicode": true
     },
+    "artifactName": "Concert-Audio-System-Setup-${version}-${arch}.${ext}",
     "compression": "normal",
-    "asar": false,
+    "asar": true,
     "electronDownload": {
       "cache": ".electron-cache"
     }
