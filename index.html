@@ -18,7 +18,7 @@
                 <img src="assets/big-logo.png" alt="Theatre Sound Mixer" class="logo" id="logo">
                 <h1>CONCERT AUDIO SYSTEM</h1>
                 
-                <div class="version">1.1.1</div>
+                <div class="version">1.1.2</div>
                 <div class="current-time" id="currentTime">--:--:--</div>
                 <div class="status" id="status">Готов к работе</div>
             </div>
@@ -95,6 +95,17 @@
                             <span class="radio-text">Один трек</span>
                         </label>
                     </div>
+                    <div class="crossfade-settings">
+                        <label class="crossfade-toggle">
+                            <input type="checkbox" id="crossfadeEnabled">
+                            <span class="toggle-switch" aria-hidden="true"></span>
+                            <span>Crossfade</span>
+                        </label>
+                        <div class="crossfade-duration">
+                            <input type="range" id="crossfadeDuration" min="1" max="10" value="3" aria-label="Длительность crossfade">
+                            <span id="crossfadeDurationValue">3 с</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -113,6 +124,11 @@
             <div class="progress-section">
                 <div class="time-display">
                     <span id="currentTimeDisplay">0:00</span> / <span id="totalTimeDisplay">0:00</span> • <span id="remainingTimeDisplay">-0:00</span>
+                </div>
+                <div class="waveform-panel" id="waveformPanel">
+                    <canvas id="trackWaveform" aria-label="Waveform текущего трека"></canvas>
+                    <div class="waveform-playhead" id="waveformPlayhead"></div>
+                    <div class="waveform-state" id="waveformState">Waveform ожидает трек</div>
                 </div>
                 <input type="range" class="progress-bar" id="progressBar" min="0" max="100" value="0" aria-label="Прогресс воспроизведения">
             </div>

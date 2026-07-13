@@ -1076,6 +1076,97 @@ body {
     white-space: nowrap;
 }
 
+.crossfade-settings {
+    display: grid;
+    grid-template-columns: minmax(118px, auto) minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.crossfade-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+}
+
+.crossfade-toggle input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.toggle-switch {
+    width: 34px;
+    height: 18px;
+    border-radius: 999px;
+    border: 1px solid var(--border-secondary);
+    background: var(--bg-input);
+    position: relative;
+    flex: 0 0 auto;
+    transition: background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.toggle-switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    background: var(--text-muted);
+    transition: transform var(--transition-fast), background-color var(--transition-fast);
+}
+
+.crossfade-toggle input:checked + .toggle-switch {
+    border-color: rgba(106, 168, 255, 0.55);
+    background: rgba(106, 168, 255, 0.22);
+    box-shadow: 0 0 0 3px rgba(106, 168, 255, 0.08);
+}
+
+.crossfade-toggle input:checked + .toggle-switch::after {
+    transform: translateX(16px);
+    background: var(--accent-primary);
+}
+
+.crossfade-duration {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 42px;
+    align-items: center;
+    gap: 8px;
+}
+
+.crossfade-duration input {
+    width: 100%;
+    accent-color: var(--accent-primary);
+}
+
+.crossfade-duration span {
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: right;
+}
+
+.crossfade-duration span.is-disabled {
+    color: var(--text-disabled);
+}
+
 /* Правая панель */
 .right-panel {
     background: 
@@ -1210,6 +1301,80 @@ body {
     color: var(--accent-danger);
     text-shadow: 0 0 8px rgba(255, 90, 90, 0.3);
     animation: pulse 1s ease-in-out infinite;
+}
+
+.waveform-panel {
+    --waveform-progress: 0%;
+    position: relative;
+    width: 100%;
+    height: 74px;
+    margin-bottom: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012)),
+        rgba(6, 8, 11, 0.36);
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.waveform-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--waveform-progress);
+    background: linear-gradient(90deg, rgba(106, 168, 255, 0.16), rgba(45, 204, 112, 0.1));
+    pointer-events: none;
+}
+
+.waveform-panel canvas {
+    position: absolute;
+    inset: 8px;
+    width: calc(100% - 16px);
+    height: calc(100% - 16px);
+}
+
+.waveform-playhead {
+    position: absolute;
+    top: 7px;
+    bottom: 7px;
+    width: 2px;
+    background: rgba(255, 255, 255, 0.86);
+    box-shadow: 0 0 12px rgba(106, 168, 255, 0.42);
+    transform: translateX(-1px);
+    pointer-events: none;
+}
+
+.waveform-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 14px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    pointer-events: none;
+}
+
+.waveform-panel.has-waveform .waveform-state {
+    display: none;
+}
+
+.waveform-panel.is-loading .waveform-state::after {
+    content: "";
+    width: 7px;
+    height: 7px;
+    margin-left: 8px;
+    border-radius: 999px;
+    background: var(--accent-primary);
+    box-shadow: 0 0 12px rgba(106, 168, 255, 0.55);
+    animation: waveformPulse 900ms ease-in-out infinite;
 }
 
 .progress-bar {
@@ -1712,6 +1877,11 @@ body {
     100% { transform: translateY(100%); }
 }
 
+@keyframes waveformPulse {
+    0%, 100% { opacity: 0.35; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
+}
+
 /* CAS visual refresh */
 .app-container {
     background:
@@ -1774,7 +1944,7 @@ body {
 }
 
 .now-playing { min-height: 130px; }
-.progress-section { min-height: 92px; }
+.progress-section { min-height: 180px; }
 .volume-section { min-height: 280px; }
 .countdown-section { min-height: 130px; }
 .hotkeys-info { min-height: 150px; }

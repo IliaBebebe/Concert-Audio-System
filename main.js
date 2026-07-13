@@ -17,6 +17,7 @@ const METADATA_CONCURRENCY = 2;
 const MAX_METADATA_FILE_SIZE = 1024 * 1024 * 1024;
 const MAX_METADATA_CACHE_ENTRIES = 256;
 const MAX_METADATA_TEXT_LENGTH = 200;
+const MAX_WAVEFORM_FILE_SIZE = 350 * 1024 * 1024;
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.ogg', '.flac', '.m4a', '.aac', '.opus', '.webm']);
 
 const appRootPath = path.resolve(__dirname);
@@ -896,6 +897,32 @@ ipcMain.handle('get-audio-metadata', async (event, filePath) => {
     return { success: true, data: await getAudioMetadata(resolvedPath, stats) };
   } catch (error) {
     console.warn('Error getting audio metadata:', error.message);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-audio-file-buffer', async (event, filePath) => {
+  if (!isTrustedSender(event, mainWindow)) {
+    return unauthorizedResponse();
+  }
+
+  try {
+    const { resolvedPath, stats } = await resolveMusicPath(filePath, 'file');
+    if (!isSupportedAudioFile(resolvedPath)) {
+      return { success: false, error: 'Поддерживаются только аудиофайлы' };
+    }
+    if (stats.size > MAX_WAVEFORM_FILE_SIZE) {
+      return { success: false, error: 'Файл слишком большой для построения waveform' };
+    }
+
+    const fileBuffer = await fs.readFile(resolvedPath);
+    const data = fileBuffer.buffer.slice(
+      fileBuffer.byteOffset,
+      fileBuffer.byteOffset + fileBuffer.byteLength
+    );
+    return { success: true, data };
+  } catch (error) {
+    console.warn('Error reading audio file for waveform:', error.message);
     return { success: false, error: error.message };
   }
 });

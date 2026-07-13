@@ -77,6 +77,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return ipcRenderer.invoke('get-audio-metadata', filePath);
   },
 
+  getAudioFileBuffer: (filePath) => {
+    if (typeof filePath !== 'string') {
+      throw new Error('filePath must be a string');
+    }
+    return ipcRenderer.invoke('get-audio-file-buffer', filePath);
+  },
+
   saveTrackMetadata: (filePath, metadata) => {
     if (typeof filePath !== 'string') {
       throw new Error('filePath must be a string');

@@ -18,6 +18,15 @@
         this.detachedBlocks = new Map();
         this.floatingWindowZ = 1100;
         this.modalCloseMs = 150;
+        this.retiringMusicPlayers = new Set();
+        this.crossfadeTimers = new Set();
+        this.isCrossfading = false;
+        this.crossfadeEnabled = false;
+        this.crossfadeDuration = 3;
+        this.waveformCache = new Map();
+        this.waveformRequestId = 0;
+        this.waveformPeaks = [];
+        this.waveformResizeObserver = null;
         
         // Режимы воспроизведения
         this.playbackMode = 'sequential';
@@ -218,9 +227,13 @@
         };
 
         this.connectHowlToAnalyser(this.musicPlayer, 'music');
+        this.retiringMusicPlayers.forEach((player) => this.connectHowlToAnalyser(player, 'music'));
         this.soundEffects.forEach((soundData) => this.connectHowlToAnalyser(soundData?.sound, 'effects'));
 
-        const musicTarget = this.isPlaying && !this.isPaused
+        const hasRetiringMusic = Array.from(this.retiringMusicPlayers).some((player) => {
+            try { return player?.playing(); } catch { return false; }
+        });
+        const musicTarget = (this.isPlaying && !this.isPaused) || hasRetiringMusic
             ? getLevel(this.musicAnalyser, this.musicAnalyserData)
             : 0;
         const effectsTarget = Array.from(this.soundEffects.values()).some((soundData) => soundData?.sound?.playing())
@@ -759,10 +772,12 @@
         this.createSoundPads();
         this.setupResizers();
         this.setupDetachableBlocks();
+        this.setupWaveformCanvas();
         this.initVuMeters();
         this.startClock();
         this.updateCountdownDisplay();
         await this.loadStoredData();
+        this.updateCrossfadeControls();
         await this.refreshPlaylists();
     }
 
@@ -801,6 +816,25 @@
         });
         
         document.getElementById('progressBar')?.addEventListener('input', (e) => this.seekMusic(e.target.value));
+        document.getElementById('waveformPanel')?.addEventListener('click', (e) => this.seekFromWaveform(e));
+
+        const crossfadeEnabled = document.getElementById('crossfadeEnabled');
+        const crossfadeDuration = document.getElementById('crossfadeDuration');
+        if (crossfadeEnabled) {
+            crossfadeEnabled.addEventListener('change', (e) => {
+                this.crossfadeEnabled = e.target.checked;
+                this.updateCrossfadeControls();
+                this.saveStoredData();
+                this.updateStatus(this.crossfadeEnabled ? 'Crossfade включен' : 'Crossfade выключен');
+            });
+        }
+        if (crossfadeDuration) {
+            crossfadeDuration.addEventListener('input', (e) => {
+                this.crossfadeDuration = this.normalizeCrossfadeDuration(e.target.value);
+                this.updateCrossfadeControls();
+                this.saveStoredData();
+            });
+        }
         
         const searchInput = document.getElementById('trackSearchInput');
         if (searchInput) {
@@ -835,6 +869,28 @@
         const element = document.getElementById(id);
         if (element) {
             element.addEventListener('click', handler);
+        }
+    }
+
+    normalizeCrossfadeDuration(value) {
+        const numericValue = Number(value);
+        if (!Number.isFinite(numericValue)) return 3;
+        return Math.max(1, Math.min(10, Math.round(numericValue)));
+    }
+
+    updateCrossfadeControls() {
+        const enabledInput = document.getElementById('crossfadeEnabled');
+        const durationInput = document.getElementById('crossfadeDuration');
+        const durationValue = document.getElementById('crossfadeDurationValue');
+
+        if (enabledInput) enabledInput.checked = this.crossfadeEnabled;
+        if (durationInput) {
+            durationInput.value = String(this.crossfadeDuration);
+            durationInput.disabled = !this.crossfadeEnabled;
+        }
+        if (durationValue) {
+            durationValue.textContent = `${this.crossfadeDuration} с`;
+            durationValue.classList.toggle('is-disabled', !this.crossfadeEnabled);
         }
     }
 
@@ -1077,6 +1133,7 @@
         }
         this.displayTracks();
         this.updateTrackCounter();
+        this.clearWaveform('Waveform ожидает трек');
     }
 
     displayTracks() {
@@ -1534,15 +1591,28 @@
         currentTrackEl.title = track?.filename || title;
     }
 
-    loadTrack(index) {
+    loadTrack(index, options = {}) {
         if (index < 0 || index >= this.playlistTracks.length) return;
 
+        const {
+            preserveCurrent = false,
+            initialVolume = this.musicVolume,
+            fadeInMs = 0
+        } = options;
         this.currentTrackIndex = index;
         const track = this.playlistTracks[index];
-        this.stopMusic({ silent: true });
+        if (!preserveCurrent) {
+            this.stopMusic({ silent: true });
+        } else {
+            this.stopProgressTracking(false);
+            this.pendingMusicStart = false;
+            this.isPlaying = false;
+            this.isPaused = false;
+        }
 
         const playerToken = ++this.musicPlayerToken;
         let player = null;
+        let fadeInApplied = false;
         const isCurrentPlayer = () => this.musicPlayer === player && this.musicPlayerToken === playerToken;
         const discardFailedPlayer = (message) => {
             if (!isCurrentPlayer()) return;
@@ -1559,7 +1629,7 @@
         player = new Howl({
             src: [track.path],
             html5: true,
-            volume: this.musicVolume,
+            volume: initialVolume,
             mute: this.isMuted,
             loop: this.playbackMode === 'loop',
             onplay: () => {
@@ -1575,6 +1645,15 @@
                 this.pendingMusicStart = false;
                 this.isPlaying = true;
                 this.isPaused = false;
+                if (fadeInMs > 0 && !fadeInApplied) {
+                    fadeInApplied = true;
+                    try {
+                        player.volume(0);
+                        player.fade(0, this.musicVolume, fadeInMs);
+                    } catch {
+                        try { player.volume(this.musicVolume); } catch {}
+                    }
+                }
                 this.updateStatus(`Воспроизведение: ${this.getTrackTitle(track)}`);
                 this.startProgressTracking();
                 this.updateVuMeters();
@@ -1625,6 +1704,8 @@
         this.updateCurrentTrackDisplay(track);
         this.updateMediaSessionMetadata(track);
         this.highlightCurrentTrack();
+        this.loadWaveformForTrack(track);
+        return player;
     }
 
     handleTrackEnd(player = this.musicPlayer, playerToken = this.musicPlayerToken) {
@@ -1643,7 +1724,113 @@
         }
     }
 
-    playTrack(index) {
+    shouldCrossfadeTo(index) {
+        return this.crossfadeEnabled
+            && this.crossfadeDuration > 0
+            && this.musicPlayer
+            && this.isPlaying
+            && !this.isPaused
+            && !this.pendingMusicStart
+            && this.playlistTracks.length > 1
+            && index >= 0
+            && index < this.playlistTracks.length
+            && index !== this.currentTrackIndex;
+    }
+
+    getCrossfadeDurationMs(player = this.musicPlayer) {
+        const requestedMs = this.normalizeCrossfadeDuration(this.crossfadeDuration) * 1000;
+        try {
+            const duration = player?.duration();
+            const seek = player?.seek();
+            if (Number.isFinite(duration) && Number.isFinite(seek) && duration > seek) {
+                return Math.max(250, Math.min(requestedMs, Math.round((duration - seek) * 1000)));
+            }
+        } catch {}
+        return requestedMs;
+    }
+
+    startCrossfadeToIndex(index, { automatic = false } = {}) {
+        if (!this.shouldCrossfadeTo(index) || this.isCrossfading) {
+            this.playTrack(index, { forceDirect: true });
+            return;
+        }
+
+        const outgoingPlayer = this.musicPlayer;
+        const outgoingTrack = this.playlistTracks[this.currentTrackIndex];
+        const incomingTrack = this.playlistTracks[index];
+        const fadeMs = this.getCrossfadeDurationMs(outgoingPlayer);
+
+        this.isCrossfading = true;
+        const incomingPlayer = this.loadTrack(index, {
+            preserveCurrent: true,
+            initialVolume: 0,
+            fadeInMs: fadeMs
+        });
+
+        if (!incomingPlayer) {
+            this.isCrossfading = false;
+            return;
+        }
+
+        this.fadeOutAndUnloadMusicPlayer(outgoingPlayer, fadeMs);
+        this.playMusic();
+
+        const timer = setTimeout(() => {
+            this.crossfadeTimers.delete(timer);
+            this.isCrossfading = false;
+        }, fadeMs + 120);
+        this.crossfadeTimers.add(timer);
+
+        const fromTitle = this.getTrackTitle(outgoingTrack);
+        const toTitle = this.getTrackTitle(incomingTrack);
+        this.updateStatus(`${automatic ? 'Авто-' : ''}Crossfade: ${fromTitle} → ${toTitle}`);
+    }
+
+    fadeOutAndUnloadMusicPlayer(player, durationMs) {
+        if (!player) return;
+        this.retiringMusicPlayers.add(player);
+
+        try {
+            const currentVolume = Number(player.volume());
+            player.fade(Number.isFinite(currentVolume) ? currentVolume : this.musicVolume, 0, durationMs);
+        } catch {
+            try { player.volume(0); } catch {}
+        }
+
+        const timer = setTimeout(() => {
+            this.crossfadeTimers.delete(timer);
+            this.retiringMusicPlayers.delete(player);
+            try { player.unload(); } catch {}
+        }, durationMs + 180);
+        this.crossfadeTimers.add(timer);
+    }
+
+    maybeStartAutomaticCrossfade(player, playerToken, seek, duration) {
+        if (!this.crossfadeEnabled
+            || this.playbackMode !== 'sequential'
+            || this.isCrossfading
+            || this.musicPlayer !== player
+            || this.musicPlayerToken !== playerToken
+            || this.playlistTracks.length < 2
+            || !Number.isFinite(seek)
+            || !Number.isFinite(duration)
+            || duration <= 0) {
+            return;
+        }
+
+        const fadeSeconds = this.normalizeCrossfadeDuration(this.crossfadeDuration);
+        const remaining = duration - seek;
+        if (remaining > 0 && remaining <= fadeSeconds && seek > 0.5) {
+            const nextIndex = (this.currentTrackIndex + 1) % this.playlistTracks.length;
+            this.startCrossfadeToIndex(nextIndex, { automatic: true });
+        }
+    }
+
+    playTrack(index, { forceDirect = false } = {}) {
+        if (!forceDirect && this.shouldCrossfadeTo(index)) {
+            this.startCrossfadeToIndex(index);
+            return;
+        }
         if (!this.musicPlayer || index !== this.currentTrackIndex) {
             this.loadTrack(index);
         }
@@ -1697,6 +1884,13 @@
             clearTimeout(this.musicRetryTimeout);
             this.musicRetryTimeout = null;
         }
+        this.crossfadeTimers.forEach((timer) => clearTimeout(timer));
+        this.crossfadeTimers.clear();
+        this.retiringMusicPlayers.forEach((retiringPlayer) => {
+            try { retiringPlayer.unload(); } catch {}
+        });
+        this.retiringMusicPlayers.clear();
+        this.isCrossfading = false;
         this.isPlaying = false;
         this.isPaused = false;
         this.stopProgressTracking();
@@ -1764,6 +1958,8 @@
                     if (progressBar) {
                         progressBar.value = progress;
                     }
+                    this.updateWaveformProgress(progress);
+                    this.maybeStartAutomaticCrossfade(player, playerToken, seek, duration);
                     
                     const now = Date.now();
                     if (!this.lastTimeUpdate || now - this.lastTimeUpdate >= 250) {
@@ -1826,6 +2022,7 @@
         const remainingTimeDisplay = document.getElementById('remainingTimeDisplay');
         
         if (progressBar) progressBar.value = 0;
+        this.updateWaveformProgress(0);
         if (currentTimeDisplay) currentTimeDisplay.textContent = '0:00';
         if (totalTimeDisplay) totalTimeDisplay.textContent = '0:00';
         if (remainingTimeDisplay) {
@@ -1843,12 +2040,199 @@
                 if (duration && duration > 0) {
                     const seekTime = Math.max(0, Math.min(duration, (progress / 100) * duration));
                     this.musicPlayer.seek(seekTime);
+                    this.updateWaveformProgress(Math.min(100, Math.max(0, Number(progress) || 0)));
                     this.updateTimeDisplays();
                 }
             } catch (error) {
                 this.updateStatus('Ошибка перемотки', 'error');
             }
         }
+    }
+
+    setupWaveformCanvas() {
+        const canvas = document.getElementById('trackWaveform');
+        const panel = document.getElementById('waveformPanel');
+        if (!canvas || !panel) return;
+
+        this.clearWaveform('Waveform ожидает трек');
+        this.waveformResizeObserver = new ResizeObserver(() => this.drawWaveform());
+        this.waveformResizeObserver.observe(panel);
+    }
+
+    setWaveformState(message, loading = false) {
+        const state = document.getElementById('waveformState');
+        const panel = document.getElementById('waveformPanel');
+        if (state) state.textContent = message;
+        if (panel) {
+            panel.classList.toggle('is-loading', loading);
+            panel.classList.toggle('has-waveform', this.waveformPeaks.length > 0);
+        }
+    }
+
+    clearWaveform(message = 'Waveform недоступна') {
+        this.waveformPeaks = [];
+        this.updateWaveformProgress(0);
+        const canvas = document.getElementById('trackWaveform');
+        if (canvas) {
+            const context = canvas.getContext('2d');
+            if (context) context.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        this.setWaveformState(message, false);
+    }
+
+    async loadWaveformForTrack(track) {
+        const requestId = ++this.waveformRequestId;
+        this.updateWaveformProgress(0);
+        if (!track?.path) {
+            this.clearWaveform('Waveform ожидает трек');
+            return;
+        }
+
+        const cachedPeaks = this.waveformCache.get(track.path);
+        if (cachedPeaks) {
+            this.waveformPeaks = cachedPeaks;
+            this.drawWaveform();
+            this.setWaveformState('', false);
+            return;
+        }
+
+        this.clearWaveform('Строю waveform...');
+        this.setWaveformState('Строю waveform...', true);
+
+        try {
+            const result = await window.electronAPI.getAudioFileBuffer(track.path);
+            if (requestId !== this.waveformRequestId) return;
+            if (!result?.success || !result.data) {
+                this.clearWaveform(result?.error || 'Waveform недоступна');
+                return;
+            }
+
+            const audioData = this.toArrayBuffer(result.data);
+            const audioContext = this.getWaveformAudioContext();
+            const decodedBuffer = await audioContext.decodeAudioData(audioData.slice(0));
+            if (requestId !== this.waveformRequestId) return;
+
+            const peaks = this.createWaveformPeaks(decodedBuffer, 320);
+            this.waveformCache.set(track.path, peaks);
+            while (this.waveformCache.size > 32) {
+                this.waveformCache.delete(this.waveformCache.keys().next().value);
+            }
+
+            this.waveformPeaks = peaks;
+            this.drawWaveform();
+            this.setWaveformState('', false);
+        } catch {
+            if (requestId === this.waveformRequestId) {
+                this.clearWaveform('Waveform недоступна для этого файла');
+            }
+        }
+    }
+
+    toArrayBuffer(data) {
+        if (data instanceof ArrayBuffer) return data;
+        if (ArrayBuffer.isView(data)) {
+            return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+        }
+        if (Array.isArray(data)) {
+            return new Uint8Array(data).buffer;
+        }
+        throw new Error('Unsupported audio buffer');
+    }
+
+    getWaveformAudioContext() {
+        this.setupAudioAnalysers();
+        if (this.audioContext) return this.audioContext;
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) {
+            throw new Error('AudioContext unavailable');
+        }
+        this.audioContext = new AudioContextClass();
+        return this.audioContext;
+    }
+
+    createWaveformPeaks(audioBuffer, sampleCount) {
+        const peaks = [];
+        const channelCount = Math.min(2, audioBuffer.numberOfChannels || 1);
+        const totalSamples = audioBuffer.length;
+        const bucketSize = Math.max(1, Math.floor(totalSamples / sampleCount));
+        let maxPeak = 0;
+
+        for (let bucket = 0; bucket < sampleCount; bucket++) {
+            const start = bucket * bucketSize;
+            const end = Math.min(totalSamples, start + bucketSize);
+            const step = Math.max(1, Math.floor((end - start) / 90));
+            let peak = 0;
+
+            for (let channel = 0; channel < channelCount; channel++) {
+                const samples = audioBuffer.getChannelData(channel);
+                for (let i = start; i < end; i += step) {
+                    peak = Math.max(peak, Math.abs(samples[i] || 0));
+                }
+            }
+
+            peaks.push(peak);
+            maxPeak = Math.max(maxPeak, peak);
+        }
+
+        const normalizer = maxPeak > 0 ? maxPeak : 1;
+        return peaks.map((peak) => Math.max(0.03, peak / normalizer));
+    }
+
+    drawWaveform() {
+        const canvas = document.getElementById('trackWaveform');
+        if (!canvas) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.max(1, Math.floor(rect.width));
+        const height = Math.max(1, Math.floor(rect.height));
+        const scale = window.devicePixelRatio || 1;
+        const targetWidth = Math.floor(width * scale);
+        const targetHeight = Math.floor(height * scale);
+
+        if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+        }
+
+        const context = canvas.getContext('2d');
+        if (!context) return;
+        context.clearRect(0, 0, targetWidth, targetHeight);
+
+        if (this.waveformPeaks.length === 0) return;
+
+        const centerY = targetHeight / 2;
+        const barGap = Math.max(1, Math.round(1.5 * scale));
+        const barWidth = Math.max(1, Math.floor(targetWidth / this.waveformPeaks.length) - barGap);
+        const gradient = context.createLinearGradient(0, 0, 0, targetHeight);
+        gradient.addColorStop(0, 'rgba(131, 184, 255, 0.88)');
+        gradient.addColorStop(0.5, 'rgba(106, 168, 255, 0.58)');
+        gradient.addColorStop(1, 'rgba(45, 204, 112, 0.62)');
+        context.fillStyle = gradient;
+
+        this.waveformPeaks.forEach((peak, index) => {
+            const barHeight = Math.max(2 * scale, peak * targetHeight * 0.82);
+            const x = index * (barWidth + barGap);
+            const y = centerY - barHeight / 2;
+            context.fillRect(x, y, barWidth, barHeight);
+        });
+    }
+
+    updateWaveformProgress(progress) {
+        const panel = document.getElementById('waveformPanel');
+        const playhead = document.getElementById('waveformPlayhead');
+        const clampedProgress = Math.min(100, Math.max(0, Number(progress) || 0));
+        if (panel) panel.style.setProperty('--waveform-progress', `${clampedProgress}%`);
+        if (playhead) playhead.style.left = `${clampedProgress}%`;
+    }
+
+    seekFromWaveform(event) {
+        const panel = document.getElementById('waveformPanel');
+        if (!panel || !this.musicPlayer) return;
+
+        const rect = panel.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        const progress = ((event.clientX - rect.left) / rect.width) * 100;
+        this.seekMusic(progress);
     }
 
     formatTime(seconds) {
@@ -2473,7 +2857,9 @@
             padLabels: Array.from(this.padLabels.entries()).map(([index, name]) => ({ index, name })),
             musicVolume: this.musicVolume,
             effectsVolume: this.effectsVolume,
-            playbackMode: this.playbackMode
+            playbackMode: this.playbackMode,
+            crossfadeEnabled: this.crossfadeEnabled,
+            crossfadeDuration: this.crossfadeDuration
         };
         try {
             localStorage.setItem('theatreSoundMixer', JSON.stringify(data));
@@ -2496,6 +2882,8 @@
             this.playbackMode = ['sequential', 'loop', 'single'].includes(data.playbackMode)
                 ? data.playbackMode
                 : 'sequential';
+            this.crossfadeEnabled = Boolean(data.crossfadeEnabled);
+            this.crossfadeDuration = this.normalizeCrossfadeDuration(data.crossfadeDuration ?? 3);
 
             const musicSlider = document.getElementById('musicVolume');
             const effectsSlider = document.getElementById('effectsVolume');
@@ -2508,6 +2896,7 @@
 
             const playbackModeInput = document.querySelector(`input[name="playbackMode"][value="${this.playbackMode}"]`);
             if (playbackModeInput) playbackModeInput.checked = true;
+            this.updateCrossfadeControls();
 
             if (Array.isArray(data.padLabels)) {
                 data.padLabels.forEach((label) => {
