@@ -14,7 +14,7 @@
     --bg-button-hover: #30333c;
     --bg-button-active: #383c46;
     --bg-input: #20232a;
-    
+
     --border-primary: rgba(255, 255, 255, 0.09);
     --border-secondary: rgba(255, 255, 255, 0.13);
     --border-accent: rgba(255, 255, 255, 0.18);
@@ -50,6 +50,12 @@
     --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-medium: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --modal-open-dur: 250ms;
+    --modal-close-dur: 150ms;
+    --modal-scale: 0.96;
+    --modal-scale-close: 0.96;
+    --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 body {
@@ -71,6 +77,34 @@ body {
     opacity: 0.9;
     width: 16px;
     text-align: center;
+}
+
+.t-modal {
+  transform-origin: center;
+  transform: scale(var(--modal-scale));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--modal-open-dur) var(--modal-ease),
+    opacity   var(--modal-open-dur) var(--modal-ease);
+  will-change: transform, opacity;
+}
+.t-modal.is-open {
+  transform: scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+.t-modal.is-closing {
+  transform: scale(var(--modal-scale-close));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--modal-close-dur) var(--modal-ease),
+    opacity   var(--modal-close-dur) var(--modal-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-modal { transition: none !important; }
 }
 
 /* Градиентные фоны */
@@ -203,7 +237,7 @@ body {
 }
 
 .version {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-muted);
     margin-bottom: 12px;
     font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
@@ -399,7 +433,7 @@ body {
 
 .playlist-btn small {
     margin-left: auto;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-muted);
     background: rgba(255, 255, 255, 0.05);
     padding: 2px 6px;
@@ -439,7 +473,7 @@ body {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--text-secondary);
     transition: all var(--transition-fast);
@@ -508,7 +542,7 @@ body {
     position: absolute;
     top: 4px;
     left: 4px;
-    font-size: 8px;
+    font-size: 10px;
     color: var(--text-muted);
     font-weight: 700;
     background: rgba(0, 0, 0, 0.4);
@@ -538,7 +572,7 @@ body {
     color: var(--text-primary);
     border-radius: 6px;
     cursor: pointer;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     transition: all var(--transition-fast);
     text-transform: uppercase;
@@ -572,7 +606,7 @@ body {
     border-color: var(--accent-danger);
     color: #ffffff;
     padding: 8px;
-    font-size: 10px;
+    font-size: 11px;
     margin-top: 4px;
 }
 
@@ -662,7 +696,7 @@ body {
 }
 
 .playlist-name, .pad-status {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-secondary);
     padding: 4px 8px;
     background: rgba(255, 255, 255, 0.03);
@@ -780,7 +814,7 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-muted);
     font-style: normal;
 }
@@ -790,7 +824,7 @@ body {
 }
 
 .track-duration {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-muted);
     font-family: 'JetBrains Mono', monospace;
     flex-shrink: 0;
@@ -1035,7 +1069,7 @@ body {
 }
 
 .radio-text {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -1164,7 +1198,7 @@ body {
     border-radius: 4px;
     min-width: 50px;
     text-align: center;
-    font-size: 10px;
+    font-size: 11px;
 }
 
 .time-display .warning {
@@ -1554,7 +1588,7 @@ body {
 }
 
 .hotkeys-info div {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-muted);
     margin-bottom: 4px;
     padding: 3px 6px 3px 30px;
@@ -1570,7 +1604,7 @@ body {
     left: 8px;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 10px;
+    font-size: 11px;
 }
 
 .hotkeys-info div:hover {
@@ -2013,7 +2047,7 @@ body {
     .sound-pad {
         min-height: 50px;
         height: 50px;
-        font-size: 9px;
+        font-size: 10px;
     }
     
     .playlists-container {
@@ -2159,7 +2193,7 @@ body {
     border-radius: 999px;
     border: 1px solid rgba(106, 168, 255, 0.22);
     color: rgba(106, 168, 255, 0.9);
-    font-size: 9px;
+    font-size: 10px;
     font-style: normal;
 }
 
@@ -2199,6 +2233,297 @@ body {
     text-shadow: none;
 }
 
+.detachable-block {
+    position: relative;
+}
+
+.detachable-block > .section-header,
+.detachable-block > h2,
+.detachable-block > h3,
+.detachable-block > h4 {
+    padding-right: 36px;
+}
+
+.block-detach-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 5;
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 7px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025)),
+        rgba(20, 22, 27, 0.86);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    opacity: 0.72;
+    transition:
+        background-color var(--transition-fast),
+        border-color var(--transition-fast),
+        color var(--transition-fast),
+        opacity var(--transition-fast);
+}
+
+.block-detach-btn .fas {
+    margin-right: 0;
+    width: auto;
+    font-size: 12px;
+}
+
+.block-detach-btn:hover {
+    border-color: rgba(106, 168, 255, 0.42);
+    color: var(--accent-primary);
+    opacity: 1;
+}
+
+.progress-section.detachable-block,
+.volume-section.detachable-block {
+    padding-top: 42px;
+}
+
+.detached-window-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    pointer-events: none;
+}
+
+.floating-window {
+    position: absolute;
+    min-width: 300px;
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 10px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.028)),
+        rgba(24, 27, 32, 0.94);
+    box-shadow:
+        0 28px 80px rgba(0, 0, 0, 0.48),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(26px);
+    color: var(--text-primary);
+}
+
+.floating-titlebar {
+    height: 36px;
+    flex: 0 0 36px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.095), rgba(255, 255, 255, 0.018));
+    cursor: move;
+}
+
+.traffic-lights {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex: 0 0 auto;
+}
+
+.traffic-light {
+    width: 12px;
+    height: 12px;
+    border: none;
+    border-radius: 999px;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+        inset 0 0 0 1px rgba(0, 0, 0, 0.2),
+        0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.traffic-light::before {
+    color: rgba(0, 0, 0, 0.56);
+    font-size: 8px;
+    font-weight: 800;
+    line-height: 1;
+    opacity: 0;
+}
+
+.traffic-lights:hover .traffic-light::before {
+    opacity: 1;
+}
+
+.traffic-light.close {
+    background: #ff5f57;
+}
+
+.traffic-light.close::before {
+    content: "x";
+}
+
+.traffic-light.minimize {
+    background: #febc2e;
+}
+
+.traffic-light.minimize::before {
+    content: "-";
+}
+
+.traffic-light.zoom {
+    background: #28c840;
+}
+
+.traffic-light.zoom::before {
+    content: "+";
+}
+
+.floating-title {
+    flex: 1;
+    min-width: 0;
+    padding-right: 54px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-align: center;
+    text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.floating-window-content {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 14px;
+}
+
+.floating-window-content > .is-detached {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    margin: 0;
+    resize: none;
+}
+
+.floating-window-content > .section.is-detached,
+.floating-window-content > .tracks-section.is-detached,
+.floating-window-content > .now-playing.is-detached,
+.floating-window-content > .progress-section.is-detached,
+.floating-window-content > .volume-section.is-detached,
+.floating-window-content > .countdown-section.is-detached,
+.floating-window-content > .hotkeys-info.is-detached {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.floating-window-content > .tracks-section.is-detached {
+    display: flex;
+}
+
+.floating-window-content > .progress-section.is-detached,
+.floating-window-content > .volume-section.is-detached {
+    padding-top: 16px;
+}
+
+.floating-window-content > .hotkeys-info.is-detached {
+    margin-top: 0;
+}
+
+.detached-window .block-detach-btn {
+    display: none;
+}
+
+.floating-window.is-minimized {
+    min-height: 36px;
+}
+
+.floating-window.is-minimized .floating-window-content,
+.floating-window.is-minimized .floating-resize-handle {
+    display: none;
+}
+
+.floating-window.is-maximized .floating-titlebar {
+    cursor: default;
+}
+
+.floating-resize-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 18px;
+    height: 18px;
+    cursor: nwse-resize;
+}
+
+.floating-resize-handle::before {
+    content: "";
+    position: absolute;
+    right: 5px;
+    bottom: 5px;
+    width: 7px;
+    height: 7px;
+    border-right: 1px solid rgba(255, 255, 255, 0.32);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.32);
+}
+
+.detached-block-placeholder {
+    min-height: 92px;
+    display: grid;
+    place-items: center;
+    gap: 8px;
+    padding: 14px;
+    border: 1px dashed rgba(106, 168, 255, 0.26);
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, rgba(106, 168, 255, 0.055), rgba(255, 255, 255, 0.012)),
+        rgba(14, 16, 20, 0.62);
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.detached-block-placeholder.is-fill {
+    flex: 1;
+    min-height: 220px;
+}
+
+.detached-placeholder-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+}
+
+.detached-placeholder-btn {
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid rgba(106, 168, 255, 0.28);
+    border-radius: 7px;
+    background: rgba(106, 168, 255, 0.1);
+    color: var(--accent-primary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.detached-placeholder-btn .fas {
+    margin-right: 0;
+}
+
 .metadata-modal-overlay {
     position: fixed;
     inset: 0;
@@ -2234,7 +2559,7 @@ body {
     display: block;
     margin-bottom: 4px;
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.8px;
@@ -2301,7 +2626,7 @@ body {
     margin-top: 2px;
     color: var(--text-muted);
     font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
+    font-size: 11px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
