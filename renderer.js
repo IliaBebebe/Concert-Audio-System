@@ -939,6 +939,57 @@
         return `${this.getTrackDisplayNumber(track, index)}. ${this.getTrackTitle(track)}`;
     }
 
+    getTrackStartOffset(track) {
+        const startOffset = Number(track?.startOffset ?? track?.metadataOverride?.startOffset);
+        return Number.isFinite(startOffset) && startOffset > 0 ? startOffset : 0;
+    }
+
+    formatTrackStartOffset(seconds) {
+        const roundedTenths = Math.max(0, Math.round((Number(seconds) || 0) * 10));
+        const wholeSeconds = Math.floor(roundedTenths / 10);
+        const hours = Math.floor(wholeSeconds / 3600);
+        const minutes = Math.floor((wholeSeconds % 3600) / 60);
+        const remainingSeconds = wholeSeconds % 60;
+        const fraction = roundedTenths % 10;
+        const secondsText = `${String(remainingSeconds).padStart(2, '0')}${fraction ? `.${fraction}` : ''}`;
+
+        return hours > 0
+            ? `${hours}:${String(minutes).padStart(2, '0')}:${secondsText}`
+            : `${minutes}:${secondsText}`;
+    }
+
+    parseTrackStartOffset(value) {
+        const rawValue = String(value ?? '').trim().replace(',', '.');
+        if (!rawValue) return 0;
+
+        const parts = rawValue.split(':');
+        if (parts.length > 3 || parts.some((part) => !/^\d+(?:\.\d+)?$/.test(part))) {
+            throw new Error('Укажите время в формате 1:23, 0:45.5 или в секундах');
+        }
+        if (parts.length > 1 && parts.slice(0, -1).some((part) => !/^\d+$/.test(part))) {
+            throw new Error('Дробную часть можно указывать только в секундах');
+        }
+
+        const values = parts.map(Number);
+        let seconds;
+        if (values.length === 1) {
+            seconds = values[0];
+        } else if (values.length === 2) {
+            if (values[1] >= 60) throw new Error('Количество секунд должно быть меньше 60');
+            seconds = values[0] * 60 + values[1];
+        } else {
+            if (values[1] >= 60 || values[2] >= 60) {
+                throw new Error('Минуты и секунды должны быть меньше 60');
+            }
+            seconds = values[0] * 3600 + values[1] * 60 + values[2];
+        }
+
+        if (!Number.isFinite(seconds) || seconds < 0 || seconds > 12 * 60 * 60) {
+            throw new Error('Точка старта должна быть от 0 до 12 часов');
+        }
+        return Math.round(seconds * 1000) / 1000;
+    }
+
     isTrackMetadataOverridden(track, field) {
         return Boolean(track?.metadataOverride && Object.prototype.hasOwnProperty.call(track.metadataOverride, field));
     }
@@ -1002,12 +1053,14 @@
             <p><i class="fas fa-music"></i> Плейлисты не найдены</p>
             <p class="hint"></p>
             <p class="hint">Создайте подпапки с музыкой или выберите другую папку</p>
+            <button class="action-btn" id="openMusicFolderBtn"><i class="fas fa-folder-open"></i> Открыть папку с музыкой</button>
             <button class="action-btn" id="changeFolderBtn"><i class="fas fa-folder-open"></i> Изменить папку с музыкой</button>
         `;
         wrapper.querySelector('.hint').textContent = `В ${folderName} нет плейлистов (подпапок с музыкой)`;
         container.appendChild(wrapper);
         
         document.getElementById('changeFolderBtn').addEventListener('click', () => this.changeMusicFolder());
+        document.getElementById('openMusicFolderBtn').addEventListener('click', () => this.openMusicFolder());
         this.updateStatus('Плейлисты не найдены в текущей папке');
     }
 
@@ -1020,12 +1073,14 @@
             <p><i class="fas fa-exclamation-triangle"></i> Ошибка загрузки плейлистов</p>
             <p class="error-detail"></p>
             <button class="action-btn" id="retryBtn"><i class="fas fa-redo"></i> Повторить</button>
+            <button class="action-btn" id="openMusicFolderBtn"><i class="fas fa-folder-open"></i> Открыть папку с музыкой</button>
             <button class="action-btn" id="changeFolderBtn2"><i class="fas fa-folder-open"></i> Изменить папку</button>
         `;
         wrapper.querySelector('.error-detail').textContent = error || 'Неизвестная ошибка';
         container.appendChild(wrapper);
         
         document.getElementById('retryBtn').addEventListener('click', () => this.refreshPlaylists());
+        document.getElementById('openMusicFolderBtn').addEventListener('click', () => this.openMusicFolder());
         document.getElementById('changeFolderBtn2').addEventListener('click', () => this.changeMusicFolder());
         this.updateStatus(`Ошибка: ${error}`);
     }
@@ -1042,12 +1097,18 @@
         const folderIcon = document.createElement('i');
         folderIcon.className = 'fas fa-folder';
         folderPath.append(folderIcon, ` ${folderName}`);
+        const openButton = document.createElement('button');
+        openButton.className = 'folder-open-btn';
+        openButton.id = 'openMusicFolderSmall';
+        openButton.title = 'Открыть папку с музыкой в Проводнике';
+        openButton.setAttribute('aria-label', 'Открыть папку с музыкой в Проводнике');
+        openButton.innerHTML = '<i class="fas fa-folder-open"></i>';
         const changeButton = document.createElement('button');
         changeButton.className = 'folder-change-btn';
         changeButton.id = 'changeMusicFolderSmall';
         changeButton.setAttribute('aria-label', 'Изменить папку с музыкой');
         changeButton.innerHTML = '<i class="fas fa-edit"></i>';
-        currentFolder.append(folderPath, changeButton);
+        currentFolder.append(folderPath, openButton, changeButton);
         container.appendChild(currentFolder);
         
         playlists.forEach(playlist => {
@@ -1067,6 +1128,7 @@
             container.appendChild(btn);
         });
         
+        document.getElementById('openMusicFolderSmall').addEventListener('click', () => this.openMusicFolder());
         document.getElementById('changeMusicFolderSmall').addEventListener('click', () => this.changeMusicFolder());
     }
 
@@ -1102,6 +1164,18 @@
         } catch (error) {
             if (requestId !== this.playlistRequestId) return;
             this.updateStatus('Ошибка загрузки плейлиста');
+        }
+    }
+
+    async openMusicFolder() {
+        try {
+            const result = await window.electronAPI.openMusicFolder();
+            if (!result?.success) {
+                throw new Error(result?.error || 'Не удалось открыть папку с музыкой');
+            }
+            this.updateStatus('Папка с музыкой открыта');
+        } catch (error) {
+            this.updateStatus('Не удалось открыть папку с музыкой', 'error');
         }
     }
 
@@ -1183,14 +1257,7 @@
 
             const trackArtist = document.createElement('span');
             trackArtist.className = 'track-artist';
-            trackArtist.textContent = this.getTrackArtist(track);
-
-            if (track.metadataOverride && Object.keys(track.metadataOverride).length > 0) {
-                const editedBadge = document.createElement('span');
-                editedBadge.className = 'track-edited-badge';
-                editedBadge.textContent = 'ручн.';
-                trackArtist.appendChild(editedBadge);
-            }
+            this.renderTrackArtist(trackArtist, track);
 
             trackInfo.appendChild(trackName);
             trackInfo.appendChild(trackArtist);
@@ -1212,8 +1279,8 @@
             const editBtn = document.createElement('button');
             editBtn.className = 'track-edit-btn';
             editBtn.type = 'button';
-            editBtn.title = 'Редактировать метаданные';
-            editBtn.setAttribute('aria-label', 'Редактировать метаданные трека');
+            editBtn.title = 'Редактировать параметры трека';
+            editBtn.setAttribute('aria-label', 'Редактировать параметры трека');
             editBtn.innerHTML = '<i class="fas fa-pen"></i>';
             editBtn.addEventListener('click', (event) => {
                 event.stopPropagation();
@@ -1245,6 +1312,13 @@
             editedBadge.className = 'track-edited-badge';
             editedBadge.textContent = 'ручн.';
             element.appendChild(editedBadge);
+        }
+        const startOffset = this.getTrackStartOffset(track);
+        if (startOffset > 0) {
+            const startBadge = document.createElement('span');
+            startBadge.className = 'track-start-badge';
+            startBadge.textContent = `старт ${this.formatTrackStartOffset(startOffset)}`;
+            element.appendChild(startBadge);
         }
     }
 
@@ -1430,7 +1504,7 @@
             <form class="metadata-modal" aria-label="Редактирование метаданных трека" role="dialog" aria-modal="true">
                 <div class="metadata-modal-header">
                     <div>
-                        <span class="metadata-modal-kicker">Метаданные трека</span>
+                        <span class="metadata-modal-kicker">Параметры трека</span>
                         <h3>Редактирование</h3>
                     </div>
                     <button type="button" class="metadata-close-btn" aria-label="Закрыть"><i class="fas fa-times"></i></button>
@@ -1447,6 +1521,11 @@
                     <span>Номер</span>
                     <input type="number" name="trackNumber" min="1" step="1">
                 </label>
+                <label class="metadata-field metadata-field-small">
+                    <span>Старт с позиции</span>
+                    <input type="text" name="startOffset" placeholder="0:00" inputmode="decimal" autocomplete="off" aria-describedby="startOffsetHint">
+                    <small class="metadata-field-hint" id="startOffsetHint">0:00 — с начала; например, 1:23</small>
+                </label>
                 <div class="metadata-source-name"></div>
                 <div class="metadata-actions">
                     <button type="button" class="metadata-secondary-btn" data-action="reset">Сбросить</button>
@@ -1459,6 +1538,7 @@
         const titleInput = overlay.querySelector('input[name="title"]');
         const artistInput = overlay.querySelector('input[name="artist"]');
         const numberInput = overlay.querySelector('input[name="trackNumber"]');
+        const startOffsetInput = overlay.querySelector('input[name="startOffset"]');
         const sourceName = overlay.querySelector('.metadata-source-name');
         const close = () => overlay.remove();
         let isSubmitting = false;
@@ -1472,6 +1552,7 @@
         titleInput.value = this.getTrackTitle(track);
         artistInput.value = track.artist && track.artist !== 'Неизвестный исполнитель' ? track.artist : '';
         numberInput.value = track.trackNumber || index + 1;
+        startOffsetInput.value = this.formatTrackStartOffset(this.getTrackStartOffset(track));
         sourceName.textContent = track.filename || track.name || '';
 
         overlay.querySelector('.metadata-close-btn').addEventListener('click', close);
@@ -1490,12 +1571,22 @@
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
             if (isSubmitting) return;
+            let startOffset;
+            try {
+                startOffset = this.parseTrackStartOffset(startOffsetInput.value);
+            } catch (error) {
+                this.updateStatus(error.message, 'warning');
+                startOffsetInput.focus();
+                startOffsetInput.select();
+                return;
+            }
             setSubmitting(true);
             try {
                 const saved = await this.saveTrackMetadata(index, {
                     title: titleInput.value,
                     artist: artistInput.value,
-                    trackNumber: numberInput.value
+                    trackNumber: numberInput.value,
+                    startOffset
                 });
                 if (saved) close();
             } finally {
@@ -1531,12 +1622,19 @@
             track.trackNumber = Object.prototype.hasOwnProperty.call(track.metadataOverride, 'trackNumber')
                 ? track.metadataOverride.trackNumber
                 : null;
+            track.startOffset = Object.prototype.hasOwnProperty.call(track.metadataOverride, 'startOffset')
+                ? track.metadataOverride.startOffset
+                : 0;
             this.trackMetadataTasks.delete(track);
             await this.loadTrackMetadata(track);
 
             if (this.currentPlaylist === playlistAtStart && this.playlistTracks.includes(track)) {
                 this.displayTracks();
-                if (this.playlistTracks[this.currentTrackIndex] === track) {
+                const isCurrentTrack = this.playlistTracks[this.currentTrackIndex] === track;
+                if (isCurrentTrack && this.musicPlayer && !this.isPlaying && !this.pendingMusicStart) {
+                    this.loadTrack(this.currentTrackIndex);
+                }
+                if (isCurrentTrack) {
                     this.updateCurrentTrackDisplay(track);
                     this.updateMediaSessionMetadata(track);
                 }
@@ -1564,11 +1662,16 @@
             track.title = null;
             track.artist = null;
             track.trackNumber = null;
+            track.startOffset = 0;
             this.trackMetadataTasks.delete(track);
             await this.loadTrackMetadata(track);
             if (this.currentPlaylist === playlistAtStart && this.playlistTracks.includes(track)) {
                 this.displayTracks();
-                if (this.playlistTracks[this.currentTrackIndex] === track) {
+                const isCurrentTrack = this.playlistTracks[this.currentTrackIndex] === track;
+                if (isCurrentTrack && this.musicPlayer && !this.isPlaying && !this.pendingMusicStart) {
+                    this.loadTrack(this.currentTrackIndex);
+                }
+                if (isCurrentTrack) {
                     this.updateCurrentTrackDisplay(track);
                     this.updateMediaSessionMetadata(track);
                 }
@@ -1679,6 +1782,18 @@
             onload: () => {
                 if (!isCurrentPlayer()) return;
                 this.connectHowlToAnalyser(player, 'music');
+                const startOffset = this.getTrackStartOffset(track);
+                const duration = player.duration();
+                const initialSeek = startOffset > 0 && Number.isFinite(duration) && startOffset < duration
+                    ? startOffset
+                    : 0;
+                if (initialSeek > 0) {
+                    player.seek(initialSeek);
+                }
+                const progress = Number.isFinite(duration) && duration > 0 ? (initialSeek / duration) * 100 : 0;
+                const progressBar = document.getElementById('progressBar');
+                if (progressBar) progressBar.value = progress;
+                this.updateWaveformProgress(progress);
                 this.updateTimeDisplays(player);
             },
             onloaderror: () => {
@@ -2178,6 +2293,30 @@
         return peaks.map((peak) => Math.max(0.03, peak / normalizer));
     }
 
+    getWaveformPeaksForWidth(targetWidth, scale) {
+        if (this.waveformPeaks.length === 0) return [];
+
+        const minPitch = Math.max(1, 1.8 * scale);
+        const maxBarsForWidth = Math.max(1, Math.floor(targetWidth / minPitch));
+        const targetCount = Math.min(this.waveformPeaks.length, maxBarsForWidth);
+        if (targetCount >= this.waveformPeaks.length) {
+            return this.waveformPeaks;
+        }
+
+        const resampledPeaks = [];
+        const samplesPerBucket = this.waveformPeaks.length / targetCount;
+        for (let bucket = 0; bucket < targetCount; bucket++) {
+            const start = Math.floor(bucket * samplesPerBucket);
+            const end = Math.max(start + 1, Math.ceil((bucket + 1) * samplesPerBucket));
+            let peak = 0;
+            for (let i = start; i < end && i < this.waveformPeaks.length; i++) {
+                peak = Math.max(peak, this.waveformPeaks[i]);
+            }
+            resampledPeaks.push(peak);
+        }
+        return resampledPeaks;
+    }
+
     drawWaveform() {
         const canvas = document.getElementById('trackWaveform');
         if (!canvas) return;
@@ -2200,18 +2339,22 @@
 
         if (this.waveformPeaks.length === 0) return;
 
+        const visiblePeaks = this.getWaveformPeaksForWidth(targetWidth, scale);
+        if (visiblePeaks.length === 0) return;
+
         const centerY = targetHeight / 2;
-        const barGap = Math.max(1, Math.round(1.5 * scale));
-        const barWidth = Math.max(1, Math.floor(targetWidth / this.waveformPeaks.length) - barGap);
+        const pitch = targetWidth / visiblePeaks.length;
+        const barGap = pitch >= 4 * scale ? Math.min(1.5 * scale, pitch * 0.28) : Math.max(0, pitch * 0.18);
+        const barWidth = Math.max(0.5, pitch - barGap);
         const gradient = context.createLinearGradient(0, 0, 0, targetHeight);
         gradient.addColorStop(0, 'rgba(131, 184, 255, 0.88)');
         gradient.addColorStop(0.5, 'rgba(106, 168, 255, 0.58)');
         gradient.addColorStop(1, 'rgba(45, 204, 112, 0.62)');
         context.fillStyle = gradient;
 
-        this.waveformPeaks.forEach((peak, index) => {
+        visiblePeaks.forEach((peak, index) => {
             const barHeight = Math.max(2 * scale, peak * targetHeight * 0.82);
-            const x = index * (barWidth + barGap);
+            const x = index * pitch + barGap / 2;
             const y = centerY - barHeight / 2;
             context.fillRect(x, y, barWidth, barHeight);
         });
@@ -2226,10 +2369,10 @@
     }
 
     seekFromWaveform(event) {
-        const panel = document.getElementById('waveformPanel');
-        if (!panel || !this.musicPlayer) return;
+        const canvas = document.getElementById('trackWaveform');
+        if (!canvas || !this.musicPlayer) return;
 
-        const rect = panel.getBoundingClientRect();
+        const rect = canvas.getBoundingClientRect();
         if (rect.width <= 0) return;
         const progress = ((event.clientX - rect.left) / rect.width) * 100;
         this.seekMusic(progress);

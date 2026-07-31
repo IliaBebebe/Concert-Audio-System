@@ -1330,15 +1330,15 @@ body {
 
 .waveform-panel canvas {
     position: absolute;
-    inset: 8px;
-    width: calc(100% - 16px);
-    height: calc(100% - 16px);
+    inset: 0;
+    width: 100%;
+    height: 100%;
 }
 
 .waveform-playhead {
     position: absolute;
-    top: 7px;
-    bottom: 7px;
+    top: 0;
+    bottom: 0;
     width: 2px;
     background: rgba(255, 255, 255, 0.86);
     box-shadow: 0 0 12px rgba(106, 168, 255, 0.42);
@@ -1951,7 +1951,7 @@ body {
 
 .current-folder {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 34px;
+    grid-template-columns: minmax(0, 1fr) 34px 34px;
     align-items: center;
     gap: 8px;
     padding: 8px 8px 8px 10px;
@@ -1972,6 +1972,7 @@ body {
     font-size: 11px;
 }
 
+.folder-open-btn,
 .folder-change-btn,
 .action-btn {
     min-height: 34px;
@@ -1988,6 +1989,7 @@ body {
     transition: background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), color var(--transition-fast);
 }
 
+.folder-open-btn,
 .folder-change-btn {
     width: 34px;
     padding: 0;
@@ -2001,6 +2003,7 @@ body {
     font-weight: 700;
 }
 
+.folder-open-btn:hover,
 .folder-change-btn:hover,
 .action-btn:hover,
 .btn-refresh:hover,
@@ -2363,6 +2366,18 @@ body {
     border-radius: 999px;
     border: 1px solid rgba(106, 168, 255, 0.22);
     color: rgba(106, 168, 255, 0.9);
+    font-size: 10px;
+    font-style: normal;
+}
+
+.track-start-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    padding: 1px 5px;
+    border-radius: 999px;
+    border: 1px solid rgba(45, 204, 112, 0.22);
+    color: rgba(88, 220, 143, 0.9);
     font-size: 10px;
     font-style: normal;
 }
@@ -2790,6 +2805,14 @@ body {
     outline: none;
     border-color: var(--accent-primary);
     box-shadow: 0 0 0 3px rgba(106, 168, 255, 0.16);
+}
+
+.metadata-field-hint {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: normal;
+    text-transform: none;
 }
 
 .metadata-source-name {

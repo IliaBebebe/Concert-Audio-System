@@ -4,9 +4,11 @@
 
 ## Установка
 
-1.  Скачайте последнюю версию со страницы [релизов](https://github.com/IliaBebebe/Concert-Audio-System/releases) на GitHub.
-2.  Распакуйте архив `Concert-Audio-System-v1.0.0-win-x64.zip` в удобное для вас место.
-3.  Запустите `Concert Audio System.exe`.
+1.  Скачайте `Concert-Audio-System-Setup.exe` со страницы [релизов](https://github.com/IliaBebebe/Concert-Audio-System/releases) на GitHub.
+2.  Запустите установщик и выберите папку установки.
+3.  Откройте Concert Audio System из меню «Пуск» или с созданного ярлыка.
+
+Ссылка на этот файл всегда ведёт к последней версии: [скачать установщик](https://github.com/IliaBebebe/Concert-Audio-System/releases/latest/download/Concert-Audio-System-Setup.exe).
 
 ## Основные возможности
 

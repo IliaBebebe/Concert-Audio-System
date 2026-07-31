@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, screen, Menu, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Menu, session, shell } = require('electron');
 const path = require('node:path');
 const { fileURLToPath, pathToFileURL } = require('node:url');
 const fs = require('node:fs/promises');
@@ -17,6 +17,7 @@ const METADATA_CONCURRENCY = 2;
 const MAX_METADATA_FILE_SIZE = 1024 * 1024 * 1024;
 const MAX_METADATA_CACHE_ENTRIES = 256;
 const MAX_METADATA_TEXT_LENGTH = 200;
+const MAX_TRACK_START_OFFSET_SECONDS = 12 * 60 * 60;
 const MAX_WAVEFORM_FILE_SIZE = 350 * 1024 * 1024;
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.ogg', '.flac', '.m4a', '.aac', '.opus', '.webm']);
 
@@ -78,12 +79,16 @@ function normalizeTrackMetadata(metadata = {}) {
   const rawTrackNumber = typeof metadata.trackNumber === 'number' || typeof metadata.trackNumber === 'string'
     ? String(metadata.trackNumber).trim()
     : '';
+  const startOffset = Number(metadata.startOffset);
 
   if (title) normalized.title = title;
   if (artist) normalized.artist = artist;
 
   if (/^[1-9]\d{0,4}$/.test(rawTrackNumber)) {
     normalized.trackNumber = Number(rawTrackNumber);
+  }
+  if (Number.isFinite(startOffset) && startOffset > 0 && startOffset <= MAX_TRACK_START_OFFSET_SECONDS) {
+    normalized.startOffset = Math.round(startOffset * 1000) / 1000;
   }
 
   return normalized;
@@ -137,6 +142,7 @@ function applyTrackMetadataOverride(track, override) {
   if (cleanOverride.title) result.title = cleanOverride.title;
   if (cleanOverride.artist) result.artist = cleanOverride.artist;
   if (cleanOverride.trackNumber) result.trackNumber = cleanOverride.trackNumber;
+  if (cleanOverride.startOffset) result.startOffset = cleanOverride.startOffset;
 
   return result;
 }
@@ -770,6 +776,23 @@ ipcMain.handle('select-music-folder', async (event) => {
       return { success: false, error: 'Папка не выбрана' };
     }
     return { success: true, path: result.filePaths[0] };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('open-music-folder', async (event) => {
+  if (!isTrustedSender(event, mainWindow)) {
+    return unauthorizedResponse();
+  }
+
+  try {
+    const config = await loadConfig();
+    const musicFolder = await validateMusicFolder(config.musicFolder);
+    const errorMessage = await shell.openPath(musicFolder);
+    return errorMessage
+      ? { success: false, error: errorMessage }
+      : { success: true };
   } catch (error) {
     return { success: false, error: error.message };
   }

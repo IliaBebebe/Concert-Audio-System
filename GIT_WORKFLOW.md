@@ -24,6 +24,13 @@ npm run build
 
 Use the project `package.json` scripts for release builds.
 
+## Stable Download Link
+
+Windows installers are built as `Concert-Audio-System-Setup.exe`. Upload that
+file to every GitHub release without renaming it. The public landing points to
+`/releases/latest/download/Concert-Audio-System-Setup.exe`, which GitHub
+automatically resolves to the asset in the latest release.
+
 ## Deploy
 
 For source backup to the VPS Git remote:

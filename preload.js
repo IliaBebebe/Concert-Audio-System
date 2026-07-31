@@ -48,6 +48,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectMusicFolder: () => ipcRenderer.invoke('select-music-folder'),
 
   /**
+   * Открывает текущую папку с музыкой в системном файловом менеджере.
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  openMusicFolder: () => ipcRenderer.invoke('open-music-folder'),
+
+  /**
    * Устанавливает папку с музыкой
    * @param {string} folderPath - Путь к папке
    * @returns {Promise<{success: boolean, error?: string}>}
