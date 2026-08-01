@@ -1,6 +1,6 @@
 {
   "name": "theatre-sound-mixer",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Professional sound mixer for theatre productions - Concert Audio System (CAS)",
   "desktopName": "concert-audio-system",
   "main": "main.js",
@@ -12,9 +12,9 @@
     "build-win": "electron-builder --win --dir --x64",
     "build-installer": "npm run build:win",
     "build-simple": "electron-builder --win --dir --x64",
-    "build:win": "electron-builder --win nsis --x64",
-    "build:mac": "electron-builder --mac dmg --universal",
-    "build:linux": "electron-builder --linux AppImage deb --x64",
+    "build:win": "electron-builder --win nsis --x64 --publish never",
+    "build:mac": "electron-builder --mac dmg --universal --publish never",
+    "build:linux": "electron-builder --linux AppImage deb --x64 --publish never",
     "dev": "electron . --dev"
   },
   "devDependencies": {
@@ -92,6 +92,7 @@
         }
       ],
       "category": "AudioVideo;Audio;Player;",
+      "maintainer": "Concert Audio System",
       "syncDesktopName": true,
       "artifactName": "Concert-Audio-System-linux.${ext}"
     },

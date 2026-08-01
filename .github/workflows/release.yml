@@ -40,23 +40,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Build Windows package
-        if: matrix.artifact == 'windows'
-        run: ${{ matrix.command }}
-        env:
-          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
-      - name: Build macOS package
-        if: matrix.artifact == 'macos'
-        run: ${{ matrix.command }}
-        env:
-          CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      - name: Build Linux package
-        if: matrix.artifact == 'linux'
+      - name: Build package
         run: ${{ matrix.command }}
       - uses: actions/upload-artifact@v4
         with:
