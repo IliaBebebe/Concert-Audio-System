@@ -36,16 +36,16 @@
         <p class="lead">Полный контроль. Идеальный звук.</p>
         <p class="hero-copy">Профессиональное ПО для управления музыкой, эффектами, режимами воспроизведения и live audio cues на мероприятиях любого масштаба.</p>
         <div class="hero-actions">
-          <a class="button primary" href="https://github.com/IliaBebebe/Concert-Audio-System/releases/download/v1.0.6/Concert-Audio-System-Setup-1.0.6.exe" rel="noopener" target="_blank">
-            <span class="button-icon" aria-hidden="true">↓</span>
-            Скачать для Windows
+          <a class="button primary" href="#download" data-primary-download>
+            <img class="button-os-icon" src="/assets/os-windows.svg" alt="" data-primary-icon>
+            <span data-primary-label>Скачать CAS</span>
           </a>
           <a class="button secondary" href="https://github.com/IliaBebebe/Concert-Audio-System/releases" rel="noopener" target="_blank">
             GitHub releases
           </a>
         </div>
         <div class="hero-meta" aria-label="Ключевые преимущества">
-          <span>Windows installer</span>
+          <span>Windows, macOS и Linux</span>
           <span>12 sound pads</span>
           <span>Hotkeys</span>
           <span>Live timer</span>
@@ -112,7 +112,7 @@
           <p>CAS не пытается быть студийной DAW. Это desktop-инструмент для надежного запуска треков и эффектов, быстрых переключений, контроля громкости и понятной обратной связи, когда на площадке нет права на путаницу.</p>
           <ul class="check-list">
             <li>локальное приложение без браузерной панели;</li>
-            <li>понятный installer wizard для Windows;</li>
+            <li>простая установка на Windows, macOS и Linux;</li>
             <li>режимы для концертов, спектаклей, залов и корпоративных событий.</li>
           </ul>
         </div>
@@ -152,14 +152,33 @@
       <div class="section-inner download-grid">
         <div>
           <p class="section-kicker">Релиз</p>
-          <h2 id="download-title">Скачайте CAS и установите через мастер Windows.</h2>
-          <p>На сайте доступен установщик версии 1.0.6. Альтернативно можно перейти на GitHub и выбрать нужный релиз или архив сборки.</p>
+          <h2 id="download-title">CAS для Windows, macOS и Linux.</h2>
+          <p data-download-intro>Сайт подберёт нужную сборку автоматически. Если система не определилась, покажем все варианты сразу.</p>
         </div>
         <div class="download-panel">
           <img src="/assets/cas-logo.png" alt="CAS Concert Audio System">
-          <a class="button primary full" href="https://github.com/IliaBebebe/Concert-Audio-System/releases/download/v1.0.6/Concert-Audio-System-Setup-1.0.6.exe" rel="noopener" target="_blank">Download for Windows</a>
-          <a class="button secondary full" href="https://github.com/IliaBebebe/Concert-Audio-System/releases" rel="noopener" target="_blank">View on GitHub</a>
-          <p class="release-note">Concert-Audio-System-Setup-1.0.6.exe</p>
+          <p class="download-status" data-download-status aria-live="polite">Выберите вашу операционную систему.</p>
+          <div class="download-options" data-download-options>
+            <a class="download-option" data-platform="windows" href="https://github.com/IliaBebebe/Concert-Audio-System/releases/latest/download/Concert-Audio-System-Setup.exe" rel="noopener" target="_blank">
+              <span class="os-icon"><img src="/assets/os-windows.svg" alt=""></span>
+              <span class="download-option-copy"><strong>Windows</strong><small>Windows 10/11 · установщик .exe</small></span>
+              <span class="download-option-action">Скачать</span>
+            </a>
+            <a class="download-option" data-platform="macos" href="https://github.com/IliaBebebe/Concert-Audio-System/releases/latest/download/Concert-Audio-System-macOS.dmg" rel="noopener" target="_blank">
+              <span class="os-icon"><img src="/assets/os-apple.svg" alt=""></span>
+              <span class="download-option-copy"><strong>macOS</strong><small>Intel и Apple Silicon · .dmg</small></span>
+              <span class="download-option-action">Скачать</span>
+            </a>
+            <a class="download-option" data-platform="linux" href="https://github.com/IliaBebebe/Concert-Audio-System/releases/latest/download/Concert-Audio-System-linux.AppImage" rel="noopener" target="_blank">
+              <span class="os-icon"><img src="/assets/os-linux.svg" alt=""></span>
+              <span class="download-option-copy"><strong>Linux</strong><small>AppImage · x64 · запускается без установки</small></span>
+              <span class="download-option-action">Скачать</span>
+            </a>
+          </div>
+          <button class="show-all-downloads" type="button" data-show-all-downloads hidden>Показать версии для других ОС</button>
+          <a class="button secondary full" href="https://github.com/IliaBebebe/Concert-Audio-System/releases" rel="noopener" target="_blank">Все файлы на GitHub</a>
+          <p class="release-note">Ссылки ведут на последнюю стабильную версию. Для Ubuntu и Debian также доступен пакет .deb.</p>
+          <p class="icon-attribution">Значки ОС: <a href="https://fontawesome.com/license/free" rel="noopener" target="_blank">Font Awesome Free</a>.</p>
         </div>
       </div>
     </section>
@@ -171,5 +190,6 @@
       <a href="https://github.com/IliaBebebe/Concert-Audio-System/releases" rel="noopener" target="_blank">GitHub</a>
     </div>
   </footer>
+  <script src="/downloads.js" defer></script>
 </body>
 </html>

@@ -4,11 +4,13 @@
 
 ## Установка
 
-1.  Скачайте `Concert-Audio-System-Setup.exe` со страницы [релизов](https://github.com/IliaBebebe/Concert-Audio-System/releases) на GitHub.
-2.  Запустите установщик и выберите папку установки.
-3.  Откройте Concert Audio System из меню «Пуск» или с созданного ярлыка.
+Скачайте подходящий файл на [странице релизов](https://github.com/IliaBebebe/Concert-Audio-System/releases):
 
-Ссылка на этот файл всегда ведёт к последней версии: [скачать установщик](https://github.com/IliaBebebe/Concert-Audio-System/releases/latest/download/Concert-Audio-System-Setup.exe).
+* **Windows 10/11:** `Concert-Audio-System-Setup.exe` — запустите установщик и следуйте его шагам.
+* **macOS (Intel и Apple Silicon):** `Concert-Audio-System-macOS.dmg` — перетащите приложение в папку «Программы».
+* **Linux x64:** `Concert-Audio-System-linux.AppImage` — сделайте файл исполняемым и запустите его. Для Ubuntu и Debian также доступен пакет `.deb`.
+
+Постоянные ссылки на последнюю стабильную версию: [Windows](https://github.com/IliaBebebe/Concert-Audio-System/releases/latest/download/Concert-Audio-System-Setup.exe), [macOS](https://github.com/IliaBebebe/Concert-Audio-System/releases/latest/download/Concert-Audio-System-macOS.dmg), [Linux](https://github.com/IliaBebebe/Concert-Audio-System/releases/latest/download/Concert-Audio-System-linux.AppImage).
 
 ## Основные возможности
 

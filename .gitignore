@@ -10,6 +10,7 @@ build/*
 !build/installer.nsh
 !build/installerHeader.bmp
 !build/license.txt
+!build/icon.svg
 release/
 *.asar
 
@@ -80,5 +81,11 @@ assets/fontawesome/
 
 # Hosted landing source is tracked separately in ../cas-landing
 landing/assets/
+!landing/assets/
+landing/assets/*
 landing/downloads/
 landing/styles.css
+!landing/assets/os-windows.svg
+!landing/assets/os-apple.svg
+!landing/assets/os-linux.svg
+!landing/styles.css

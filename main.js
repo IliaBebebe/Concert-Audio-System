@@ -25,7 +25,9 @@ const appRootPath = path.resolve(__dirname);
 const configPath = path.join(app.getPath('userData'), 'config.json');
 const windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
 const metadataWorkerPath = path.join(__dirname, 'metadata-worker.js');
-const appIconPath = path.join(__dirname, 'assets', 'app-icon.ico');
+const appIconPath = process.platform === 'win32'
+  ? path.join(__dirname, 'assets', 'app-icon.ico')
+  : undefined;
 const isDev = process.argv.includes('--dev');
 
 let mainWindow = null;
@@ -951,7 +953,9 @@ ipcMain.handle('get-audio-file-buffer', async (event, filePath) => {
 });
 
 async function startApplication() {
-  app.setAppUserModelId('com.concertaudiosystem.cas');
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.concertaudiosystem.cas');
+  }
   Menu.setApplicationMenu(null);
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
