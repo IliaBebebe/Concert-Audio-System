@@ -1114,6 +1114,9 @@ class TheatreSoundMixer {
                 this.musicPlayer.mute(this.isMuted);
             } catch {}
         }
+        this.retiringMusicPlayers.forEach(p => {
+            try { p.mute(this.isMuted); } catch {}
+        });
         this.soundEffects.forEach(sd => {
             if (sd?.sound) {
                 try { sd.sound.mute(this.isMuted); } catch {}
@@ -2280,6 +2283,7 @@ class TheatreSoundMixer {
         } else {
             this.stopProgressTracking(false);
             this.pendingMusicStart = false;
+            this.isPlaying = false;
         }
 
         const playerToken = ++this.musicPlayerToken;
@@ -2323,10 +2327,10 @@ class TheatreSoundMixer {
                 if (fadeInMs > 0 && !fadeInApplied) {
                     fadeInApplied = true;
                     try {
-                        player.volume(0);
-                        player.fade(0, this.musicVolume, fadeInMs);
+                        const targetVolume = this.isMuted ? 0 : this.musicVolume;
+                        player.fade(0, targetVolume, fadeInMs);
                     } catch {
-                        try { player.volume(this.musicVolume); } catch {}
+                        try { player.volume(this.isMuted ? 0 : this.musicVolume); } catch {}
                     }
                 }
                 this.updateStatus(`Воспроизведение: ${this.getTrackTitle(track)}`);
@@ -2427,6 +2431,7 @@ class TheatreSoundMixer {
 
         if (this.crossfadeDuration <= 0) return false;
         if (!this.musicPlayer || !this.isPlaying || this.isPaused || this.pendingMusicStart) return false;
+        if (typeof this.musicPlayer.playing === 'function' && !this.musicPlayer.playing()) return false;
         if (this.isCrossfading) return false;
 
         const currentDeckId = this.playingDeck || this.activeDeck;
@@ -2505,7 +2510,7 @@ class TheatreSoundMixer {
             return;
         }
 
-        this.playMusic();
+        this.playMusic({ force: true });
 
         const timer = setTimeout(() => {
             this.crossfadeTimers.delete(timer);
@@ -2573,7 +2578,8 @@ class TheatreSoundMixer {
         }
     }
 
-    playMusic() {
+    playMusic(options = {}) {
+        const { force = false } = options;
         if (!this.musicPlayer) {
             const targetDeckId = this.playingDeck || this.activeDeck;
             const deck = this.decks[targetDeckId];
@@ -2587,7 +2593,12 @@ class TheatreSoundMixer {
 
         this.resumeAudioContext();
         const player = this.musicPlayer;
-        if (!player || this.pendingMusicStart || (this.isPlaying && !this.isPaused)) return;
+        if (!player) return;
+
+        const isPlayerActuallyPlaying = Boolean(player.playing && player.playing());
+        if (!force && !this.isPaused && (this.pendingMusicStart || isPlayerActuallyPlaying)) {
+            return;
+        }
 
         this.pendingMusicStart = true;
         this.updateDeckUI();
@@ -2598,7 +2609,8 @@ class TheatreSoundMixer {
                 this.updateDeckUI();
                 this.updateStatus('Не удалось запустить трек', 'error');
             }
-        } catch {
+        } catch (error) {
+            CAS_LOGGER.error('Ошибка вызова player.play():', error);
             if (this.musicPlayer === player) this.pendingMusicStart = false;
             this.updateDeckUI();
             this.updateStatus('Ошибка воспроизведения', 'error');
@@ -2614,6 +2626,16 @@ class TheatreSoundMixer {
         }
         if (this.isPlaying && !this.isPaused) {
             this.musicPlayer.pause();
+            this.retiringMusicPlayers.forEach((retiringPlayer) => {
+                try {
+                    retiringPlayer.stop();
+                    retiringPlayer.unload();
+                } catch {}
+            });
+            this.retiringMusicPlayers.clear();
+            this.crossfadeTimers.forEach((timer) => clearTimeout(timer));
+            this.crossfadeTimers.clear();
+            this.isCrossfading = false;
             this.updateDeckUI();
         }
     }

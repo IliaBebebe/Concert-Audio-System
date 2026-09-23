@@ -134,3 +134,52 @@ test('shouldCrossfadeTo returns false when music is paused, stopped, or duration
     mixer.isCrossfading = true;
     assert.strictEqual(mixer.shouldCrossfadeTo('A', 1), false);
 });
+
+test('playMusic with force: true starts new player even if isPlaying is true', () => {
+    const mixer = createMockMixer();
+    let playCallCount = 0;
+    mixer.musicPlayer = {
+        playing: () => false,
+        play: () => {
+            playCallCount++;
+            return 1;
+        }
+    };
+    mixer.isPlaying = true;
+    mixer.isPaused = false;
+    mixer.resumeAudioContext = () => {};
+    mixer.updateDeckUI = () => {};
+
+    // Normal playMusic when player is not playing but isPlaying flag is true
+    // Because isPlayerActuallyPlaying is false, it plays!
+    mixer.playMusic();
+    assert.strictEqual(playCallCount, 1);
+
+    // Calling playMusic with force: true also plays
+    mixer.playMusic({ force: true });
+    assert.strictEqual(playCallCount, 2);
+});
+
+test('pauseMusic cleans up retiring crossfade players immediately', () => {
+    const mixer = createMockMixer();
+    let outgoingStopped = false;
+    let outgoingUnloaded = false;
+    const retiringPlayer = {
+        stop: () => { outgoingStopped = true; },
+        unload: () => { outgoingUnloaded = true; }
+    };
+    mixer.retiringMusicPlayers = new Set([retiringPlayer]);
+    mixer.crossfadeTimers = new Set([setTimeout(() => {}, 10000)]);
+    mixer.isCrossfading = true;
+    mixer.musicPlayer = { pause: () => {} };
+    mixer.updateDeckUI = () => {};
+
+    mixer.pauseMusic();
+
+    assert.strictEqual(outgoingStopped, true);
+    assert.strictEqual(outgoingUnloaded, true);
+    assert.strictEqual(mixer.retiringMusicPlayers.size, 0);
+    assert.strictEqual(mixer.crossfadeTimers.size, 0);
+    assert.strictEqual(mixer.isCrossfading, false);
+});
+
