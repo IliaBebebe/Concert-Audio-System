@@ -3123,6 +3123,12 @@ body {
     animation: deckPlayPulse 1.8s infinite ease-in-out;
 }
 
+.deck-state-pill.paused {
+    background: rgba(255, 170, 0, 0.18);
+    color: #ffaa00;
+    border: 1px solid rgba(255, 170, 0, 0.4);
+}
+
 @keyframes deckPlayPulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }

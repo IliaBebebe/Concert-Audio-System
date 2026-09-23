@@ -1,6 +1,6 @@
 {
   "name": "theatre-sound-mixer",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Professional sound mixer for theatre productions - Concert Audio System (CAS)",
   "desktopName": "concert-audio-system",
   "main": "main.js",

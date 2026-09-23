@@ -1176,18 +1176,20 @@ class TheatreSoundMixer {
                 const searchInput = document.getElementById(targetDeck === 'A' ? 'trackSearchInputA' : 'trackSearchInputB');
                 if (searchInput) searchInput.value = '';
 
-                this.currentPlaylist = playlist;
-                this.playlistTracks = result.data;
-                this.currentTrackIndex = 0;
-                this.trackFilterQuery = '';
+                if (!this.playingDeck || this.playingDeck === targetDeck) {
+                    this.currentPlaylist = playlist;
+                    this.playlistTracks = result.data;
+                    this.currentTrackIndex = 0;
+                    this.trackFilterQuery = '';
+                }
 
                 this.displayTracks(targetDeck);
                 this.updateDeckUI();
                 this.updateTrackCounter();
                 this.updateStatus(`Плейлист загружен в Deck ${targetDeck}: ${playlist.name}`, 'success');
                 
-                if (!this.isPlaying && this.playlistTracks.length > 0) {
-                    this.loadTrack(0);
+                if (!this.isPlaying && !this.playingDeck && this.activeDeck === targetDeck && deck.tracks.length > 0) {
+                    this.loadTrack(0, { deckId: targetDeck });
                 }
             } else {
                 throw new Error(result.error);
@@ -1529,6 +1531,13 @@ class TheatreSoundMixer {
     // ===== Dual Playlist Deck Management =====
 
     playTrackInDeck(deckId, index, options = {}) {
+        const { forceDirect = false } = options;
+
+        if (!forceDirect && this.shouldCrossfadeTo(deckId, index)) {
+            this.startCrossfadeTo(deckId, index, options);
+            return;
+        }
+
         if (this.playingDeck && this.playingDeck !== deckId) {
             this.stopMusic({ silent: true });
         }
@@ -1542,14 +1551,15 @@ class TheatreSoundMixer {
         this.currentTrackIndex = index;
         deck.currentTrackIndex = index;
 
-        this.loadTrack(index, options);
+        this.loadTrack(index, { ...options, deckId });
         this.playMusic();
         this.highlightCurrentTrack();
         this.updateDeckUI();
     }
 
     playTrack(index, options = {}) {
-        this.playTrackInDeck(this.activeDeck, index, options);
+        const deckId = this.playingDeck || this.activeDeck;
+        this.playTrackInDeck(deckId, index, options);
     }
 
     filterTracksInDeck(deckId, query) {
@@ -1570,9 +1580,11 @@ class TheatreSoundMixer {
         this.activeDeck = deckId;
 
         const deck = this.decks[deckId];
-        this.currentPlaylist = deck.playlist;
-        this.playlistTracks = deck.tracks;
-        this.currentTrackIndex = deck.currentTrackIndex;
+        if (!this.playingDeck) {
+            this.currentPlaylist = deck.playlist;
+            this.playlistTracks = deck.tracks;
+            this.currentTrackIndex = deck.currentTrackIndex;
+        }
         this.trackFilterQuery = deck.filterQuery || '';
 
         this.updateDeckUI();
@@ -1635,38 +1647,36 @@ class TheatreSoundMixer {
         if (colA) colA.classList.toggle('active', this.activeDeck === 'A');
         if (colB) colB.classList.toggle('active', this.activeDeck === 'B');
 
+        const activeBadgeDeck = this.playingDeck || this.activeDeck;
         if (badge) {
-            badge.textContent = this.activeDeck === 'A' ? 'DECK A' : 'DECK B';
-            badge.classList.toggle('deck-b', this.activeDeck === 'B');
+            badge.textContent = activeBadgeDeck === 'A' ? 'DECK A' : 'DECK B';
+            badge.classList.toggle('deck-b', activeBadgeDeck === 'B');
         }
 
-        if (stateA) {
-            stateA.classList.remove('playing', 'active', 'standby');
-            if (this.playingDeck === 'A' && this.isPlaying && !this.isPaused) {
-                stateA.textContent = 'ИГРАЕТ ▶';
-                stateA.classList.add('playing');
-            } else if (this.activeDeck === 'A') {
-                stateA.textContent = 'АКТИВЕН';
-                stateA.classList.add('active');
-            } else {
-                stateA.textContent = 'ОЖИДАНИЕ';
-                stateA.classList.add('standby');
-            }
-        }
+        const isDeckPlaying = (deckId) => this.playingDeck === deckId && (this.isPlaying || this.pendingMusicStart || this.isCrossfading) && !this.isPaused;
+        const isDeckPaused = (deckId) => this.playingDeck === deckId && this.isPaused;
 
-        if (stateB) {
-            stateB.classList.remove('playing', 'active', 'standby');
-            if (this.playingDeck === 'B' && this.isPlaying && !this.isPaused) {
-                stateB.textContent = 'ИГРАЕТ ▶';
-                stateB.classList.add('playing');
-            } else if (this.activeDeck === 'B') {
-                stateB.textContent = 'АКТИВЕН';
-                stateB.classList.add('active');
+        const updatePill = (element, deckId) => {
+            if (!element) return;
+            element.classList.remove('playing', 'paused', 'active', 'standby');
+
+            if (isDeckPlaying(deckId)) {
+                element.textContent = 'ИГРАЕТ ▶';
+                element.classList.add('playing');
+            } else if (isDeckPaused(deckId)) {
+                element.textContent = 'ПАУЗА ⏸';
+                element.classList.add('paused');
+            } else if (!this.playingDeck && this.activeDeck === deckId) {
+                element.textContent = 'АКТИВЕН';
+                element.classList.add('active');
             } else {
-                stateB.textContent = 'ОЖИДАНИЕ';
-                stateB.classList.add('standby');
+                element.textContent = 'ОЖИДАНИЕ';
+                element.classList.add('standby');
             }
-        }
+        };
+
+        updatePill(stateA, 'A');
+        updatePill(stateB, 'B');
 
         this.updatePlaylistSelection();
     }
@@ -2056,22 +2066,28 @@ class TheatreSoundMixer {
     }
 
     loadTrack(index, options = {}) {
-        if (index < 0 || index >= this.playlistTracks.length) return;
+        const deckId = options.deckId || this.playingDeck || this.activeDeck;
+        const deck = this.decks[deckId];
+        const tracks = deck?.tracks || this.playlistTracks;
+        if (index < 0 || index >= tracks.length) return;
 
         const {
             preserveCurrent = false,
             initialVolume = this.musicVolume,
             fadeInMs = 0
         } = options;
+
         this.currentTrackIndex = index;
-        const track = this.playlistTracks[index];
+        if (deck) deck.currentTrackIndex = index;
+        this.playingDeck = deckId;
+        const track = tracks[index];
+
         if (!preserveCurrent) {
             this.stopMusic({ silent: true });
+            this.playingDeck = deckId;
         } else {
             this.stopProgressTracking(false);
             this.pendingMusicStart = false;
-            this.isPlaying = false;
-            this.isPaused = false;
         }
 
         const playerToken = ++this.musicPlayerToken;
@@ -2085,8 +2101,10 @@ class TheatreSoundMixer {
             this.pendingMusicStart = false;
             this.isPlaying = false;
             this.isPaused = false;
+            this.playingDeck = null;
             this.stopProgressTracking();
             try { player.unload(); } catch {}
+            this.updateDeckUI();
             this.updateStatus(message, 'error');
         };
 
@@ -2109,6 +2127,7 @@ class TheatreSoundMixer {
                 this.pendingMusicStart = false;
                 this.isPlaying = true;
                 this.isPaused = false;
+                this.playingDeck = deckId;
                 if (fadeInMs > 0 && !fadeInApplied) {
                     fadeInApplied = true;
                     try {
@@ -2121,7 +2140,7 @@ class TheatreSoundMixer {
                 this.updateStatus(`Воспроизведение: ${this.getTrackTitle(track)}`);
                 this.startProgressTracking();
                 this.updateVuMeters();
-                this.playingDeck = this.activeDeck;
+                this.highlightCurrentTrack();
                 this.updateDeckUI();
             },
             onpause: () => {
@@ -2172,6 +2191,7 @@ class TheatreSoundMixer {
                 this.isPaused = false;
                 this.stopProgressTracking(false);
                 this.updateStatus('Ошибка воспроизведения', 'error');
+                this.updateDeckUI();
                 if (this.playbackMode === 'sequential' && !this.musicRetryTimeout) {
                     this.musicRetryTimeout = setTimeout(() => {
                         this.musicRetryTimeout = null;
@@ -2205,17 +2225,29 @@ class TheatreSoundMixer {
         }
     }
 
-    shouldCrossfadeTo(index) {
-        return this.crossfadeEnabled
-            && this.crossfadeDuration > 0
-            && this.musicPlayer
-            && this.isPlaying
-            && !this.isPaused
-            && !this.pendingMusicStart
-            && this.playlistTracks.length > 1
-            && index >= 0
-            && index < this.playlistTracks.length
-            && index !== this.currentTrackIndex;
+    shouldCrossfadeTo(targetDeckIdOrIndex, maybeIndex) {
+        let targetDeckId = this.playingDeck || this.activeDeck;
+        let targetIndex = targetDeckIdOrIndex;
+        if (typeof targetDeckIdOrIndex === 'string') {
+            targetDeckId = targetDeckIdOrIndex;
+            targetIndex = maybeIndex;
+        }
+
+        if (!this.crossfadeEnabled || this.crossfadeDuration <= 0) return false;
+        if (!this.musicPlayer || !this.isPlaying || this.isPaused || this.pendingMusicStart) return false;
+        if (this.isCrossfading) return false;
+
+        const targetDeck = this.decks[targetDeckId];
+        if (!targetDeck || !targetDeck.tracks || targetDeck.tracks.length === 0) return false;
+        if (targetIndex < 0 || targetIndex >= targetDeck.tracks.length) return false;
+
+        const currentDeckId = this.playingDeck || this.activeDeck;
+        const currentTrackIndex = this.decks[currentDeckId]?.currentTrackIndex ?? this.currentTrackIndex;
+
+        // Don't crossfade into the exact same track in the same deck
+        if (currentDeckId === targetDeckId && currentTrackIndex === targetIndex) return false;
+
+        return true;
     }
 
     getCrossfadeDurationMs(player = this.musicPlayer) {
@@ -2230,22 +2262,41 @@ class TheatreSoundMixer {
         return requestedMs;
     }
 
-    startCrossfadeToIndex(index, { automatic = false } = {}) {
-        if (!this.shouldCrossfadeTo(index) || this.isCrossfading) {
-            this.playTrack(index, { forceDirect: true });
+    startCrossfadeTo(targetDeckId, targetIndex, { automatic = false } = {}) {
+        if (!this.shouldCrossfadeTo(targetDeckId, targetIndex) || this.isCrossfading) {
+            this.playTrackInDeck(targetDeckId, targetIndex, { forceDirect: true });
             return;
         }
 
         const outgoingPlayer = this.musicPlayer;
-        const outgoingTrack = this.playlistTracks[this.currentTrackIndex];
-        const incomingTrack = this.playlistTracks[index];
-        const fadeMs = this.getCrossfadeDurationMs(outgoingPlayer);
+        const outgoingDeckId = this.playingDeck || this.activeDeck;
+        const outgoingDeck = this.decks[outgoingDeckId];
+        const outgoingTrack = outgoingDeck?.tracks?.[outgoingDeck.currentTrackIndex];
 
+        const incomingDeck = this.decks[targetDeckId];
+        const incomingTrack = incomingDeck?.tracks?.[targetIndex];
+        if (!incomingTrack) {
+            this.playTrackInDeck(targetDeckId, targetIndex, { forceDirect: true });
+            return;
+        }
+
+        const fadeMs = this.getCrossfadeDurationMs(outgoingPlayer);
         this.isCrossfading = true;
-        const incomingPlayer = this.loadTrack(index, {
+
+        this.activeDeck = targetDeckId;
+        this.playingDeck = targetDeckId;
+        this.currentPlaylist = incomingDeck.playlist;
+        this.playlistTracks = incomingDeck.tracks;
+        this.currentTrackIndex = targetIndex;
+        incomingDeck.currentTrackIndex = targetIndex;
+
+        this.fadeOutAndUnloadMusicPlayer(outgoingPlayer, fadeMs);
+
+        const incomingPlayer = this.loadTrack(targetIndex, {
             preserveCurrent: true,
             initialVolume: 0,
-            fadeInMs: fadeMs
+            fadeInMs: fadeMs,
+            deckId: targetDeckId
         });
 
         if (!incomingPlayer) {
@@ -2253,18 +2304,25 @@ class TheatreSoundMixer {
             return;
         }
 
-        this.fadeOutAndUnloadMusicPlayer(outgoingPlayer, fadeMs);
         this.playMusic();
 
         const timer = setTimeout(() => {
             this.crossfadeTimers.delete(timer);
             this.isCrossfading = false;
-        }, fadeMs + 120);
+        }, fadeMs + 150);
         this.crossfadeTimers.add(timer);
 
-        const fromTitle = this.getTrackTitle(outgoingTrack);
+        const fromTitle = outgoingTrack ? this.getTrackTitle(outgoingTrack) : 'Трек';
         const toTitle = this.getTrackTitle(incomingTrack);
-        this.updateStatus(`${automatic ? 'Авто-' : ''}Crossfade: ${fromTitle} → ${toTitle}`);
+        const deckSwitchText = outgoingDeckId !== targetDeckId ? ` [Deck ${outgoingDeckId} → ${targetDeckId}]` : '';
+        this.updateStatus(`${automatic ? 'Авто-' : ''}Crossfade${deckSwitchText}: ${fromTitle} → ${toTitle}`);
+        this.highlightCurrentTrack();
+        this.updateDeckUI();
+    }
+
+    startCrossfadeToIndex(index, options = {}) {
+        const deckId = this.playingDeck || this.activeDeck;
+        this.startCrossfadeTo(deckId, index, options);
     }
 
     fadeOutAndUnloadMusicPlayer(player, durationMs) {
@@ -2273,7 +2331,8 @@ class TheatreSoundMixer {
 
         try {
             const currentVolume = Number(player.volume());
-            player.fade(Number.isFinite(currentVolume) ? currentVolume : this.musicVolume, 0, durationMs);
+            const startVol = (Number.isFinite(currentVolume) && currentVolume > 0) ? currentVolume : this.musicVolume;
+            player.fade(startVol, 0, durationMs);
         } catch {
             try { player.volume(0); } catch {}
         }
@@ -2281,8 +2340,11 @@ class TheatreSoundMixer {
         const timer = setTimeout(() => {
             this.crossfadeTimers.delete(timer);
             this.retiringMusicPlayers.delete(player);
-            try { player.unload(); } catch {}
-        }, durationMs + 180);
+            try {
+                player.stop();
+                player.unload();
+            } catch {}
+        }, durationMs + 200);
         this.crossfadeTimers.add(timer);
     }
 
@@ -2292,39 +2354,34 @@ class TheatreSoundMixer {
             || this.isCrossfading
             || this.musicPlayer !== player
             || this.musicPlayerToken !== playerToken
-            || this.playlistTracks.length < 2
             || !Number.isFinite(seek)
             || !Number.isFinite(duration)
             || duration <= 0) {
             return;
         }
 
+        const deckId = this.playingDeck || this.activeDeck;
+        const deck = this.decks[deckId];
+        if (!deck || !deck.tracks || deck.tracks.length < 2) return;
+
         const fadeSeconds = this.normalizeCrossfadeDuration(this.crossfadeDuration);
         const remaining = duration - seek;
         if (remaining > 0 && remaining <= fadeSeconds && seek > 0.5) {
-            const nextIndex = (this.currentTrackIndex + 1) % this.playlistTracks.length;
-            this.startCrossfadeToIndex(nextIndex, { automatic: true });
+            const nextIndex = (deck.currentTrackIndex + 1) % deck.tracks.length;
+            this.startCrossfadeTo(deckId, nextIndex, { automatic: true });
         }
-    }
-
-    playTrack(index, { forceDirect = false } = {}) {
-        if (!forceDirect && this.shouldCrossfadeTo(index)) {
-            this.startCrossfadeToIndex(index);
-            return;
-        }
-        if (!this.musicPlayer || index !== this.currentTrackIndex) {
-            this.loadTrack(index);
-        }
-        this.playMusic();
     }
 
     playMusic() {
         if (!this.musicPlayer) {
-            if (this.playlistTracks.length === 0) {
+            const targetDeckId = this.playingDeck || this.activeDeck;
+            const deck = this.decks[targetDeckId];
+            if (!deck || !deck.tracks || deck.tracks.length === 0) {
                 this.updateStatus('Сначала выберите трек', 'warning');
                 return;
             }
-            this.loadTrack(this.currentTrackIndex);
+            const trackIndex = deck.currentTrackIndex || 0;
+            this.loadTrack(trackIndex, { deckId: targetDeckId });
         }
 
         this.resumeAudioContext();
@@ -2332,17 +2389,17 @@ class TheatreSoundMixer {
         if (!player || this.pendingMusicStart || (this.isPlaying && !this.isPaused)) return;
 
         this.pendingMusicStart = true;
+        this.updateDeckUI();
         try {
             const soundId = player.play();
             if (soundId === null || soundId === undefined) {
                 this.pendingMusicStart = false;
-                this.updateStatus('Не удалось запустить трек', 'error');
-            } else {
-                this.playingDeck = this.activeDeck;
                 this.updateDeckUI();
+                this.updateStatus('Не удалось запустить трек', 'error');
             }
         } catch {
             if (this.musicPlayer === player) this.pendingMusicStart = false;
+            this.updateDeckUI();
             this.updateStatus('Ошибка воспроизведения', 'error');
         }
     }
@@ -2372,7 +2429,10 @@ class TheatreSoundMixer {
         this.crossfadeTimers.forEach((timer) => clearTimeout(timer));
         this.crossfadeTimers.clear();
         this.retiringMusicPlayers.forEach((retiringPlayer) => {
-            try { retiringPlayer.unload(); } catch {}
+            try {
+                retiringPlayer.stop();
+                retiringPlayer.unload();
+            } catch {}
         });
         this.retiringMusicPlayers.clear();
         this.isCrossfading = false;
@@ -2380,6 +2440,7 @@ class TheatreSoundMixer {
         this.isPaused = false;
         this.playingDeck = null;
         this.stopProgressTracking();
+        this.highlightCurrentTrack();
         this.updateDeckUI();
 
         if (player) {
@@ -2420,12 +2481,13 @@ class TheatreSoundMixer {
             container.querySelectorAll('.track-row').forEach((row) => {
                 const rowIdx = Number(row.dataset.index);
                 const btn = row.querySelector('.track-btn');
-                const isActive = isPlayingThisDeck && rowIdx === currentIndex;
+                const isCurrentDeck = this.playingDeck ? isPlayingThisDeck : (this.activeDeck === deckId);
+                const isActive = isCurrentDeck && rowIdx === currentIndex;
 
                 row.classList.toggle('active', isActive);
                 btn?.classList.toggle('active', isActive);
 
-                if (isActive) {
+                if (isActive && isPlayingThisDeck) {
                     (row || btn).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }
             });
