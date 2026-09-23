@@ -1,15 +1,42 @@
-class TheatreSoundMixer {
+const CAS_CONFIG = Object.freeze({
+    CROSSFADE: {
+        DEFAULT_DURATION: 3,
+        MIN_DURATION: 1,
+        MAX_DURATION: 10,
+        MIN_FADE_MS: 250,
+        CLEANUP_BUFFER_MS: 200,
+        TIMER_BUFFER_MS: 150
+    },
+    AUDIO: {
+        DEFAULT_MUSIC_VOLUME: 0.7,
+        DEFAULT_EFFECTS_VOLUME: 0.7,
+        PROGRESS_INTERVAL_MS: 250,
+        DURATION_TIMEOUT_MS: 15000,
+        MAX_CONCURRENT_DURATION_LOADS: 4
+    },
+    UI: {
+        MODAL_CLOSE_MS: 150,
+        FLOATING_Z_INDEX: 1100,
+        STATUS_TIMEOUT_MS: 4000
+    },
+    STORAGE: {
+        THROTTLE_MS: 400
+    }
+});
+
+const CAS_LOGGER = {
+    debug(...args) {
+        if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
+            console.debug('[CAS]', ...args);
+        }
+    },
+    info(...args) { console.info('[CAS]', ...args); },
+    warn(...args) { console.warn('[CAS]', ...args); },
+    error(...args) { console.error('[CAS]', ...args); }
+};
+
+class CASDeckManager {
     constructor() {
-        this.musicPlayer = null;
-        this.soundEffects = new Map();
-        this.currentPlaylist = null;
-        this.currentTrackIndex = 0;
-        this.playlistTracks = [];
-        this.selectedPad = null;
-        this.isPlaying = false;
-        this.isPaused = false;
-        this.isMuted = false;
-        this.trackFilterQuery = '';
         this.decks = {
             A: { playlist: null, tracks: [], currentTrackIndex: 0, filterQuery: '' },
             B: { playlist: null, tracks: [], currentTrackIndex: 0, filterQuery: '' }
@@ -18,19 +45,102 @@ class TheatreSoundMixer {
         this.playingDeck = null;
         this.viewMode = 'split';
         this.dragState = null;
+    }
+
+    getDeck(deckId) {
+        return this.decks[deckId] || null;
+    }
+
+    getCurrentDeck() {
+        const deckId = this.playingDeck || this.activeDeck;
+        return this.decks[deckId] || this.decks.A;
+    }
+
+    setActiveDeck(deckId) {
+        if (deckId === 'A' || deckId === 'B') {
+            this.activeDeck = deckId;
+            return true;
+        }
+        return false;
+    }
+
+    setPlayingDeck(deckId) {
+        if (deckId === 'A' || deckId === 'B' || deckId === null) {
+            this.playingDeck = deckId;
+            return true;
+        }
+        return false;
+    }
+
+    setViewMode(mode) {
+        if (['split', 'A', 'B'].includes(mode)) {
+            this.viewMode = mode;
+            if (mode === 'A' || mode === 'B') {
+                this.activeDeck = mode;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    reorderTrack(deckId, sourceIndex, targetIndex, insertAfter) {
+        const deck = this.decks[deckId];
+        if (!deck || !Array.isArray(deck.tracks)) return null;
+
+        const tracks = deck.tracks;
+        if (sourceIndex < 0 || sourceIndex >= tracks.length) return null;
+        if (targetIndex < 0 || targetIndex >= tracks.length) return null;
+        if (sourceIndex === targetIndex) return { tracks, newCurrentIndex: deck.currentTrackIndex, insertAt: targetIndex };
+
+        const [movedTrack] = tracks.splice(sourceIndex, 1);
+        let insertAt;
+        if (insertAfter) {
+            insertAt = sourceIndex < targetIndex ? targetIndex : targetIndex + 1;
+        } else {
+            insertAt = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+        }
+
+        tracks.splice(insertAt, 0, movedTrack);
+
+        let newCurrentIndex = deck.currentTrackIndex;
+        if (deck.currentTrackIndex === sourceIndex) {
+            newCurrentIndex = insertAt;
+        } else {
+            if (deck.currentTrackIndex > sourceIndex) newCurrentIndex--;
+            if (newCurrentIndex >= insertAt) newCurrentIndex++;
+        }
+        deck.currentTrackIndex = newCurrentIndex;
+
+        return { tracks, newCurrentIndex, insertAt };
+    }
+}
+
+class TheatreSoundMixer {
+    constructor() {
+        this.deckManager = new CASDeckManager();
+        this.decks = this.deckManager.decks;
+
+        this.musicPlayer = null;
+        this.soundEffects = new Map();
+        this.selectedPad = null;
+        this.isPlaying = false;
+        this.isPaused = false;
+        this.isMuted = false;
+
         this.playlistRequestId = 0;
         this.refreshRequestId = 0;
         this.musicPlayerToken = 0;
         this.pendingMusicStart = false;
         this.musicRetryTimeout = null;
         this.detachedBlocks = new Map();
-        this.floatingWindowZ = 1100;
-        this.modalCloseMs = 150;
+        this.floatingWindowZ = CAS_CONFIG.UI.FLOATING_Z_INDEX;
+        this.modalCloseMs = CAS_CONFIG.UI.MODAL_CLOSE_MS;
         this.retiringMusicPlayers = new Set();
         this.crossfadeTimers = new Set();
         this.isCrossfading = false;
         this.crossfadeEnabled = false;
-        this.crossfadeDuration = 3;
+        this.deckCrossfadeEnabled = false;
+        this.crossfadeDuration = CAS_CONFIG.CROSSFADE.DEFAULT_DURATION;
         this.waveformCache = new Map();
         this.waveformRequestId = 0;
         this.waveformPeaks = [];
@@ -39,10 +149,11 @@ class TheatreSoundMixer {
         // Режимы воспроизведения
         this.playbackMode = 'sequential';
         
-        this.musicVolume = 0.7;
-        this.effectsVolume = 0.7;
+        this.musicVolume = CAS_CONFIG.AUDIO.DEFAULT_MUSIC_VOLUME;
+        this.effectsVolume = CAS_CONFIG.AUDIO.DEFAULT_EFFECTS_VOLUME;
         
         this.config = null;
+        this._saveStoredDataTimeout = null;
         
         // Оптимизация производительности
         this.progressAnimationFrame = null;
@@ -99,6 +210,74 @@ class TheatreSoundMixer {
         this.setupVisibilityHandlers();
         
         this.initializeApp();
+    }
+
+    get activeDeck() {
+        return this.deckManager.activeDeck;
+    }
+    set activeDeck(val) {
+        this.deckManager.setActiveDeck(val);
+    }
+
+    get playingDeck() {
+        return this.deckManager.playingDeck;
+    }
+    set playingDeck(val) {
+        this.deckManager.setPlayingDeck(val);
+    }
+
+    get viewMode() {
+        return this.deckManager.viewMode;
+    }
+    set viewMode(val) {
+        this.deckManager.viewMode = val;
+    }
+
+    get dragState() {
+        return this.deckManager.dragState;
+    }
+    set dragState(val) {
+        this.deckManager.dragState = val;
+    }
+
+    get currentDeck() {
+        return this.deckManager.getCurrentDeck();
+    }
+
+    get playlistTracks() {
+        return this.currentDeck?.tracks || [];
+    }
+    set playlistTracks(tracks) {
+        if (this.currentDeck) {
+            this.currentDeck.tracks = Array.isArray(tracks) ? tracks : [];
+        }
+    }
+
+    get currentPlaylist() {
+        return this.currentDeck?.playlist || null;
+    }
+    set currentPlaylist(playlist) {
+        if (this.currentDeck) {
+            this.currentDeck.playlist = playlist;
+        }
+    }
+
+    get currentTrackIndex() {
+        return this.currentDeck?.currentTrackIndex || 0;
+    }
+    set currentTrackIndex(index) {
+        if (this.currentDeck) {
+            this.currentDeck.currentTrackIndex = Number.isInteger(index) ? index : 0;
+        }
+    }
+
+    get trackFilterQuery() {
+        return this.currentDeck?.filterQuery || '';
+    }
+    set trackFilterQuery(query) {
+        if (this.currentDeck) {
+            this.currentDeck.filterQuery = typeof query === 'string' ? query : '';
+        }
     }
     
     setupVisibilityHandlers() {
@@ -829,13 +1008,22 @@ class TheatreSoundMixer {
         document.getElementById('waveformPanel')?.addEventListener('click', (e) => this.seekFromWaveform(e));
 
         const crossfadeEnabled = document.getElementById('crossfadeEnabled');
+        const deckCrossfadeEnabled = document.getElementById('deckCrossfadeEnabled');
         const crossfadeDuration = document.getElementById('crossfadeDuration');
         if (crossfadeEnabled) {
             crossfadeEnabled.addEventListener('change', (e) => {
                 this.crossfadeEnabled = e.target.checked;
                 this.updateCrossfadeControls();
                 this.saveStoredData();
-                this.updateStatus(this.crossfadeEnabled ? 'Crossfade включен' : 'Crossfade выключен');
+                this.updateStatus(this.crossfadeEnabled ? 'Кроссфейд в треках включен' : 'Кроссфейд в треках выключен');
+            });
+        }
+        if (deckCrossfadeEnabled) {
+            deckCrossfadeEnabled.addEventListener('change', (e) => {
+                this.deckCrossfadeEnabled = e.target.checked;
+                this.updateCrossfadeControls();
+                this.saveStoredData();
+                this.updateStatus(this.deckCrossfadeEnabled ? 'Кроссфейд между деками включен' : 'Кроссфейд между деками выключен');
             });
         }
         if (crossfadeDuration) {
@@ -895,23 +1083,27 @@ class TheatreSoundMixer {
 
     normalizeCrossfadeDuration(value) {
         const numericValue = Number(value);
-        if (!Number.isFinite(numericValue)) return 3;
-        return Math.max(1, Math.min(10, Math.round(numericValue)));
+        if (!Number.isFinite(numericValue)) return CAS_CONFIG.CROSSFADE.DEFAULT_DURATION;
+        return Math.max(CAS_CONFIG.CROSSFADE.MIN_DURATION, Math.min(CAS_CONFIG.CROSSFADE.MAX_DURATION, Math.round(numericValue)));
     }
 
     updateCrossfadeControls() {
         const enabledInput = document.getElementById('crossfadeEnabled');
+        const deckCrossfadeInput = document.getElementById('deckCrossfadeEnabled');
         const durationInput = document.getElementById('crossfadeDuration');
         const durationValue = document.getElementById('crossfadeDurationValue');
 
         if (enabledInput) enabledInput.checked = this.crossfadeEnabled;
+        if (deckCrossfadeInput) deckCrossfadeInput.checked = this.deckCrossfadeEnabled;
+
+        const anyCrossfade = this.crossfadeEnabled || this.deckCrossfadeEnabled;
         if (durationInput) {
             durationInput.value = String(this.crossfadeDuration);
-            durationInput.disabled = !this.crossfadeEnabled;
+            durationInput.disabled = !anyCrossfade;
         }
         if (durationValue) {
             durationValue.textContent = `${this.crossfadeDuration} с`;
-            durationValue.classList.toggle('is-disabled', !this.crossfadeEnabled);
+            durationValue.classList.toggle('is-disabled', !anyCrossfade);
         }
     }
 
@@ -2233,18 +2425,27 @@ class TheatreSoundMixer {
             targetIndex = maybeIndex;
         }
 
-        if (!this.crossfadeEnabled || this.crossfadeDuration <= 0) return false;
+        if (this.crossfadeDuration <= 0) return false;
         if (!this.musicPlayer || !this.isPlaying || this.isPaused || this.pendingMusicStart) return false;
         if (this.isCrossfading) return false;
+
+        const currentDeckId = this.playingDeck || this.activeDeck;
+        const isSwitchingDecks = currentDeckId !== targetDeckId;
+
+        // Отдельная проверка: между разными деками vs внутри одного плейлиста
+        if (isSwitchingDecks) {
+            if (!this.deckCrossfadeEnabled) return false;
+        } else {
+            if (!this.crossfadeEnabled) return false;
+        }
 
         const targetDeck = this.decks[targetDeckId];
         if (!targetDeck || !targetDeck.tracks || targetDeck.tracks.length === 0) return false;
         if (targetIndex < 0 || targetIndex >= targetDeck.tracks.length) return false;
 
-        const currentDeckId = this.playingDeck || this.activeDeck;
-        const currentTrackIndex = this.decks[currentDeckId]?.currentTrackIndex ?? this.currentTrackIndex;
+        const currentTrackIndex = this.decks[currentDeckId]?.currentTrackIndex ?? 0;
 
-        // Don't crossfade into the exact same track in the same deck
+        // Не делать кроссфейд в тот же самый трек в том же деке
         if (currentDeckId === targetDeckId && currentTrackIndex === targetIndex) return false;
 
         return true;
@@ -3439,6 +3640,24 @@ class TheatreSoundMixer {
     }
 
     saveStoredData() {
+        if (this._saveStoredDataTimeout) {
+            clearTimeout(this._saveStoredDataTimeout);
+        }
+        this._saveStoredDataTimeout = setTimeout(() => {
+            this._saveStoredDataTimeout = null;
+            this._writeStoredData();
+        }, CAS_CONFIG.STORAGE.THROTTLE_MS);
+    }
+
+    saveStoredDataImmediate() {
+        if (this._saveStoredDataTimeout) {
+            clearTimeout(this._saveStoredDataTimeout);
+            this._saveStoredDataTimeout = null;
+        }
+        this._writeStoredData();
+    }
+
+    _writeStoredData() {
         const data = {
             soundEffects: Array.from(this.soundEffects.entries())
                 .filter(([, soundData]) => typeof soundData?.path === 'string' && soundData.path)
@@ -3452,13 +3671,16 @@ class TheatreSoundMixer {
             effectsVolume: this.effectsVolume,
             playbackMode: this.playbackMode,
             crossfadeEnabled: this.crossfadeEnabled,
+            deckCrossfadeEnabled: this.deckCrossfadeEnabled,
             crossfadeDuration: this.crossfadeDuration,
             viewMode: this.viewMode,
             activeDeck: this.activeDeck
         };
         try {
             localStorage.setItem('theatreSoundMixer', JSON.stringify(data));
-        } catch {}
+        } catch (e) {
+            CAS_LOGGER.warn('Ошибка сохранения в localStorage:', e);
+        }
     }
 
     async loadStoredData() {
@@ -3472,13 +3694,14 @@ class TheatreSoundMixer {
                 const numeric = Number(value);
                 return Number.isFinite(numeric) ? Math.max(0, Math.min(1, numeric)) : fallback;
             };
-            this.musicVolume = normalizeVolume(data.musicVolume, 0.7);
-            this.effectsVolume = normalizeVolume(data.effectsVolume, 0.7);
+            this.musicVolume = normalizeVolume(data.musicVolume, CAS_CONFIG.AUDIO.DEFAULT_MUSIC_VOLUME);
+            this.effectsVolume = normalizeVolume(data.effectsVolume, CAS_CONFIG.AUDIO.DEFAULT_EFFECTS_VOLUME);
             this.playbackMode = ['sequential', 'loop', 'single'].includes(data.playbackMode)
                 ? data.playbackMode
                 : 'sequential';
             this.crossfadeEnabled = Boolean(data.crossfadeEnabled);
-            this.crossfadeDuration = this.normalizeCrossfadeDuration(data.crossfadeDuration ?? 3);
+            this.deckCrossfadeEnabled = Boolean(data.deckCrossfadeEnabled);
+            this.crossfadeDuration = this.normalizeCrossfadeDuration(data.crossfadeDuration ?? CAS_CONFIG.CROSSFADE.DEFAULT_DURATION);
 
             if (['split', 'A', 'B'].includes(data.viewMode)) {
                 this.setViewMode(data.viewMode);
@@ -3717,70 +3940,88 @@ class TheatreSoundMixer {
 }
 
 // Инициализация приложения
-document.addEventListener('DOMContentLoaded', () => {
-    window.soundMixer = new TheatreSoundMixer();
-});
+if (typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+        window.soundMixer = new TheatreSoundMixer();
+    });
+}
 
 // Очистка ресурсов при закрытии окна
-window.addEventListener('beforeunload', () => {
-    if (window.soundMixer) {
-        window.soundMixer.stopMusic();
-        window.soundMixer.stopAllEffects();
-        
-        if (window.soundMixer.clockInterval) {
-            clearInterval(window.soundMixer.clockInterval);
-        }
-        if (window.soundMixer.progressAnimationFrame) {
-            cancelAnimationFrame(window.soundMixer.progressAnimationFrame);
-        }
-        if (window.soundMixer.volumeUpdateTimeout) {
-            clearTimeout(window.soundMixer.volumeUpdateTimeout);
-        }
-        if (window.soundMixer.musicVolumeTimeout) {
-            clearTimeout(window.soundMixer.musicVolumeTimeout);
-        }
-        if (window.soundMixer.effectsVolumeTimeout) {
-            clearTimeout(window.soundMixer.effectsVolumeTimeout);
-        }
-        if (window.soundMixer.statusUpdateTimeout) {
-            clearTimeout(window.soundMixer.statusUpdateTimeout);
-        }
-        if (window.soundMixer.countdownInterval) {
-            clearInterval(window.soundMixer.countdownInterval);
-        }
-        if (window.soundMixer.vuMeterInterval) {
-            clearInterval(window.soundMixer.vuMeterInterval);
-        }
-        
-        if (window.soundMixer.musicPlayer) {
-            try {
-                window.soundMixer.musicPlayer.unload();
-            } catch (e) {}
-        }
-        
-        window.soundMixer.soundEffects.forEach((soundData) => {
-            if (soundData?.sound) {
-                try {
-                    soundData.sound.unload();
-                } catch (e) {}
+if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', () => {
+        if (window.soundMixer) {
+            window.soundMixer.stopMusic();
+            window.soundMixer.stopAllEffects();
+            
+            if (window.soundMixer.clockInterval) {
+                clearInterval(window.soundMixer.clockInterval);
             }
-        });
+            if (window.soundMixer.progressAnimationFrame) {
+                cancelAnimationFrame(window.soundMixer.progressAnimationFrame);
+            }
+            if (window.soundMixer.volumeUpdateTimeout) {
+                clearTimeout(window.soundMixer.volumeUpdateTimeout);
+            }
+            if (window.soundMixer.musicVolumeTimeout) {
+                clearTimeout(window.soundMixer.musicVolumeTimeout);
+            }
+            if (window.soundMixer.effectsVolumeTimeout) {
+                clearTimeout(window.soundMixer.effectsVolumeTimeout);
+            }
+            if (window.soundMixer.statusUpdateTimeout) {
+                clearTimeout(window.soundMixer.statusUpdateTimeout);
+            }
+            if (window.soundMixer.countdownInterval) {
+                clearInterval(window.soundMixer.countdownInterval);
+            }
+            if (window.soundMixer.vuMeterInterval) {
+                clearInterval(window.soundMixer.vuMeterInterval);
+            }
+            
+            if (window.soundMixer.musicPlayer) {
+                try {
+                    window.soundMixer.musicPlayer.unload();
+                } catch (e) {
+                    CAS_LOGGER.debug('Ошибка выгрузки musicPlayer при beforeunload:', e);
+                }
+            }
+            
+            window.soundMixer.soundEffects.forEach((soundData) => {
+                if (soundData?.sound) {
+                    try {
+                        soundData.sound.unload();
+                    } catch (e) {
+                        CAS_LOGGER.debug('Ошибка выгрузки soundEffect при beforeunload:', e);
+                    }
+                }
+            });
 
-        window.soundMixer.closeAudioAnalysers();
-        
-        window.soundMixer.saveStoredData();
-    }
-});
+            window.soundMixer.closeAudioAnalysers();
+            window.soundMixer.saveStoredDataImmediate();
+        }
+    });
 
-// Обработка ошибок на уровне приложения
-window.addEventListener('error', (event) => {
-    if (window.soundMixer) {
-        window.soundMixer.updateStatus('Произошла ошибка приложения', 'error');
-    }
-});
+    // Обработка ошибок на уровне приложения
+    window.addEventListener('error', (event) => {
+        CAS_LOGGER.error('Глобальная ошибка приложения:', event.error || event.message);
+        if (window.soundMixer) {
+            window.soundMixer.updateStatus('Произошла ошибка приложения', 'error');
+        }
+    });
 
-window.addEventListener('unhandledrejection', (event) => {
-    if (window.soundMixer) {
-        window.soundMixer.updateStatus('Ошибка выполнения операции', 'error');
-    }
-});
+    window.addEventListener('unhandledrejection', (event) => {
+        CAS_LOGGER.error('Необработанный Promise rejection:', event.reason);
+        if (window.soundMixer) {
+            window.soundMixer.updateStatus('Ошибка выполнения операции', 'error');
+        }
+    });
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        CAS_CONFIG,
+        CAS_LOGGER,
+        CASDeckManager,
+        TheatreSoundMixer
+    };
+}

@@ -1077,15 +1077,23 @@ body {
 }
 
 .crossfade-settings {
-    display: grid;
-    grid-template-columns: minmax(118px, auto) minmax(0, 1fr);
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
     margin-top: 10px;
     padding: 8px;
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 7px;
     background: rgba(255, 255, 255, 0.025);
+}
+
+.crossfade-toggles {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
 }
 
 .crossfade-toggle {
@@ -1143,11 +1151,23 @@ body {
     background: var(--accent-primary);
 }
 
+.crossfade-decks-toggle input:checked + .toggle-switch {
+    border-color: rgba(157, 78, 221, 0.55);
+    background: rgba(157, 78, 221, 0.22);
+    box-shadow: 0 0 0 3px rgba(157, 78, 221, 0.08);
+}
+
+.crossfade-decks-toggle input:checked + .toggle-switch::after {
+    background: var(--accent-purple);
+}
+
 .crossfade-duration {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 42px;
+    grid-template-columns: minmax(80px, 1fr) 42px;
     align-items: center;
     gap: 8px;
+    flex: 1 1 140px;
+    min-width: 130px;
 }
 
 .crossfade-duration input {
