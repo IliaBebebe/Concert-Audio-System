@@ -1,4 +1,4 @@
-﻿﻿class TheatreSoundMixer {
+class TheatreSoundMixer {
     constructor() {
         this.musicPlayer = null;
         this.soundEffects = new Map();
@@ -10,6 +10,14 @@
         this.isPaused = false;
         this.isMuted = false;
         this.trackFilterQuery = '';
+        this.decks = {
+            A: { playlist: null, tracks: [], currentTrackIndex: 0, filterQuery: '' },
+            B: { playlist: null, tracks: [], currentTrackIndex: 0, filterQuery: '' }
+        };
+        this.activeDeck = 'A';
+        this.playingDeck = null;
+        this.viewMode = 'split';
+        this.dragState = null;
         this.playlistRequestId = 0;
         this.refreshRequestId = 0;
         this.musicPlayerToken = 0;
@@ -779,6 +787,8 @@
         await this.loadStoredData();
         this.updateCrossfadeControls();
         await this.refreshPlaylists();
+        this.updateDeckUI();
+        this.displayTracks();
     }
 
     async loadConfig() {
@@ -836,10 +846,12 @@
             });
         }
         
-        const searchInput = document.getElementById('trackSearchInput');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => this.filterTracks(e.target.value));
-        }
+        document.getElementById('trackSearchInputA')?.addEventListener('input', (e) => {
+            this.filterTracksInDeck('A', e.target.value);
+        });
+        document.getElementById('trackSearchInputB')?.addEventListener('input', (e) => {
+            this.filterTracksInDeck('B', e.target.value);
+        });
         
         const countdownStart = document.getElementById('countdownStart');
         const countdownStop = document.getElementById('countdownStop');
@@ -863,6 +875,15 @@
         
         document.addEventListener('keydown', (e) => this.handleHotkeys(e));
         document.addEventListener('wheel', (e) => this.handleVolumeWheel(e), { passive: false });
+
+        // Переключение режимов отображения деков (Рядом / Deck A / Deck B)
+        this.onClick('viewModeSplit', () => this.setViewMode('split'));
+        this.onClick('viewModeA', () => this.setViewMode('A'));
+        this.onClick('viewModeB', () => this.setViewMode('B'));
+
+        // Клик по шапке дека делает его активным
+        this.onClick('deckHeaderA', () => this.setActiveDeck('A'));
+        this.onClick('deckHeaderB', () => this.setActiveDeck('B'));
     }
 
     onClick(id, handler) {
@@ -932,7 +953,7 @@
     }
 
     getTrackDisplayNumber(track, index) {
-        return track?.trackNumber || index + 1;
+        return index + 1;
     }
 
     getTrackDisplayName(track, index) {
@@ -1134,28 +1155,38 @@
 
     async loadPlaylist(playlist) {
         const requestId = ++this.playlistRequestId;
+        const targetDeck = this.activeDeck;
         try {
-            this.updateStatus(`Загрузка плейлиста: ${playlist.name}`);
+            this.updateStatus(`Загрузка в Deck ${targetDeck}: ${playlist.name}`);
             const result = await window.electronAPI.getPlaylistTracks(playlist.path);
             if (requestId !== this.playlistRequestId) return;
             
             if (result.success) {
-                this.stopMusic({ silent: true });
+                if (this.playingDeck === targetDeck) {
+                    this.stopMusic({ silent: true });
+                }
+
                 this.trackLoadGeneration++;
+                const deck = this.decks[targetDeck];
+                deck.playlist = playlist;
+                deck.tracks = result.data;
+                deck.currentTrackIndex = 0;
+                deck.filterQuery = '';
+
+                const searchInput = document.getElementById(targetDeck === 'A' ? 'trackSearchInputA' : 'trackSearchInputB');
+                if (searchInput) searchInput.value = '';
+
                 this.currentPlaylist = playlist;
                 this.playlistTracks = result.data;
                 this.currentTrackIndex = 0;
-                
-                const playlistNameEl = document.getElementById('currentPlaylistName');
-                if (playlistNameEl) {
-                    playlistNameEl.textContent = `(${playlist.name})`;
-                }
-                this.displayTracks();
-                this.updatePlaylistSelection();
+                this.trackFilterQuery = '';
+
+                this.displayTracks(targetDeck);
+                this.updateDeckUI();
                 this.updateTrackCounter();
-                this.updateStatus(`Плейлист загружен: ${playlist.name}`, 'success');
+                this.updateStatus(`Плейлист загружен в Deck ${targetDeck}: ${playlist.name}`, 'success');
                 
-                if (this.playlistTracks.length > 0) {
+                if (!this.isPlaying && this.playlistTracks.length > 0) {
                     this.loadTrack(0);
                 }
             } else {
@@ -1163,7 +1194,7 @@
             }
         } catch (error) {
             if (requestId !== this.playlistRequestId) return;
-            this.updateStatus('Ошибка загрузки плейлиста');
+            this.updateStatus('Ошибка загрузки плейлиста', 'error');
         }
     }
 
@@ -1180,9 +1211,45 @@
     }
 
     updatePlaylistSelection() {
-        const currentPath = this.currentPlaylist?.path;
+        const pathA = this.decks.A.playlist?.path;
+        const pathB = this.decks.B.playlist?.path;
+        const currentActivePath = this.decks[this.activeDeck].playlist?.path;
+
         document.querySelectorAll('.playlist-btn').forEach((button) => {
-            button.classList.toggle('active', button.dataset.playlistPath === currentPath);
+            const btnPath = button.dataset.playlistPath;
+            button.classList.toggle('active', btnPath === currentActivePath);
+
+            let deckBadge = button.querySelector('.playlist-deck-badge');
+            const isDeckA = btnPath === pathA;
+            const isDeckB = btnPath === pathB;
+
+            if (isDeckA && isDeckB) {
+                if (!deckBadge) {
+                    deckBadge = document.createElement('span');
+                    deckBadge.className = 'playlist-deck-badge';
+                    button.appendChild(deckBadge);
+                }
+                deckBadge.textContent = 'A+B';
+                deckBadge.className = 'playlist-deck-badge';
+            } else if (isDeckA) {
+                if (!deckBadge) {
+                    deckBadge = document.createElement('span');
+                    deckBadge.className = 'playlist-deck-badge';
+                    button.appendChild(deckBadge);
+                }
+                deckBadge.textContent = 'Deck A';
+                deckBadge.className = 'playlist-deck-badge';
+            } else if (isDeckB) {
+                if (!deckBadge) {
+                    deckBadge = document.createElement('span');
+                    deckBadge.className = 'playlist-deck-badge deck-b';
+                    button.appendChild(deckBadge);
+                }
+                deckBadge.textContent = 'Deck B';
+                deckBadge.className = 'playlist-deck-badge deck-b';
+            } else if (deckBadge) {
+                deckBadge.remove();
+            }
         });
     }
 
@@ -1190,117 +1257,153 @@
         this.playlistRequestId++;
         this.refreshRequestId++;
         this.stopMusic({ silent: true });
-        this.currentPlaylist = null;
         this.trackLoadGeneration++;
+        this.decks = {
+            A: { playlist: null, tracks: [], currentTrackIndex: 0, filterQuery: '' },
+            B: { playlist: null, tracks: [], currentTrackIndex: 0, filterQuery: '' }
+        };
+        this.currentPlaylist = null;
         this.playlistTracks = [];
         this.currentTrackIndex = 0;
         this.trackFilterQuery = '';
 
-        const searchInput = document.getElementById('trackSearchInput');
-        if (searchInput) searchInput.value = '';
-        const playlistName = document.getElementById('currentPlaylistName');
-        if (playlistName) playlistName.textContent = '(не выбран)';
+        const searchInputA = document.getElementById('trackSearchInputA');
+        const searchInputB = document.getElementById('trackSearchInputB');
+        if (searchInputA) searchInputA.value = '';
+        if (searchInputB) searchInputB.value = '';
+
         const currentTrack = document.getElementById('currentTrack');
         if (currentTrack) {
             currentTrack.textContent = 'Трек не выбран';
             currentTrack.title = '';
         }
         this.displayTracks();
+        this.updateDeckUI();
         this.updateTrackCounter();
         this.clearWaveform('Waveform ожидает трек');
     }
 
-    displayTracks() {
-        const container = document.getElementById('tracksContainer');
-        container.replaceChildren();
+    displayTracks(targetDeckId = null) {
+        const decksToRender = targetDeckId ? [targetDeckId] : ['A', 'B'];
 
-        const list = this.playlistTracks
-            .map((t, i) => ({ t, i }))
-            .filter(({ t }) => {
-                if (!this.trackFilterQuery) return true;
-                const name = (t.name || '').toLowerCase();
-                const title = (t.title || '').toLowerCase();
-                const artist = (t.artist || '').toLowerCase();
-                const trackNumber = String(t.trackNumber || '');
-                return name.includes(this.trackFilterQuery)
-                    || title.includes(this.trackFilterQuery)
-                    || artist.includes(this.trackFilterQuery)
-                    || trackNumber.includes(this.trackFilterQuery);
+        decksToRender.forEach((deckId) => {
+            const containerId = deckId === 'A' ? 'tracksContainerA' : 'tracksContainerB';
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.replaceChildren();
+
+            const deck = this.decks[deckId];
+            if (!deck) return;
+            const filterQuery = (deck.filterQuery || '').toLowerCase().trim();
+            const tracks = deck.tracks || [];
+
+            const list = tracks
+                .map((t, i) => ({ t, i }))
+                .filter(({ t }) => {
+                    if (!filterQuery) return true;
+                    const name = (t.name || '').toLowerCase();
+                    const title = (t.title || '').toLowerCase();
+                    const artist = (t.artist || '').toLowerCase();
+                    const trackNumber = String(t.trackNumber || '');
+                    return name.includes(filterQuery)
+                        || title.includes(filterQuery)
+                        || artist.includes(filterQuery)
+                        || trackNumber.includes(filterQuery);
+                });
+
+            const fragment = document.createDocumentFragment();
+            const pendingTrackLoads = [];
+            const isDragEnabled = !filterQuery;
+
+            list.forEach(({ t: track, i: index }) => {
+                const row = document.createElement('div');
+                row.className = 'track-row';
+                row.dataset.index = String(index);
+                row.dataset.deck = deckId;
+
+                // Drag handle
+                const dragHandle = document.createElement('div');
+                dragHandle.className = 'track-drag-handle';
+                dragHandle.innerHTML = '<i class="fas fa-grip-vertical"></i>';
+                dragHandle.setAttribute('aria-hidden', 'true');
+
+                if (isDragEnabled) {
+                    row.draggable = true;
+                    row.addEventListener('dragstart', (e) => this.handleTrackDragStart(e, deckId, index));
+                    row.addEventListener('dragover', (e) => this.handleTrackDragOver(e, deckId));
+                    row.addEventListener('dragenter', (e) => this.handleTrackDragEnter(e, row));
+                    row.addEventListener('dragleave', (e) => this.handleTrackDragLeave(e, row));
+                    row.addEventListener('drop', (e) => this.handleTrackDrop(e, deckId, index));
+                    row.addEventListener('dragend', (e) => this.handleTrackDragEnd(e));
+                } else {
+                    dragHandle.style.opacity = '0.15';
+                    dragHandle.style.cursor = 'default';
+                }
+
+                const btn = document.createElement('button');
+                btn.className = 'track-btn';
+                btn.dataset.index = String(index);
+                btn.dataset.deck = deckId;
+                if (this.playingDeck === deckId && index === deck.currentTrackIndex) {
+                    btn.classList.add('active');
+                    row.classList.add('active');
+                }
+
+                const trackContent = document.createElement('div');
+                trackContent.className = 'track-content';
+
+                const trackInfo = document.createElement('div');
+                trackInfo.className = 'track-info';
+
+                const trackName = document.createElement('span');
+                trackName.className = 'track-name';
+                trackName.textContent = this.getTrackDisplayName(track, index);
+
+                const trackArtist = document.createElement('span');
+                trackArtist.className = 'track-artist';
+                this.renderTrackArtist(trackArtist, track);
+
+                trackInfo.appendChild(trackName);
+                trackInfo.appendChild(trackArtist);
+
+                const trackDuration = document.createElement('span');
+                trackDuration.className = 'track-duration';
+                trackDuration.textContent = track.duration
+                    ? this.formatTime(track.duration)
+                    : (track.durationUnavailable ? 'N/A' : '--:--');
+
+                trackContent.appendChild(trackInfo);
+                trackContent.appendChild(trackDuration);
+                btn.appendChild(trackContent);
+
+                btn.addEventListener('click', () => this.playTrackInDeck(deckId, index));
+
+                const editBtn = document.createElement('button');
+                editBtn.className = 'track-edit-btn';
+                editBtn.type = 'button';
+                editBtn.title = 'Редактировать параметры трека';
+                editBtn.setAttribute('aria-label', 'Редактировать параметры трека');
+                editBtn.innerHTML = '<i class="fas fa-pen"></i>';
+                editBtn.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    this.openTrackMetadataEditor(deckId, index);
+                });
+
+                row.append(dragHandle, btn, editBtn);
+                fragment.appendChild(row);
+
+                if (!track.duration || !track.artist || !track.title || !track.trackNumber) {
+                    pendingTrackLoads.push({ track, trackDuration, trackName, trackArtist, index, deckId });
+                }
             });
 
-        // Используем DocumentFragment для оптимизации DOM
-        const fragment = document.createDocumentFragment();
-        const pendingTrackLoads = [];
-
-        list.forEach(({ t: track, i: index }) => {
-            const row = document.createElement('div');
-            row.className = 'track-row';
-            row.dataset.index = String(index);
-
-            const btn = document.createElement('button');
-            btn.className = 'track-btn';
-            btn.dataset.index = String(index);
-            if (index === this.currentTrackIndex) {
-                btn.classList.add('active');
-                row.classList.add('active');
-            }
-
-            const trackContent = document.createElement('div');
-            trackContent.className = 'track-content';
-
-            const trackInfo = document.createElement('div');
-            trackInfo.className = 'track-info';
-
-            const trackName = document.createElement('span');
-            trackName.className = 'track-name';
-            trackName.textContent = this.getTrackDisplayName(track, index);
-
-            const trackArtist = document.createElement('span');
-            trackArtist.className = 'track-artist';
-            this.renderTrackArtist(trackArtist, track);
-
-            trackInfo.appendChild(trackName);
-            trackInfo.appendChild(trackArtist);
-
-            const trackDuration = document.createElement('span');
-            trackDuration.className = 'track-duration';
-            trackDuration.textContent = track.duration
-                ? this.formatTime(track.duration)
-                : (track.durationUnavailable ? 'N/A' : '--:--');
-
-            trackContent.appendChild(trackInfo);
-            trackContent.appendChild(trackDuration);
-            btn.appendChild(trackContent);
-
-            // Метаданные редактируются отдельной кнопкой: это исключает
-            // случайный запуск музыки при обычном двойном клике.
-            btn.addEventListener('click', () => this.playTrack(index));
-
-            const editBtn = document.createElement('button');
-            editBtn.className = 'track-edit-btn';
-            editBtn.type = 'button';
-            editBtn.title = 'Редактировать параметры трека';
-            editBtn.setAttribute('aria-label', 'Редактировать параметры трека');
-            editBtn.innerHTML = '<i class="fas fa-pen"></i>';
-            editBtn.addEventListener('click', (event) => {
-                event.stopPropagation();
-                this.openTrackMetadataEditor(index);
+            container.appendChild(fragment);
+            pendingTrackLoads.forEach(({ track, trackDuration, trackName, trackArtist, index }) => {
+                if (!track.duration) this.loadTrackDuration(track, trackDuration);
+                if (!track.artist || !track.title || !track.trackNumber) {
+                    this.loadTrackMetadata(track, { nameElement: trackName, artistElement: trackArtist, index });
+                }
             });
-
-            row.append(btn, editBtn);
-            fragment.appendChild(row);
-
-            if (!track.duration || !track.artist || !track.title || !track.trackNumber) {
-                pendingTrackLoads.push({ track, trackDuration, trackName, trackArtist, index });
-            }
-        });
-
-        container.appendChild(fragment);
-        pendingTrackLoads.forEach(({ track, trackDuration, trackName, trackArtist, index }) => {
-            if (!track.duration) this.loadTrackDuration(track, trackDuration);
-            if (!track.artist || !track.title || !track.trackNumber) {
-                this.loadTrackMetadata(track, { nameElement: trackName, artistElement: trackArtist, index });
-            }
         });
     }
 
@@ -1322,26 +1425,276 @@
         }
     }
 
-    updateTrackRowDetails(track) {
-        const index = this.playlistTracks.indexOf(track);
-        if (index < 0) return;
+    // ===== Drag & Drop Track Reordering =====
 
-        const row = document.querySelector(`.track-row[data-index="${index}"]`);
+    handleTrackDragStart(e, deckId, index) {
+        this.dragState = { deckId, sourceIndex: index, insertAfter: false };
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', `${deckId}:${index}`);
+        const row = e.target.closest('.track-row');
+        if (row) {
+            setTimeout(() => row.classList.add('dragging'), 0);
+        }
+    }
+
+    handleTrackDragOver(e, deckId) {
+        if (!this.dragState || this.dragState.deckId !== deckId) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+
+        const row = e.target.closest('.track-row');
         if (!row) return;
 
-        const nameElement = row.querySelector('.track-name');
-        const artistElement = row.querySelector('.track-artist');
-        const durationElement = row.querySelector('.track-duration');
-        if (nameElement) nameElement.textContent = this.getTrackDisplayName(track, index);
-        this.renderTrackArtist(artistElement, track);
-        if (durationElement) {
-            durationElement.textContent = track.duration
-                ? this.formatTime(track.duration)
-                : (track.durationUnavailable ? 'N/A' : '--:--');
+        const containerId = deckId === 'A' ? 'tracksContainerA' : 'tracksContainerB';
+        const container = document.getElementById(containerId);
+        if (container) {
+            container.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach((r) => {
+                if (r !== row) r.classList.remove('drag-over-top', 'drag-over-bottom');
+            });
         }
-        if (this.playlistTracks[this.currentTrackIndex] === track) {
-            this.updateCurrentTrackDisplay(track);
+
+        const rect = row.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const isTop = e.clientY < midY;
+
+        row.classList.toggle('drag-over-top', isTop);
+        row.classList.toggle('drag-over-bottom', !isTop);
+        this.dragState.insertAfter = !isTop;
+    }
+
+    handleTrackDragEnter(e, row) {
+        e.preventDefault();
+    }
+
+    handleTrackDragLeave(e, row) {
+        if (!row.contains(e.relatedTarget)) {
+            row.classList.remove('drag-over-top', 'drag-over-bottom');
         }
+    }
+
+    handleTrackDrop(e, deckId, targetIndex) {
+        if (!this.dragState || this.dragState.deckId !== deckId) return;
+        e.preventDefault();
+
+        const sourceIndex = this.dragState.sourceIndex;
+        const insertAfterTarget = this.dragState.insertAfter;
+
+        if (sourceIndex === targetIndex) {
+            this.handleTrackDragEnd(e);
+            return;
+        }
+
+        const deck = this.decks[deckId];
+        const tracks = deck.tracks;
+
+        const [movedTrack] = tracks.splice(sourceIndex, 1);
+
+        let insertAt;
+        if (insertAfterTarget) {
+            insertAt = sourceIndex < targetIndex ? targetIndex : targetIndex + 1;
+        } else {
+            insertAt = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+        }
+
+        tracks.splice(insertAt, 0, movedTrack);
+
+        let newCurrentIndex = deck.currentTrackIndex;
+        if (deck.currentTrackIndex === sourceIndex) {
+            newCurrentIndex = insertAt;
+        } else {
+            if (deck.currentTrackIndex > sourceIndex) newCurrentIndex--;
+            if (newCurrentIndex >= insertAt) newCurrentIndex++;
+        }
+        deck.currentTrackIndex = newCurrentIndex;
+
+        if (this.activeDeck === deckId) {
+            this.playlistTracks = tracks;
+            this.currentTrackIndex = newCurrentIndex;
+        }
+
+        this.dragState = null;
+        this.displayTracks(deckId);
+        this.highlightCurrentTrack();
+        this.updateTrackCounter();
+        this.updateStatus(`Deck ${deckId}: трек перемещён на позицию ${insertAt + 1}`);
+    }
+
+    handleTrackDragEnd(e) {
+        this.dragState = null;
+        document.querySelectorAll('.track-row.dragging, .track-row.drag-over-top, .track-row.drag-over-bottom').forEach((r) => {
+            r.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom');
+        });
+    }
+
+    // ===== Dual Playlist Deck Management =====
+
+    playTrackInDeck(deckId, index, options = {}) {
+        if (this.playingDeck && this.playingDeck !== deckId) {
+            this.stopMusic({ silent: true });
+        }
+
+        this.activeDeck = deckId;
+        this.playingDeck = deckId;
+
+        const deck = this.decks[deckId];
+        this.currentPlaylist = deck.playlist;
+        this.playlistTracks = deck.tracks;
+        this.currentTrackIndex = index;
+        deck.currentTrackIndex = index;
+
+        this.loadTrack(index, options);
+        this.playMusic();
+        this.highlightCurrentTrack();
+        this.updateDeckUI();
+    }
+
+    playTrack(index, options = {}) {
+        this.playTrackInDeck(this.activeDeck, index, options);
+    }
+
+    filterTracksInDeck(deckId, query) {
+        if (!this.decks[deckId]) return;
+        this.decks[deckId].filterQuery = (query || '').toLowerCase().trim();
+        if (this.activeDeck === deckId) {
+            this.trackFilterQuery = this.decks[deckId].filterQuery;
+        }
+        this.displayTracks(deckId);
+    }
+
+    filterTracks(query) {
+        this.filterTracksInDeck(this.activeDeck, query);
+    }
+
+    setActiveDeck(deckId) {
+        if (deckId !== 'A' && deckId !== 'B') return;
+        this.activeDeck = deckId;
+
+        const deck = this.decks[deckId];
+        this.currentPlaylist = deck.playlist;
+        this.playlistTracks = deck.tracks;
+        this.currentTrackIndex = deck.currentTrackIndex;
+        this.trackFilterQuery = deck.filterQuery || '';
+
+        this.updateDeckUI();
+        this.updatePlaylistSelection();
+        this.updateTrackCounter();
+        this.updateStatus(`Выбран целевой ${deckId === 'A' ? 'Deck A' : 'Deck B'}`);
+    }
+
+    setViewMode(mode) {
+        if (!['split', 'A', 'B'].includes(mode)) return;
+        this.viewMode = mode;
+
+        const container = document.getElementById('decksContainer');
+        if (container) {
+            container.classList.remove('view-a', 'view-b');
+            if (mode === 'A') container.classList.add('view-a');
+            if (mode === 'B') container.classList.add('view-b');
+        }
+
+        const btnSplit = document.getElementById('viewModeSplit');
+        const btnA = document.getElementById('viewModeA');
+        const btnB = document.getElementById('viewModeB');
+
+        btnSplit?.classList.toggle('active', mode === 'split');
+        btnA?.classList.toggle('active', mode === 'A');
+        btnB?.classList.toggle('active', mode === 'B');
+
+        if (mode === 'A' || mode === 'B') {
+            this.setActiveDeck(mode);
+        }
+    }
+
+    updateDeckUI() {
+        const nameA = document.getElementById('deckNameA');
+        const nameB = document.getElementById('deckNameB');
+        const countA = document.getElementById('deckCountA');
+        const countB = document.getElementById('deckCountB');
+        const colA = document.getElementById('deckColumnA');
+        const colB = document.getElementById('deckColumnB');
+        const stateA = document.getElementById('deckStateA');
+        const stateB = document.getElementById('deckStateB');
+        const badge = document.getElementById('activeDeckBadge');
+
+        if (nameA) {
+            nameA.textContent = this.decks.A.playlist ? this.decks.A.playlist.name : 'Плейлист A (не выбран)';
+        }
+        if (countA) {
+            const total = this.decks.A.tracks?.length || 0;
+            countA.textContent = `${total} треков`;
+        }
+
+        if (nameB) {
+            nameB.textContent = this.decks.B.playlist ? this.decks.B.playlist.name : 'Плейлист B (не выбран)';
+        }
+        if (countB) {
+            const total = this.decks.B.tracks?.length || 0;
+            countB.textContent = `${total} треков`;
+        }
+
+        if (colA) colA.classList.toggle('active', this.activeDeck === 'A');
+        if (colB) colB.classList.toggle('active', this.activeDeck === 'B');
+
+        if (badge) {
+            badge.textContent = this.activeDeck === 'A' ? 'DECK A' : 'DECK B';
+            badge.classList.toggle('deck-b', this.activeDeck === 'B');
+        }
+
+        if (stateA) {
+            stateA.classList.remove('playing', 'active', 'standby');
+            if (this.playingDeck === 'A' && this.isPlaying && !this.isPaused) {
+                stateA.textContent = 'ИГРАЕТ ▶';
+                stateA.classList.add('playing');
+            } else if (this.activeDeck === 'A') {
+                stateA.textContent = 'АКТИВЕН';
+                stateA.classList.add('active');
+            } else {
+                stateA.textContent = 'ОЖИДАНИЕ';
+                stateA.classList.add('standby');
+            }
+        }
+
+        if (stateB) {
+            stateB.classList.remove('playing', 'active', 'standby');
+            if (this.playingDeck === 'B' && this.isPlaying && !this.isPaused) {
+                stateB.textContent = 'ИГРАЕТ ▶';
+                stateB.classList.add('playing');
+            } else if (this.activeDeck === 'B') {
+                stateB.textContent = 'АКТИВЕН';
+                stateB.classList.add('active');
+            } else {
+                stateB.textContent = 'ОЖИДАНИЕ';
+                stateB.classList.add('standby');
+            }
+        }
+
+        this.updatePlaylistSelection();
+    }
+
+    updateTrackRowDetails(track) {
+        ['A', 'B'].forEach((deckId) => {
+            const deck = this.decks[deckId];
+            const index = deck.tracks.indexOf(track);
+            if (index < 0) return;
+
+            const containerId = deckId === 'A' ? 'tracksContainerA' : 'tracksContainerB';
+            const row = document.querySelector(`#${containerId} .track-row[data-index="${index}"]`);
+            if (!row) return;
+
+            const nameElement = row.querySelector('.track-name');
+            const artistElement = row.querySelector('.track-artist');
+            const durationElement = row.querySelector('.track-duration');
+            if (nameElement) nameElement.textContent = this.getTrackDisplayName(track, index);
+            this.renderTrackArtist(artistElement, track);
+            if (durationElement) {
+                durationElement.textContent = track.duration
+                    ? this.formatTime(track.duration)
+                    : (track.durationUnavailable ? 'N/A' : '--:--');
+            }
+            if (this.playingDeck === deckId && deck.currentTrackIndex === index) {
+                this.updateCurrentTrackDisplay(track);
+            }
+        });
     }
 
     enqueueDurationLoad(track) {
@@ -1491,8 +1844,16 @@
         });
     }
 
-    openTrackMetadataEditor(index) {
-        const track = this.playlistTracks[index];
+    openTrackMetadataEditor(deckIdOrIndex, maybeIndex) {
+        let deckId = this.activeDeck;
+        let index = deckIdOrIndex;
+        if (typeof deckIdOrIndex === 'string') {
+            deckId = deckIdOrIndex;
+            index = maybeIndex;
+        }
+
+        const deck = this.decks[deckId] || this.decks[this.activeDeck];
+        const track = deck.tracks[index] || this.playlistTracks[index];
         if (!track) return;
 
         const existing = document.querySelector('.metadata-modal-overlay');
@@ -1760,6 +2121,8 @@
                 this.updateStatus(`Воспроизведение: ${this.getTrackTitle(track)}`);
                 this.startProgressTracking();
                 this.updateVuMeters();
+                this.playingDeck = this.activeDeck;
+                this.updateDeckUI();
             },
             onpause: () => {
                 if (!isCurrentPlayer()) return;
@@ -1767,6 +2130,7 @@
                 this.isPaused = true;
                 this.stopProgressTracking(false);
                 this.updateStatus('Пауза');
+                this.updateDeckUI();
             },
             onstop: () => {
                 if (!isCurrentPlayer()) return;
@@ -1775,6 +2139,8 @@
                 this.isPaused = false;
                 this.updateStatus('Остановлено');
                 this.stopProgressTracking();
+                this.playingDeck = null;
+                this.updateDeckUI();
             },
             onend: () => {
                 this.handleTrackEnd(player, playerToken);
@@ -1971,6 +2337,9 @@
             if (soundId === null || soundId === undefined) {
                 this.pendingMusicStart = false;
                 this.updateStatus('Не удалось запустить трек', 'error');
+            } else {
+                this.playingDeck = this.activeDeck;
+                this.updateDeckUI();
             }
         } catch {
             if (this.musicPlayer === player) this.pendingMusicStart = false;
@@ -1987,6 +2356,7 @@
         }
         if (this.isPlaying && !this.isPaused) {
             this.musicPlayer.pause();
+            this.updateDeckUI();
         }
     }
 
@@ -2008,7 +2378,9 @@
         this.isCrossfading = false;
         this.isPlaying = false;
         this.isPaused = false;
+        this.playingDeck = null;
         this.stopProgressTracking();
+        this.updateDeckUI();
 
         if (player) {
             try {
@@ -2029,25 +2401,37 @@
     }
 
     _navigateTrack(direction) {
-        if (this.playlistTracks.length === 0) return;
-        let newIndex = (this.currentTrackIndex + direction + this.playlistTracks.length) % this.playlistTracks.length;
-        this.playTrack(newIndex);
+        const deckId = this.playingDeck || this.activeDeck;
+        const deck = this.decks[deckId];
+        if (!deck || deck.tracks.length === 0) return;
+        const newIndex = (deck.currentTrackIndex + direction + deck.tracks.length) % deck.tracks.length;
+        this.playTrackInDeck(deckId, newIndex);
     }
 
     highlightCurrentTrack() {
-        const tracks = document.querySelectorAll('.track-btn');
-        tracks.forEach((track, index) => {
-            const row = track.closest('.track-row');
-            const trackIndex = Number(track.dataset.index);
-            const isActive = trackIndex === this.currentTrackIndex;
-            track.classList.toggle('active', isActive);
-            row?.classList.toggle('active', isActive);
-            
-            if (isActive) {
-                (row || track).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
+        ['A', 'B'].forEach((deckId) => {
+            const containerId = deckId === 'A' ? 'tracksContainerA' : 'tracksContainerB';
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const isPlayingThisDeck = this.playingDeck === deckId;
+            const currentIndex = this.decks[deckId].currentTrackIndex;
+
+            container.querySelectorAll('.track-row').forEach((row) => {
+                const rowIdx = Number(row.dataset.index);
+                const btn = row.querySelector('.track-btn');
+                const isActive = isPlayingThisDeck && rowIdx === currentIndex;
+
+                row.classList.toggle('active', isActive);
+                btn?.classList.toggle('active', isActive);
+
+                if (isActive) {
+                    (row || btn).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            });
         });
         this.updateTrackCounter();
+        this.updateDeckUI();
     }
 
     startProgressTracking() {
@@ -2856,6 +3240,10 @@
         }
 
         switch (event.code) {
+            case 'Tab':
+                event.preventDefault();
+                this.setActiveDeck(this.activeDeck === 'A' ? 'B' : 'A');
+                break;
             case 'Space':
                 event.preventDefault();
                 if (this.isPlaying && !this.isPaused) {
@@ -3002,7 +3390,9 @@
             effectsVolume: this.effectsVolume,
             playbackMode: this.playbackMode,
             crossfadeEnabled: this.crossfadeEnabled,
-            crossfadeDuration: this.crossfadeDuration
+            crossfadeDuration: this.crossfadeDuration,
+            viewMode: this.viewMode,
+            activeDeck: this.activeDeck
         };
         try {
             localStorage.setItem('theatreSoundMixer', JSON.stringify(data));
@@ -3027,6 +3417,13 @@
                 : 'sequential';
             this.crossfadeEnabled = Boolean(data.crossfadeEnabled);
             this.crossfadeDuration = this.normalizeCrossfadeDuration(data.crossfadeDuration ?? 3);
+
+            if (['split', 'A', 'B'].includes(data.viewMode)) {
+                this.setViewMode(data.viewMode);
+            }
+            if (data.activeDeck === 'A' || data.activeDeck === 'B') {
+                this.setActiveDeck(data.activeDeck);
+            }
 
             const musicSlider = document.getElementById('musicVolume');
             const effectsSlider = document.getElementById('effectsVolume');
@@ -3175,11 +3572,15 @@
     
     updateTrackCounter() {
         const counterEl = document.getElementById('trackCounter');
-        if (counterEl && this.playlistTracks.length > 0) {
-            const current = this.currentTrackIndex + 1;
-            const total = this.playlistTracks.length;
+        if (!counterEl) return;
+        const deckId = this.playingDeck || this.activeDeck;
+        const deck = this.decks[deckId];
+        const tracks = deck?.tracks || [];
+        if (tracks.length > 0) {
+            const current = (deck.currentTrackIndex || 0) + 1;
+            const total = tracks.length;
             counterEl.textContent = `${current} / ${total}`;
-        } else if (counterEl) {
+        } else {
             counterEl.textContent = '— / —';
         }
     }
