@@ -324,7 +324,12 @@ async function saveWindowState(window = mainWindow) {
     return;
   }
 
-  const bounds = window.isMaximized() ? window.getNormalBounds() : window.getBounds();
+  let bounds;
+  try {
+    bounds = (window.isMaximized() && typeof window.getNormalBounds === 'function' ? window.getNormalBounds() : null) || window.getBounds();
+  } catch {
+    bounds = window.getBounds();
+  }
   const nextState = {
     width: bounds.width,
     height: bounds.height,

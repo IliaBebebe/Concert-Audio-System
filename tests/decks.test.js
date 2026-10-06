@@ -154,3 +154,102 @@ test('handleTrackEnd in loop mode does not stop or advance', () => {
 
     mixer.handleTrackEnd(mixer.musicPlayer, mixer.musicPlayerToken);
 });
+
+test('toSafeAudioSource safely encodes special characters and preserves valid schemes', () => {
+    const mixer = createMockMixer();
+
+    // Windows path with hash and question mark
+    const winPath = 'C:\\Music\\Track #1 & #2? [Live].mp3';
+    assert.strictEqual(
+        mixer.toSafeAudioSource(winPath),
+        'file:///C:/Music/Track%20%231%20&%20%232%3F%20%5BLive%5D.mp3'
+    );
+
+    // Unix path
+    const unixPath = '/home/user/music/My Song #3.flac';
+    assert.strictEqual(
+        mixer.toSafeAudioSource(unixPath),
+        'file:///home/user/music/My%20Song%20%233.flac'
+    );
+
+    // Already file://, data:, or blob:
+    assert.strictEqual(mixer.toSafeAudioSource('file:///test.mp3'), 'file:///test.mp3');
+    assert.strictEqual(mixer.toSafeAudioSource('data:audio/wav;base64,123'), 'data:audio/wav;base64,123');
+    assert.strictEqual(mixer.toSafeAudioSource('blob:http://localhost/abc'), 'blob:http://localhost/abc');
+    assert.strictEqual(mixer.toSafeAudioSource(''), '');
+    assert.strictEqual(mixer.toSafeAudioSource(null), '');
+});
+
+test('getAudioFormat extracts audio extension safely', () => {
+    const mixer = createMockMixer();
+    assert.deepStrictEqual(mixer.getAudioFormat('C:\\Music\\song.MP3'), ['mp3']);
+    assert.deepStrictEqual(mixer.getAudioFormat('/path/to/track.flac?version=1'), ['flac']);
+    assert.deepStrictEqual(mixer.getAudioFormat('test.wav#t=10'), ['wav']);
+    assert.strictEqual(mixer.getAudioFormat(''), undefined);
+    assert.strictEqual(mixer.getAudioFormat(null), undefined);
+});
+
+test('setActiveDeck refreshes cued track display and waveform when playback is stopped', () => {
+    const mixer = createMockMixer();
+    mixer.isPlaying = false;
+    mixer.isPaused = false;
+    mixer.playingDeck = null;
+    let displayedTrack = null;
+    let waveformTrack = null;
+    mixer.updateCurrentTrackDisplay = (track) => { displayedTrack = track; };
+    mixer.loadWaveformForTrack = (track) => { waveformTrack = track; };
+    mixer.updateDeckUI = () => {};
+    mixer.updatePlaylistSelection = () => {};
+    mixer.updateTrackCounter = () => {};
+    mixer.updateStatus = () => {};
+    mixer.saveStoredData = () => {};
+
+    mixer.setActiveDeck('B');
+
+    assert.strictEqual(mixer.activeDeck, 'B');
+    assert.strictEqual(displayedTrack, mixer.decks.B.tracks[0]);
+    assert.strictEqual(waveformTrack, mixer.decks.B.tracks[0]);
+});
+
+test('playMusic loads and plays the active deck when starting from stopped state', () => {
+    const mixer = createMockMixer();
+    mixer.isPlaying = false;
+    mixer.isPaused = false;
+    mixer.playingDeck = null;
+    mixer.activeDeck = 'B';
+    let loadedDeckId = null;
+    let playCalled = false;
+    mixer.loadTrack = (index, opts) => {
+        loadedDeckId = opts.deckId;
+        mixer.musicPlayer = {
+            playing: () => false,
+            play: () => { playCalled = true; return 1; }
+        };
+    };
+    mixer.resumeAudioContext = () => {};
+    mixer.updateDeckUI = () => {};
+
+    mixer.playMusic();
+
+    assert.strictEqual(loadedDeckId, 'B');
+    assert.strictEqual(playCalled, true);
+});
+
+test('applyTrackMetadata handles artist arrays and string formats correctly', () => {
+    const mixer = createMockMixer();
+    const track = { path: 'song.mp3', title: 'Song', artist: 'Unknown' };
+
+    mixer.applyTrackMetadata(track, {
+        success: true,
+        data: {
+            artist: ['First Artist', 'Second Artist'],
+            title: 'Cool Song',
+            trackNumber: 5
+        }
+    });
+
+    assert.strictEqual(track.artist, 'First Artist, Second Artist');
+    assert.strictEqual(track.title, 'Cool Song');
+    assert.strictEqual(track.trackNumber, 5);
+});
+

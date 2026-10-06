@@ -1175,6 +1175,21 @@ class TheatreSoundMixer {
         this.updateStatus(this.isMuted ? 'Звук выключен (паника)' : 'Звук включен');
     }
 
+    toSafeAudioSource(filePath) {
+        if (!filePath || typeof filePath !== 'string') return '';
+        if (filePath.startsWith('file://') || filePath.startsWith('data:') || filePath.startsWith('blob:')) {
+            return filePath;
+        }
+        const normalized = filePath.replace(/\\/g, '/');
+        const pathPart = normalized.startsWith('/') ? normalized : '/' + normalized;
+        return encodeURI('file://' + pathPart).replace(/#/g, '%23').replace(/\?/g, '%3F');
+    }
+
+    getAudioFormat(filePath) {
+        if (!filePath || typeof filePath !== 'string') return undefined;
+        const match = /\.([a-zA-Z0-9]+)(?:[?#]|$)/.exec(filePath);
+        return match ? [match[1].toLowerCase()] : undefined;
+    }
 
     getTrackTitle(track) {
         return track?.title || track?.name || 'Без названия';
@@ -1814,6 +1829,23 @@ class TheatreSoundMixer {
         }
         this.trackFilterQuery = deck.filterQuery || '';
 
+        if (!this.isPlaying && !this.isPaused) {
+            if (deck && deck.tracks && deck.tracks.length > 0) {
+                const track = deck.tracks[deck.currentTrackIndex || 0];
+                if (track) {
+                    this.updateCurrentTrackDisplay(track);
+                    this.loadWaveformForTrack(track);
+                }
+            } else {
+                const currentTrackEl = document.getElementById('currentTrack');
+                if (currentTrackEl) {
+                    currentTrackEl.textContent = 'Трек не выбран';
+                    currentTrackEl.title = '';
+                }
+                this.clearWaveform('Waveform ожидает трек');
+            }
+        }
+
         this.updateDeckUI();
         this.updatePlaylistSelection();
         this.updateTrackCounter();
@@ -1917,8 +1949,20 @@ class TheatreSoundMixer {
     updateTrackRowDetails(track) {
         ['A', 'B'].forEach((deckId) => {
             const deck = this.decks[deckId];
-            const index = deck.tracks.indexOf(track);
+            if (!deck || !Array.isArray(deck.tracks)) return;
+            const index = deck.tracks.findIndex((t) => t === track || (t?.path && t.path === track?.path));
             if (index < 0) return;
+
+            const matchedTrack = deck.tracks[index];
+            if (matchedTrack !== track) {
+                matchedTrack.title = track.title;
+                matchedTrack.artist = track.artist;
+                matchedTrack.trackNumber = track.trackNumber;
+                matchedTrack.startOffset = track.startOffset;
+                matchedTrack.metadataOverride = track.metadataOverride;
+                matchedTrack.duration = track.duration;
+                matchedTrack.durationUnavailable = track.durationUnavailable;
+            }
 
             const containerId = deckId === 'A' ? 'tracksContainerA' : 'tracksContainerB';
             const row = document.querySelector(`#${containerId} .track-row[data-index="${index}"]`);
@@ -1927,15 +1971,15 @@ class TheatreSoundMixer {
             const nameElement = row.querySelector('.track-name');
             const artistElement = row.querySelector('.track-artist');
             const durationElement = row.querySelector('.track-duration');
-            if (nameElement) nameElement.textContent = this.getTrackDisplayName(track, index);
-            this.renderTrackArtist(artistElement, track);
+            if (nameElement) nameElement.textContent = this.getTrackDisplayName(matchedTrack, index);
+            this.renderTrackArtist(artistElement, matchedTrack);
             if (durationElement) {
-                durationElement.textContent = track.duration
-                    ? this.formatTime(track.duration)
-                    : (track.durationUnavailable ? 'N/A' : '--:--');
+                durationElement.textContent = matchedTrack.duration
+                    ? this.formatTime(matchedTrack.duration)
+                    : (matchedTrack.durationUnavailable ? 'N/A' : '--:--');
             }
             if (this.playingDeck === deckId && deck.currentTrackIndex === index) {
-                this.updateCurrentTrackDisplay(track);
+                this.updateCurrentTrackDisplay(matchedTrack);
             }
         });
     }
@@ -1986,7 +2030,8 @@ class TheatreSoundMixer {
 
             try {
                 tempSound = new Howl({
-                    src: [track.path],
+                    src: [this.toSafeAudioSource(track.path)],
+                    format: this.getAudioFormat(track.path),
                     html5: true,
                     volume: 0,
                     onload: () => finish(tempSound?.duration()),
@@ -2355,7 +2400,9 @@ class TheatreSoundMixer {
             this.isPlaying = false;
         }
 
-        this.playingDeck = deckId;
+        if (preserveCurrent || this.isPlaying || this.pendingMusicStart) {
+            this.playingDeck = deckId;
+        }
         if (deck) deck.currentTrackIndex = index;
         const track = tracks[index];
 
@@ -2373,18 +2420,27 @@ class TheatreSoundMixer {
             this.playingDeck = null;
             this.stopProgressTracking();
             try { player.unload(); } catch {}
+            this.crossfadeTimers.forEach((timer) => clearTimeout(timer));
+            this.crossfadeTimers.clear();
+            this.retiringMusicPlayers.forEach((p) => {
+                try { p.stop(); p.unload(); } catch {}
+            });
+            this.retiringMusicPlayers.clear();
+            this.isCrossfading = false;
             this.updateDeckUI();
             this.updateStatus(message, 'error');
         };
 
         player = new Howl({
-            src: [track.path],
+            src: [this.toSafeAudioSource(track.path)],
+            format: this.getAudioFormat(track.path),
             html5: true,
             volume: initialVolume,
             mute: this.isMuted,
             loop: this.playbackMode === 'loop',
             onplay: () => {
                 if (!isCurrentPlayer()) return;
+                this.consecutivePlayErrors = 0;
                 if (this.musicRetryTimeout) {
                     clearTimeout(this.musicRetryTimeout);
                     this.musicRetryTimeout = null;
@@ -2400,10 +2456,10 @@ class TheatreSoundMixer {
                 if (fadeInMs > 0 && !fadeInApplied) {
                     fadeInApplied = true;
                     try {
-                        const targetVolume = this.isMuted ? 0 : this.musicVolume;
+                        const targetVolume = this.musicVolume;
                         player.fade(0, targetVolume, fadeInMs);
                     } catch {
-                        try { player.volume(this.isMuted ? 0 : this.musicVolume); } catch {}
+                        try { player.volume(this.musicVolume); } catch {}
                     }
                 }
                 this.updateStatus(`Воспроизведение: ${this.getTrackTitle(track)}`);
@@ -2461,6 +2517,18 @@ class TheatreSoundMixer {
                 this.stopProgressTracking(false);
                 this.updateStatus('Ошибка воспроизведения', 'error');
                 this.updateDeckUI();
+
+                this.consecutivePlayErrors = (this.consecutivePlayErrors || 0) + 1;
+                const currentDeckId = this.playingDeck || this.activeDeck;
+                const currentDeck = this.decks[currentDeckId];
+                const maxErrors = Math.max(1, currentDeck?.tracks?.length || 1);
+                if (this.consecutivePlayErrors >= maxErrors) {
+                    this.stopMusic({ silent: true });
+                    this.consecutivePlayErrors = 0;
+                    this.updateStatus('Не удалось воспроизвести треки в плейлисте', 'error');
+                    return;
+                }
+
                 if (this.playbackMode === 'sequential' && !this.musicRetryTimeout) {
                     this.musicRetryTimeout = setTimeout(() => {
                         this.musicRetryTimeout = null;
@@ -2668,7 +2736,18 @@ class TheatreSoundMixer {
 
     playMusic(options = {}) {
         const { force = false } = options;
-        if (!this.musicPlayer) {
+        if (!this.isPlaying && !this.isPaused) {
+            const targetDeckId = this.activeDeck;
+            const deck = this.decks[targetDeckId];
+            if (!this.musicPlayer || this.playingDeck !== targetDeckId) {
+                if (!deck || !deck.tracks || deck.tracks.length === 0) {
+                    this.updateStatus('Сначала выберите трек', 'warning');
+                    return;
+                }
+                const trackIndex = deck.currentTrackIndex || 0;
+                this.loadTrack(trackIndex, { deckId: targetDeckId });
+            }
+        } else if (!this.musicPlayer) {
             const targetDeckId = this.playingDeck || this.activeDeck;
             const deck = this.decks[targetDeckId];
             if (!deck || !deck.tracks || deck.tracks.length === 0) {
@@ -3052,6 +3131,11 @@ class TheatreSoundMixer {
         const sampleStep = totalSamples / sampleCount;
         let maxPeak = 0;
 
+        const channels = [];
+        for (let c = 0; c < channelCount; c++) {
+            channels.push(audioBuffer.getChannelData(c));
+        }
+
         for (let bucket = 0; bucket < sampleCount; bucket++) {
             const start = Math.floor(bucket * sampleStep);
             const end = Math.min(totalSamples, Math.max(start + 1, Math.floor((bucket + 1) * sampleStep)));
@@ -3059,7 +3143,7 @@ class TheatreSoundMixer {
             let peak = 0;
 
             for (let channel = 0; channel < channelCount; channel++) {
-                const samples = audioBuffer.getChannelData(channel);
+                const samples = channels[channel];
                 for (let i = start; i < end; i += step) {
                     peak = Math.max(peak, Math.abs(samples[i] || 0));
                 }
@@ -3150,11 +3234,21 @@ class TheatreSoundMixer {
 
     seekFromWaveform(event) {
         const canvas = document.getElementById('trackWaveform');
-        if (!canvas || !this.musicPlayer) return;
+        if (!canvas) return;
+
+        if (!this.musicPlayer) {
+            const targetDeckId = this.playingDeck || this.activeDeck;
+            const deck = this.decks[targetDeckId];
+            if (deck?.tracks?.length) {
+                this.loadTrack(deck.currentTrackIndex || 0, { deckId: targetDeckId });
+            }
+        }
+        if (!this.musicPlayer) return;
 
         const rect = canvas.getBoundingClientRect();
         if (rect.width <= 0) return;
-        const progress = ((event.clientX - rect.left) / rect.width) * 100;
+        const rawProgress = ((event.clientX - rect.left) / rect.width) * 100;
+        const progress = Math.max(0, Math.min(100, rawProgress));
         this.seekMusic(progress);
     }
 
@@ -3353,7 +3447,8 @@ class TheatreSoundMixer {
         let sound = null;
         try {
             sound = new Howl({
-                src: [soundData.path],
+                src: [this.toSafeAudioSource(soundData.path)],
+                format: this.getAudioFormat(soundData.path),
                 volume: this.effectsVolume,
                 mute: this.isMuted,
                 html5: true,
@@ -3636,7 +3731,7 @@ class TheatreSoundMixer {
         if (tagName === 'INPUT' || tagName === 'TEXTAREA' || event.target?.isContentEditable) return;
 
         const repeatedTriggerKeys = new Set([
-            'Space', 'Escape', 'KeyM', 'Digit0', 'Digit1', 'Digit2', 'Digit3', 'Digit4',
+            'Tab', 'Space', 'Escape', 'KeyM', 'Digit0', 'Digit1', 'Digit2', 'Digit3', 'Digit4',
             'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Minus', 'Equal',
             'Numpad0', 'Numpad1', 'Numpad2', 'Numpad3', 'Numpad4', 'Numpad5',
             'Numpad6', 'Numpad7', 'Numpad8', 'Numpad9'

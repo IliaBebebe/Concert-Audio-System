@@ -1,6 +1,10 @@
 const { parentPort, workerData } = require('node:worker_threads');
 
 function cleanText(value) {
+  if (Array.isArray(value)) {
+    const joined = value.filter(Boolean).map(String).join(', ').trim();
+    return joined ? joined.slice(0, 200) : null;
+  }
   return typeof value === 'string' ? value.trim().slice(0, 200) || null : null;
 }
 
