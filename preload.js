@@ -10,7 +10,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {string} [customPath] - Опциональный путь (должен быть внутри musicFolder)
    * @returns {Promise<{success: boolean, data?: Array, error?: string, needsSetup?: boolean}>}
    */
-  readDirectory: (customPath) => {
+  readDirectory: async (customPath) => {
     if (customPath !== undefined && typeof customPath !== 'string') {
       throw new Error('customPath должен быть строкой');
     }
@@ -22,7 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {string} playlistPath - Путь к плейлисту
    * @returns {Promise<{success: boolean, data?: Array, error?: string}>}
    */
-  getPlaylistTracks: (playlistPath) => {
+  getPlaylistTracks: async (playlistPath) => {
     if (typeof playlistPath !== 'string') {
       throw new Error('playlistPath должен быть строкой');
     }
@@ -34,7 +34,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {object} options - Настройки диалога
    * @returns {Promise<{canceled: boolean, filePaths?: string[]}>}
    */
-  openFileDialog: (options) => {
+  openFileDialog: async (options) => {
     if (typeof options !== 'object' || options === null) {
       throw new Error('options должен быть объектом');
     }
@@ -58,7 +58,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {string} folderPath - Путь к папке
    * @returns {Promise<{success: boolean, error?: string}>}
    */
-  setMusicFolder: (folderPath) => {
+  setMusicFolder: async (folderPath) => {
     if (typeof folderPath !== 'string') {
       throw new Error('folderPath должен быть строкой');
     }
@@ -76,21 +76,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {string} filePath - Путь к файлу
    * @returns {Promise<{success: boolean, data?: {artist?, title?, album?}, error?: string}>}
    */
-  getAudioMetadata: (filePath) => {
+  getAudioMetadata: async (filePath) => {
     if (typeof filePath !== 'string') {
       throw new Error('filePath должен быть строкой');
     }
     return ipcRenderer.invoke('get-audio-metadata', filePath);
   },
 
-  getAudioFileBuffer: (filePath) => {
+  getAudioFileBuffer: async (filePath) => {
     if (typeof filePath !== 'string') {
       throw new Error('filePath must be a string');
     }
     return ipcRenderer.invoke('get-audio-file-buffer', filePath);
   },
 
-  saveTrackMetadata: (filePath, metadata) => {
+  saveTrackMetadata: async (filePath, metadata) => {
     if (typeof filePath !== 'string') {
       throw new Error('filePath must be a string');
     }
@@ -100,7 +100,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return ipcRenderer.invoke('save-track-metadata', filePath, metadata);
   },
 
-  clearTrackMetadata: (filePath) => {
+  clearTrackMetadata: async (filePath) => {
     if (typeof filePath !== 'string') {
       throw new Error('filePath must be a string');
     }

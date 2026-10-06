@@ -1635,15 +1635,17 @@ class TheatreSoundMixer {
                 row.append(dragHandle, btn, editBtn);
                 fragment.appendChild(row);
 
-                if (!track.duration || !track.artist || !track.title || !track.trackNumber) {
-                    pendingTrackLoads.push({ track, trackDuration, trackName, trackArtist, index, deckId });
+                const needsDuration = !track.duration && !track.durationUnavailable;
+                const needsMetadata = !track.metadataLoaded;
+                if (needsDuration || needsMetadata) {
+                    pendingTrackLoads.push({ track, trackDuration, trackName, trackArtist, index, deckId, needsDuration, needsMetadata });
                 }
             });
 
             container.appendChild(fragment);
-            pendingTrackLoads.forEach(({ track, trackDuration, trackName, trackArtist, index, deckId }) => {
-                if (!track.duration) this.loadTrackDuration(track, trackDuration, deckId);
-                if (!track.artist || !track.title || !track.trackNumber) {
+            pendingTrackLoads.forEach(({ track, trackDuration, trackName, trackArtist, index, deckId, needsDuration, needsMetadata }) => {
+                if (needsDuration) this.loadTrackDuration(track, trackDuration, deckId);
+                if (needsMetadata) {
                     this.loadTrackMetadata(track, { nameElement: trackName, artistElement: trackArtist, index }, deckId);
                 }
             });
@@ -2080,6 +2082,7 @@ class TheatreSoundMixer {
         let task = this.trackMetadataTasks.get(track);
         if (!task) {
             task = this.enqueueMetadataLoad(track, deckId).then((result) => {
+                track.metadataLoaded = true;
                 this.applyTrackMetadata(track, result);
                 this.updateTrackRowDetails(track);
                 return result;
@@ -2252,6 +2255,7 @@ class TheatreSoundMixer {
                 ? track.metadataOverride.startOffset
                 : 0;
             this.trackMetadataTasks.delete(track);
+            track.metadataLoaded = false;
             await this.loadTrackMetadata(track, {}, deckId);
 
             if ((deck?.playlist === playlistAtStart || this.currentPlaylist === playlistAtStart) &&
@@ -2299,6 +2303,7 @@ class TheatreSoundMixer {
             track.trackNumber = null;
             track.startOffset = 0;
             this.trackMetadataTasks.delete(track);
+            track.metadataLoaded = false;
             await this.loadTrackMetadata(track, {}, deckId);
             if ((deck?.playlist === playlistAtStart || this.currentPlaylist === playlistAtStart) &&
                 (deck?.tracks?.includes(track) || this.playlistTracks.includes(track))) {
@@ -2823,6 +2828,7 @@ class TheatreSoundMixer {
         }
 
         let frameId = null;
+        const progressBar = document.getElementById('progressBar');
         const updateProgress = () => {
             if (this.musicPlayer !== player || this.musicPlayerToken !== playerToken || !this.isPlaying || this.isPaused) {
                 if (this.progressAnimationFrame === frameId) this.progressAnimationFrame = null;
@@ -2835,7 +2841,6 @@ class TheatreSoundMixer {
                 
                 if (duration > 0 && !isNaN(seek) && !isNaN(duration)) {
                     const progress = Math.min(100, Math.max(0, (seek / duration) * 100));
-                    const progressBar = document.getElementById('progressBar');
                     if (progressBar) {
                         progressBar.value = progress;
                     }
@@ -2870,19 +2875,24 @@ class TheatreSoundMixer {
                     const remaining = Math.max(0, duration - seek);
                     const remainingTime = `-${this.formatTime(remaining)}`;
                     
-                    const currentTimeDisplay = document.getElementById('currentTimeDisplay');
-                    const totalTimeDisplay = document.getElementById('totalTimeDisplay');
-                    const remainingTimeDisplay = document.getElementById('remainingTimeDisplay');
+                    if (!this._cachedTimeDisplays) {
+                        this._cachedTimeDisplays = {
+                            current: document.getElementById('currentTimeDisplay'),
+                            total: document.getElementById('totalTimeDisplay'),
+                            remaining: document.getElementById('remainingTimeDisplay')
+                        };
+                    }
+                    const displays = this._cachedTimeDisplays;
                     
-                    if (currentTimeDisplay) currentTimeDisplay.textContent = currentTime;
-                    if (totalTimeDisplay) totalTimeDisplay.textContent = totalTime;
-                    if (remainingTimeDisplay) {
-                        remainingTimeDisplay.textContent = remainingTime;
-                        remainingTimeDisplay.classList.remove('warning', 'danger');
+                    if (displays.current) displays.current.textContent = currentTime;
+                    if (displays.total) displays.total.textContent = totalTime;
+                    if (displays.remaining) {
+                        displays.remaining.textContent = remainingTime;
+                        displays.remaining.classList.remove('warning', 'danger');
                         if (remaining <= 10) {
-                            remainingTimeDisplay.classList.add('danger');
+                            displays.remaining.classList.add('danger');
                         } else if (remaining <= 30) {
-                            remainingTimeDisplay.classList.add('warning');
+                            displays.remaining.classList.add('warning');
                         }
                     }
                 }
@@ -3039,12 +3049,12 @@ class TheatreSoundMixer {
         const peaks = [];
         const channelCount = Math.min(2, audioBuffer.numberOfChannels || 1);
         const totalSamples = audioBuffer.length;
-        const bucketSize = Math.max(1, Math.floor(totalSamples / sampleCount));
+        const sampleStep = totalSamples / sampleCount;
         let maxPeak = 0;
 
         for (let bucket = 0; bucket < sampleCount; bucket++) {
-            const start = bucket * bucketSize;
-            const end = Math.min(totalSamples, start + bucketSize);
+            const start = Math.floor(bucket * sampleStep);
+            const end = Math.min(totalSamples, Math.max(start + 1, Math.floor((bucket + 1) * sampleStep)));
             const step = Math.max(1, Math.floor((end - start) / 90));
             let peak = 0;
 
@@ -3414,7 +3424,10 @@ class TheatreSoundMixer {
             sound.once('playerror', finish, soundId);
             this.updateStatus(`Эффект: ${soundData.name}`, 'success');
         } catch {
-            this.finishPadSound(padIndex, soundData, generation);
+            // Play failed — force-clear pad state since no soundId was generated
+            this.padActiveSoundIds.delete(padIndex);
+            this.stopPadProgress(padIndex);
+            pad?.classList.remove('playing');
             this.updateStatus('Ошибка воспроизведения эффекта', 'error');
         }
     }
@@ -3439,8 +3452,7 @@ class TheatreSoundMixer {
         
         const startTime = Date.now();
         const updateProgress = () => {
-            const padEl = document.querySelector(`.sound-pad[data-index="${padIndex}"]`);
-            if (!padEl || !padEl.classList.contains('playing')) {
+            if (!pad.isConnected || !pad.classList.contains('playing')) {
                 this.stopPadProgress(padIndex);
                 return;
             }
@@ -3448,11 +3460,11 @@ class TheatreSoundMixer {
             const elapsed = (Date.now() - startTime) / 1000;
             const progress = Math.min(100, (elapsed / duration) * 100);
             
-            let progressBar = padEl.querySelector('.pad-progress-bar');
+            let progressBar = pad.querySelector('.pad-progress-bar');
             if (!progressBar) {
                 progressBar = document.createElement('div');
                 progressBar.className = 'pad-progress-bar';
-                padEl.appendChild(progressBar);
+                pad.appendChild(progressBar);
             }
             progressBar.style.width = `${progress}%`;
             
@@ -3540,7 +3552,7 @@ class TheatreSoundMixer {
         volume = Math.max(0, Math.min(1, Number(volume) || 0));
         this.musicVolume = volume;
 
-        const volumeValueEl = document.getElementById('musicVolumeValue');
+        const volumeValueEl = typeof document !== 'undefined' ? document.getElementById('musicVolumeValue') : null;
         if (volumeValueEl) {
             volumeValueEl.textContent = `${Math.round(volume * 100)}%`;
         }
@@ -3557,6 +3569,15 @@ class TheatreSoundMixer {
                     console.warn('Ошибка установки громкости музыки:', error);
                 }
             }
+            // Cap retiring crossfade players to new master volume
+            this.retiringMusicPlayers.forEach((player) => {
+                try {
+                    const currentVol = player.volume();
+                    if (Number.isFinite(currentVol) && currentVol > volume) {
+                        player.volume(volume);
+                    }
+                } catch {}
+            });
             this.saveStoredData();
         }, 50);
     }
@@ -3565,7 +3586,7 @@ class TheatreSoundMixer {
         volume = Math.max(0, Math.min(1, Number(volume) || 0));
         this.effectsVolume = volume;
 
-        const volumeValueEl = document.getElementById('effectsVolumeValue');
+        const volumeValueEl = typeof document !== 'undefined' ? document.getElementById('effectsVolumeValue') : null;
         if (volumeValueEl) {
             volumeValueEl.textContent = `${Math.round(volume * 100)}%`;
         }
@@ -3996,9 +4017,10 @@ class TheatreSoundMixer {
     startCountdown() {
         const minutesInput = document.getElementById('countdownMinutes');
         const secondsInput = document.getElementById('countdownSeconds');
-        const clampTimerValue = (value) => Math.max(0, Math.min(59, Number.parseInt(value, 10) || 0));
-        const minutes = clampTimerValue(minutesInput?.value);
-        const seconds = clampTimerValue(secondsInput?.value);
+        const clampMinutes = (value) => Math.max(0, Math.min(999, Number.parseInt(value, 10) || 0));
+        const clampSeconds = (value) => Math.max(0, Math.min(59, Number.parseInt(value, 10) || 0));
+        const minutes = clampMinutes(minutesInput?.value);
+        const seconds = clampSeconds(secondsInput?.value);
         if (minutesInput) minutesInput.value = minutes;
         if (secondsInput) secondsInput.value = seconds;
         

@@ -757,7 +757,8 @@ ipcMain.handle('open-file-dialog', async (event, options) => {
   }
 
   try {
-    return await dialog.showOpenDialog(mainWindow, getSafeFileDialogOptions(options));
+    const parentWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+    return await dialog.showOpenDialog(parentWindow, getSafeFileDialogOptions(options));
   } catch (error) {
     console.warn('Failed to open file dialog:', error.message);
     return { canceled: true, filePaths: [] };
@@ -770,7 +771,8 @@ ipcMain.handle('select-music-folder', async (event) => {
   }
 
   try {
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const parentWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+    const result = await dialog.showOpenDialog(parentWindow, {
       title: 'Выберите папку с музыкой',
       properties: ['openDirectory']
     });
@@ -808,7 +810,8 @@ ipcMain.handle('select-music-folder-and-open-main', async (event) => {
 
   isOpeningMainFromWelcome = true;
   try {
-    const result = await dialog.showOpenDialog(welcomeWindow, {
+    const parentWindow = welcomeWindow && !welcomeWindow.isDestroyed() ? welcomeWindow : null;
+    const result = await dialog.showOpenDialog(parentWindow, {
       title: 'Выберите папку с музыкой',
       properties: ['openDirectory']
     });

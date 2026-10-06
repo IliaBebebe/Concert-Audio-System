@@ -6,6 +6,7 @@ const assetsDirectory = path.join(projectRoot, 'assets');
 
 function copyFile(source, destination) {
   if (!fs.existsSync(source)) {
+    console.warn('Warning: source not found, skipping copy:', source);
     return;
   }
   fs.mkdirSync(path.dirname(destination), { recursive: true });
@@ -14,6 +15,7 @@ function copyFile(source, destination) {
 
 function copyDirectory(source, destination) {
   if (!fs.existsSync(source)) {
+    console.warn('Warning: source directory not found, skipping copy:', source);
     return;
   }
   fs.rmSync(destination, { recursive: true, force: true });

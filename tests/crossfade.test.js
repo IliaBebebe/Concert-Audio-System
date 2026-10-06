@@ -183,3 +183,24 @@ test('pauseMusic cleans up retiring crossfade players immediately', () => {
     assert.strictEqual(mixer.isCrossfading, false);
 });
 
+test('setMusicVolume caps retiring music players when volume is reduced', (t, done) => {
+    const mixer = createMockMixer();
+    let retiringVol = 0.8;
+    const retiringPlayer = {
+        volume: (val) => {
+            if (val !== undefined) retiringVol = val;
+            return retiringVol;
+        }
+    };
+    mixer.retiringMusicPlayers = new Set([retiringPlayer]);
+    mixer.musicPlayer = { volume: () => {} };
+    mixer.saveStoredData = () => {};
+
+    mixer.setMusicVolume(0.3);
+
+    setTimeout(() => {
+        assert.strictEqual(retiringVol, 0.3);
+        done();
+    }, 80);
+});
+

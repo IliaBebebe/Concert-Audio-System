@@ -134,3 +134,23 @@ test('startBackgroundCrossfadeTracking and stopBackgroundCrossfadeTracking manag
     mixer.stopBackgroundCrossfadeTracking();
     assert.strictEqual(mixer.backgroundCrossfadeInterval, null);
 });
+
+test('handleTrackEnd in single mode stops playback', () => {
+    const mixer = createMockMixer();
+    mixer.playbackMode = 'single';
+    let stopCalled = false;
+    mixer.stopMusic = () => { stopCalled = true; };
+    mixer.nextTrack = () => { assert.fail('nextTrack should not be called in single mode'); };
+
+    mixer.handleTrackEnd(mixer.musicPlayer, mixer.musicPlayerToken);
+    assert.strictEqual(stopCalled, true);
+});
+
+test('handleTrackEnd in loop mode does not stop or advance', () => {
+    const mixer = createMockMixer();
+    mixer.playbackMode = 'loop';
+    mixer.stopMusic = () => { assert.fail('stopMusic should not be called in loop mode'); };
+    mixer.nextTrack = () => { assert.fail('nextTrack should not be called in loop mode'); };
+
+    mixer.handleTrackEnd(mixer.musicPlayer, mixer.musicPlayerToken);
+});
