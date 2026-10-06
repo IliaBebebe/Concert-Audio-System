@@ -981,18 +981,6 @@ async function startApplication() {
   });
 }
 
-app.whenReady().then(startApplication).catch((error) => {
-  console.error('Application startup failed:', error);
-  dialog.showErrorBox('Ошибка запуска', 'Не удалось запустить Concert Audio System.');
-  app.quit();
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
@@ -1000,7 +988,19 @@ if (!gotTheLock) {
   app.on('second-instance', () => {
     focusWindow(mainWindow || welcomeWindow);
   });
+
+  app.whenReady().then(startApplication).catch((error) => {
+    console.error('Application startup failed:', error);
+    dialog.showErrorBox('Ошибка запуска', 'Не удалось запустить Concert Audio System.');
+    app.quit();
+  });
 }
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
 
 process.on('uncaughtException', (error) => {
   console.error('Uncaught exception:', error);
