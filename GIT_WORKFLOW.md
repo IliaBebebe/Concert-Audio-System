@@ -46,6 +46,8 @@ For the public landing, update the separate `cas-landing` project and deploy it 
 
 ## Desktop releases
 
+- Feature release 1.4.0 (YouTube search and local imports) is maintained on `codex/online-music`. Its tagged source is `f301119`; all four packages were built by native release CI before publication. The hosted landing is deployed from its own `codex/online-music` branch.
+
 - Desktop fixes for the 1.3 series are maintained on `codex/release-1.3`; `main` is preserved separately.
 - Synchronize `package.json`, `package-lock.json`, the visible app version, and `docs/releases/vX.Y.Z.md` before tagging.
 - A pushed `v*` tag runs tests and native Windows/macOS/Linux builds. The workflow creates a **draft** only after all build jobs succeed and all four packages are present.
