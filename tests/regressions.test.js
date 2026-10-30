@@ -43,6 +43,7 @@ function mixerFixture(t) {
   t.after(() => {
     mixer.crossfadeTimers.forEach(clearTimeout);
     clearTimeout(mixer.musicRetryTimeout);
+    clearTimeout(mixer.musicVolumeTimeout);
     global.document = previousDocument;
     global.window = previousWindow;
     global.Howl = previousHowl;
@@ -179,6 +180,19 @@ test('silent outgoing audio never jumps back to master volume during fade', t =>
   outgoing.volume(0);
   mixer.fadeOutAndUnloadMusicPlayer(outgoing, 500);
   assert.equal(outgoing.faded.from, 0);
+});
+
+test('master volume changes preserve the remaining outgoing fade', async t => {
+  const { mixer } = mixerFixture(t);
+  mixer.loadTrack(0, { deckId: 'A' });
+  const outgoing = mixer.musicPlayer;
+  mixer.fadeOutAndUnloadMusicPlayer(outgoing, 1000);
+  mixer.musicPlayer = null;
+  mixer.setMusicVolume(0.2);
+  await new Promise(resolve => setTimeout(resolve, 80));
+  assert.equal(outgoing.faded.from, 0.2);
+  assert.equal(outgoing.faded.to, 0);
+  assert.ok(outgoing.faded.ms > 0 && outgoing.faded.ms < 1000);
 });
 
 test('stale playlist responses cannot overwrite a later request', async t => {

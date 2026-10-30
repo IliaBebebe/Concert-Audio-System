@@ -147,6 +147,7 @@ class TheatreSoundMixer {
         this.floatingWindowZ = CAS_CONFIG.UI.FLOATING_Z_INDEX;
         this.modalCloseMs = CAS_CONFIG.UI.MODAL_CLOSE_MS;
         this.retiringMusicPlayers = new Set();
+        this.retiringMusicDeadlines = new Map();
         this.crossfadeTimers = new Set();
         this.isCrossfading = false;
         this.crossfadeEnabled = false;
@@ -2522,6 +2523,7 @@ class TheatreSoundMixer {
                 try { p.stop(); p.unload(); } catch {}
             });
             this.retiringMusicPlayers.clear();
+            this.retiringMusicDeadlines?.clear();
             this.isCrossfading = false;
             this.updateDeckUI();
             this.updateStatus(message, 'error');
@@ -2765,6 +2767,7 @@ class TheatreSoundMixer {
                 this.crossfadeTimers.forEach(clearTimeout);
                 this.crossfadeTimers.clear();
                 this.retiringMusicPlayers.delete(outgoingPlayer);
+                this.retiringMusicDeadlines?.delete(outgoingPlayer);
                 this.isCrossfading = false;
                 this.crossfadeOutgoingDeck = null;
                 if (!outgoingPlayer.playing()) {
@@ -2814,6 +2817,8 @@ class TheatreSoundMixer {
     fadeOutAndUnloadMusicPlayer(player, durationMs) {
         if (!player) return;
         this.retiringMusicPlayers.add(player);
+        this.retiringMusicDeadlines ??= new Map();
+        this.retiringMusicDeadlines.set(player, Date.now() + durationMs);
 
         try {
             const currentVolume = Number(player.volume());
@@ -2826,6 +2831,7 @@ class TheatreSoundMixer {
         const timer = setTimeout(() => {
             this.crossfadeTimers.delete(timer);
             this.retiringMusicPlayers.delete(player);
+            this.retiringMusicDeadlines.delete(player);
             try {
                 player.stop();
                 player.unload();
@@ -2948,6 +2954,7 @@ class TheatreSoundMixer {
                 } catch {}
             });
             this.retiringMusicPlayers.clear();
+            this.retiringMusicDeadlines?.clear();
             this.crossfadeTimers.forEach((timer) => clearTimeout(timer));
             this.crossfadeTimers.clear();
             this.isCrossfading = false;
@@ -2976,6 +2983,7 @@ class TheatreSoundMixer {
             } catch {}
         });
         this.retiringMusicPlayers.clear();
+        this.retiringMusicDeadlines?.clear();
         this.isCrossfading = false;
         this.isPlaying = false;
         this.isPaused = false;
@@ -3833,6 +3841,11 @@ class TheatreSoundMixer {
                     const currentVol = player.volume();
                     if (Number.isFinite(currentVol) && currentVol > volume) {
                         player.volume(volume);
+                    }
+                    const deadline = this.retiringMusicDeadlines?.get(player);
+                    if (Number.isFinite(currentVol) && Number.isFinite(deadline)) {
+                        // Howler.volume() cancels a running fade; resume its remaining ramp.
+                        player.fade(Math.min(currentVol, volume), 0, Math.max(0, deadline - Date.now()));
                     }
                 } catch {}
             });
