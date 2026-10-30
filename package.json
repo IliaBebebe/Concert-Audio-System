@@ -81,7 +81,8 @@
         }
       ],
       "category": "public.app-category.music",
-      "artifactName": "Concert-Audio-System-macOS.${ext}"
+      "artifactName": "Concert-Audio-System-macOS.${ext}",
+      "x64ArchFiles": "**/online-tools/darwin-*/{deno,ffmpeg}"
     },
     "linux": {
       "target": [
