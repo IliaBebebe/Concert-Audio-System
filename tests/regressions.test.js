@@ -268,3 +268,22 @@ test('deck order and selected tracks restore without starting playback', async t
   assert.equal(mixer.isPlaying, false);
   assert.equal(mixer.musicPlayerDeck, 'B');
 });
+
+test('panel widths shrink and grow with the window while preserving preferred proportions', t => {
+  const { mixer } = mixerFixture(t);
+  const normal = mixer.getResponsivePanelWidths(1400);
+  const narrow = mixer.getResponsivePanelWidths(1000);
+  const wide = mixer.getResponsivePanelWidths(1800);
+  assert.ok(Math.abs(normal.leftWidth - 360) < 0.001);
+  assert.ok(Math.abs(normal.rightWidth - 340) < 0.001);
+  assert.ok(narrow.leftWidth < normal.leftWidth && narrow.rightWidth < normal.rightWidth);
+  assert.ok(wide.leftWidth > normal.leftWidth && wide.rightWidth > normal.rightWidth);
+  assert.ok(narrow.leftWidth + narrow.rightWidth + 360 + 12 <= 1000);
+});
+
+test('oversized saved panel preferences cannot hide the center panel', t => {
+  const { mixer } = mixerFixture(t);
+  const sizes = mixer.getResponsivePanelWidths(1000, 0.8, 0.8);
+  assert.ok(sizes.leftWidth >= 260 && sizes.rightWidth >= 260);
+  assert.ok(sizes.leftWidth + sizes.rightWidth + 360 + 12 <= 1000.001);
+});

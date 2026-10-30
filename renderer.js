@@ -483,6 +483,25 @@ class TheatreSoundMixer {
         }
     }
 
+    getResponsivePanelWidths(width, leftRatio = 360 / 1400, rightRatio = 340 / 1400) {
+        const available = Math.max(0, width - 12);
+        const minimumSide = Math.min(260, available / 4);
+        const minimumCenter = Math.min(360, available / 2);
+        let leftWidth = Math.max(minimumSide, width * leftRatio);
+        let rightWidth = Math.max(minimumSide, width * rightRatio);
+        const excess = leftWidth + rightWidth + minimumCenter - available;
+        if (excess > 0) {
+            const leftCapacity = leftWidth - minimumSide;
+            const rightCapacity = rightWidth - minimumSide;
+            const capacity = leftCapacity + rightCapacity;
+            if (capacity > 0) {
+                leftWidth -= excess * leftCapacity / capacity;
+                rightWidth -= excess * rightCapacity / capacity;
+            }
+        }
+        return { leftWidth, rightWidth };
+    }
+
     setupResizers() {
         const appContainer = document.querySelector('.app-container');
         if (!appContainer) return;
@@ -491,53 +510,33 @@ class TheatreSoundMixer {
         const minCenter = 360;
         const resizerSize = 6;
         
-        const applyInitialSizes = () => {
-            try {
-                const saved = JSON.parse(localStorage.getItem('tsmLayout') || '{}');
-                const leftWidth = Number(saved.leftWidth);
-                const rightWidth = Number(saved.rightWidth);
-                if (Number.isFinite(leftWidth) && leftWidth >= minLeft) appContainer.style.setProperty('--left-width', `${leftWidth}px`);
-                if (Number.isFinite(rightWidth) && rightWidth >= minRight) appContainer.style.setProperty('--right-width', `${rightWidth}px`);
-            } catch {}
-        };
-        
-        const saveSizes = (sizes) => {
-            try {
-                const saved = JSON.parse(localStorage.getItem('tsmLayout') || '{}');
-                localStorage.setItem('tsmLayout', JSON.stringify({ ...saved, ...sizes }));
-            } catch {}
-        };
-        
+        let leftRatio = 360 / 1400;
+        let rightRatio = 340 / 1400;
+        try {
+            const saved = JSON.parse(localStorage.getItem('tsmLayout') || '{}');
+            const savedViewport = Number(saved.viewportWidth) || window.innerWidth;
+            const left = Number(saved.leftRatio ?? Number(saved.leftWidth) / savedViewport);
+            const right = Number(saved.rightRatio ?? Number(saved.rightWidth) / savedViewport);
+            if (Number.isFinite(left) && left > 0) leftRatio = left;
+            if (Number.isFinite(right) && right > 0) rightRatio = right;
+        } catch {}
+
         const constrainSizes = () => {
-            const rect = appContainer.getBoundingClientRect();
-            const leftWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--left-width')) || 360;
-            const rightWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--right-width')) || 340;
-            const totalNeeded = leftWidth + rightWidth + 2 * resizerSize + minCenter;
-
-            if (rect.width >= totalNeeded) return;
-
-            let overflow = totalNeeded - rect.width;
-            let newLeft = leftWidth;
-            let newRight = rightWidth;
-
-            const leftReduction = Math.min(Math.max(0, newLeft - minLeft), overflow / 2);
-            newLeft -= leftReduction;
-            overflow -= leftReduction;
-            const rightReduction = Math.min(Math.max(0, newRight - minRight), overflow);
-            newRight -= rightReduction;
-            overflow -= rightReduction;
-            if (overflow > 0) {
-                const extraLeftReduction = Math.min(Math.max(0, newLeft - minLeft), overflow);
-                newLeft -= extraLeftReduction;
-                overflow -= extraLeftReduction;
-            }
-            appContainer.style.setProperty('--left-width', `${newLeft}px`);
-            appContainer.style.setProperty('--right-width', `${newRight}px`);
+            const width = appContainer.getBoundingClientRect().width;
+            const sizes = this.getResponsivePanelWidths(width, leftRatio, rightRatio);
+            appContainer.style.setProperty('--left-width', `${sizes.leftWidth / width * 100}%`);
+            appContainer.style.setProperty('--right-width', `${sizes.rightWidth / width * 100}%`);
         };
-
-        applyInitialSizes();
+        const saveSizes = (sizes) => {
+            const viewportWidth = appContainer.getBoundingClientRect().width;
+            leftRatio = sizes.leftWidth / viewportWidth;
+            rightRatio = sizes.rightWidth / viewportWidth;
+            try {
+                localStorage.setItem('tsmLayout', JSON.stringify({ ...sizes, viewportWidth, leftRatio, rightRatio }));
+            } catch {}
+        };
         constrainSizes();
-        
+
         const startDrag = (type, e) => {
             e.preventDefault();
             const rect = appContainer.getBoundingClientRect();
@@ -545,14 +544,14 @@ class TheatreSoundMixer {
             const onMove = (ev) => {
                 if (type === 'left') {
                     let x = ev.clientX - rect.left;
-                    const rightWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--right-width')) || 340;
+                    const rightWidth = document.querySelector('.right-panel').getBoundingClientRect().width;
                     const total = rect.width;
                     const maxLeft = total - rightWidth - 2 * resizerSize - minCenter;
                     x = Math.max(minLeft, Math.min(maxLeft, x));
                     appContainer.style.setProperty('--left-width', `${x}px`);
                 } else if (type === 'right') {
                     let x = rect.right - ev.clientX;
-                    const leftWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--left-width')) || 360;
+                    const leftWidth = document.querySelector('.left-panel').getBoundingClientRect().width;
                     const total = rect.width;
                     const maxRight = total - leftWidth - 2 * resizerSize - minCenter;
                     x = Math.max(minRight, Math.min(maxRight, x));
@@ -564,12 +563,13 @@ class TheatreSoundMixer {
                 document.removeEventListener('mousemove', onMove);
                 document.removeEventListener('mouseup', onUp);
                 window.removeEventListener('blur', onUp);
-                const leftWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--left-width')) || 0;
-                const rightWidth = parseFloat(getComputedStyle(appContainer).getPropertyValue('--right-width')) || 0;
+                const leftWidth = document.querySelector('.left-panel').getBoundingClientRect().width;
+                const rightWidth = document.querySelector('.right-panel').getBoundingClientRect().width;
                 const sizes = {};
                 if (leftWidth) sizes.leftWidth = leftWidth;
                 if (rightWidth) sizes.rightWidth = rightWidth;
                 saveSizes(sizes);
+                constrainSizes();
             };
             
             document.addEventListener('mousemove', onMove);
@@ -615,16 +615,20 @@ class TheatreSoundMixer {
         const observer = new ResizeObserver((entries) => {
             entries.forEach((entry) => {
                 const key = entry.target.dataset.blockHeightKey;
-                if (!key) return;
+                if (!key || entry.target.classList.contains('is-detached')) return;
 
                 clearTimeout(saveTimers.get(key));
                 saveTimers.set(key, setTimeout(() => {
+                    if (entry.target.classList.contains('is-detached')) return;
                     const borderBox = Array.isArray(entry.borderBoxSize)
                         ? entry.borderBoxSize[0]
                         : entry.borderBoxSize;
                     const height = Math.round(borderBox?.blockSize || entry.target.getBoundingClientRect().height);
                     if (height > 40) {
-                        savedHeights[key] = height;
+                        savedHeights[key] = { height, viewportHeight: window.innerHeight };
+                        if (entry.target.style.height.endsWith('px')) {
+                            entry.target.style.height = `${height / window.innerHeight * 100}vh`;
+                        }
                         saveHeights();
                     }
                 }, 250));
@@ -636,9 +640,11 @@ class TheatreSoundMixer {
             if (!element) return;
 
             element.dataset.blockHeightKey = key;
-            const savedHeight = Number(savedHeights[key]);
-            if (savedHeight > 40) {
-                element.style.height = `${savedHeight}px`;
+            const saved = savedHeights[key];
+            const savedHeight = Number(saved?.height ?? saved);
+            const savedViewport = Number(saved?.viewportHeight) || window.innerHeight;
+            if (Number.isFinite(savedHeight) && savedHeight > 40) {
+                element.style.height = `${savedHeight / savedViewport * 100}vh`;
             }
             observer.observe(element);
         });
@@ -752,6 +758,8 @@ class TheatreSoundMixer {
         `;
 
         const content = windowEl.querySelector('.floating-window-content');
+        const dockedHeight = block.style.height;
+        block.style.height = '';
         content.appendChild(block);
         block.classList.add('is-detached');
 
@@ -759,7 +767,7 @@ class TheatreSoundMixer {
         layer.appendChild(windowEl);
         this.positionFloatingWindow(windowEl, rect, definition);
 
-        const state = { definition, block, placeholder, windowEl, isClosing: false };
+        const state = { definition, block, placeholder, windowEl, dockedHeight, isClosing: false };
         this.detachedBlocks.set(definition.key, state);
         this.bindFloatingWindowControls(definition.key);
         this.bringFloatingWindowToFront(windowEl);
@@ -827,6 +835,7 @@ class TheatreSoundMixer {
             if (placeholder.parentElement) {
                 placeholder.parentElement.insertBefore(block, placeholder);
             }
+            block.style.height = state.dockedHeight;
             block.classList.remove('is-detached');
             placeholder.remove();
             windowEl.remove();
