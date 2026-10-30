@@ -40,6 +40,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Check release version
+        run: node -e "if (process.env.GITHUB_REF_NAME !== 'v' + require('./package.json').version) throw new Error('Tag and package version differ')"
       - run: npm test
       - name: Build package
         run: ${{ matrix.command }}
@@ -56,11 +58,21 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: release-files
           merge-multiple: true
+      - name: Verify all platform packages and release notes
+        run: |
+          test -s "docs/releases/${GITHUB_REF_NAME}.md"
+          for file in Concert-Audio-System-Setup.exe Concert-Audio-System-macOS.dmg Concert-Audio-System-linux.AppImage Concert-Audio-System-linux.deb; do
+            test -s "release-files/$file" || exit 1
+          done
       - uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          draft: true
+          name: Concert Audio System ${{ github.ref_name }}
+          body_path: docs/releases/${{ github.ref_name }}.md
+          fail_on_unmatched_files: true
           files: release-files/*

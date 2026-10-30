@@ -43,3 +43,11 @@ git push vps
 ```
 
 For the public landing, update the separate `cas-landing` project and deploy it to `/var/www/cas/public`.
+
+## Desktop releases
+
+- Desktop fixes for the 1.3 series are maintained on `codex/release-1.3`; `main` is preserved separately.
+- Synchronize `package.json`, `package-lock.json`, the visible app version, and `docs/releases/vX.Y.Z.md` before tagging.
+- A pushed `v*` tag runs tests and native Windows/macOS/Linux builds. The workflow creates a **draft** only after all build jobs succeed and all four packages are present.
+- Inspect the tagged commit, successful CI jobs and the four uploaded draft assets. Publish the verified draft with `gh release edit vX.Y.Z --draft=false --latest --verify-tag`.
+- Verify all four tagged download URLs and the corresponding `/releases/latest/download/` URLs after publication. The public landing reads the latest release automatically; filenames must remain synchronized.
