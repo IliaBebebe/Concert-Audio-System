@@ -32,3 +32,6 @@ jobs:
           node --check renderer.js
           node --check metadata-worker.js
           node --check welcome.js
+          node --check online-music.js
+          node --check online-ui.js
+          node --check scripts/prepare-online-tools.js

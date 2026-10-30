@@ -3,6 +3,9 @@ const path = require('node:path');
 const { fileURLToPath, pathToFileURL } = require('node:url');
 const fs = require('node:fs/promises');
 const { Worker } = require('node:worker_threads');
+const { OnlineMusic } = require(path.join(__dirname, 'online-music.js'));
+const requestedProfile = app.commandLine?.getSwitchValue('user-data-dir');
+if (requestedProfile) app.setPath('userData', path.resolve(requestedProfile));
 
 const DEFAULT_WINDOW_WIDTH = 1400;
 const DEFAULT_WINDOW_HEIGHT = 900;
@@ -22,6 +25,15 @@ const MAX_WAVEFORM_FILE_SIZE = 350 * 1024 * 1024;
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.ogg', '.flac', '.m4a', '.aac', '.opus', '.webm']);
 
 const appRootPath = path.resolve(__dirname);
+let onlineMusic;
+function getOnlineMusic() {
+  if (!onlineMusic) onlineMusic = new OnlineMusic({
+    root: path.join(app.getPath('userData'), 'online-library'),
+    toolsRoot: app.isPackaged ? path.join(process.resourcesPath, 'online-tools') : path.join(__dirname, 'tools')
+  });
+  return onlineMusic;
+}
+app.on('before-quit', () => onlineMusic?.dispose());
 const configPath = path.join(app.getPath('userData'), 'config.json');
 const windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
 const metadataWorkerPath = path.join(__dirname, 'metadata-worker.js');
@@ -67,7 +79,8 @@ function isSupportedAudioFile(filePath) {
 }
 
 function getTrackMetadataKey(filePath, musicFolder) {
-  return path.relative(path.resolve(musicFolder), path.resolve(filePath)).split(path.sep).join('/');
+  const relative = path.relative(path.resolve(musicFolder), path.resolve(filePath)).split(path.sep).join('/');
+  return onlineMusic && musicFolder === onlineMusic.root ? `online/${relative}` : relative;
 }
 
 function normalizeTrackMetadata(metadata = {}) {
@@ -538,6 +551,12 @@ async function resolveMusicPath(candidatePath, expectedType) {
   }
 
   const config = await loadConfig();
+  if (expectedType === 'file') {
+    const imported = await getOnlineMusic().resolve(candidatePath);
+    if (imported) {
+      return { config, musicFolder: getOnlineMusic().root, resolvedPath: imported.path, stats: await fs.stat(imported.path) };
+    }
+  }
   const musicFolder = await validateMusicFolder(config.musicFolder);
   const resolvedPath = await fs.realpath(candidatePath);
 
@@ -857,6 +876,36 @@ ipcMain.handle('get-config', async (event) => {
   }
   return loadConfig();
 });
+
+let onlineSearchBusy = false;
+for (const [channel, action] of Object.entries({
+  'online-search': async (_event, query) => {
+    if (onlineSearchBusy) throw new Error('Дождитесь завершения поиска');
+    onlineSearchBusy = true;
+    try { return await getOnlineMusic().search(query); } finally { onlineSearchBusy = false; }
+  },
+  'online-library': async () => {
+    const config = await loadConfig();
+    return (await getOnlineMusic().list()).map(track => applyTrackMetadataOverride(track, config.trackMetadataOverrides[getTrackMetadataKey(track.path, getOnlineMusic().root)]));
+  },
+  'online-remove': (_event, id) => getOnlineMusic().remove(id),
+  'online-prepare': (event, id) => getOnlineMusic().prepare(id, progress => {
+    if (!event.sender.isDestroyed()) event.sender.send('online-progress', progress);
+  }),
+  'online-cancel': (_event, id) => { getOnlineMusic().cancel(id); return true; },
+  'online-open-library': async () => {
+    await getOnlineMusic().initialize();
+    const error = await shell.openPath(getOnlineMusic().root);
+    if (error) throw new Error(error);
+    return true;
+  }
+})) {
+  ipcMain.handle(channel, async (event, value) => {
+    if (!isTrustedSender(event, mainWindow)) return unauthorizedResponse();
+    try { return { success: true, data: await action(event, value) }; }
+    catch (error) { return { success: false, error: error.message }; }
+  });
+}
 
 ipcMain.handle('save-track-metadata', async (event, filePath, metadata) => {
   if (!isTrustedSender(event, mainWindow)) {

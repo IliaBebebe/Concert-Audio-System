@@ -1020,6 +1020,7 @@ class TheatreSoundMixer {
         await this.refreshPlaylists();
         this.updateDeckUI();
         this.displayTracks();
+        if (window.CASOnlinePanel) this.onlinePanel = new window.CASOnlinePanel(this);
     }
 
     async loadConfig() {
@@ -1820,6 +1821,7 @@ class TheatreSoundMixer {
         const { forceDirect = false } = options;
         const deck = this.decks[deckId];
         if (!deck || !Number.isInteger(index) || !deck.tracks[index]) return;
+        this.onlinePlayIntent = (this.onlinePlayIntent || 0) + 1;
 
         if (!forceDirect && this.shouldCrossfadeTo(deckId, index)) {
             this.startCrossfadeTo(deckId, index, options);
@@ -1848,6 +1850,32 @@ class TheatreSoundMixer {
     playTrack(index, options = {}) {
         const deckId = this.playingDeck || this.activeDeck;
         this.playTrackInDeck(deckId, index, options);
+    }
+
+    captureOnlineTarget(deckId, autoplay = false) {
+        if (autoplay) this.onlinePlayIntent = (this.onlinePlayIntent || 0) + 1;
+        return { deckId, tracks: this.decks[deckId]?.tracks, requestId: this.playlistRequestId[deckId], playIntent: this.onlinePlayIntent || 0 };
+    }
+
+    insertOnlineTrack(track, target, autoplay = false) {
+        const deck = this.decks[target.deckId];
+        if (!deck || deck.tracks !== target.tracks || this.playlistRequestId[target.deckId] !== target.requestId) return false;
+        if (autoplay && (this.onlinePlayIntent || 0) !== target.playIntent) return false;
+        let index = deck.tracks.findIndex(item => item.path === track.path);
+        if (index < 0) { index = deck.tracks.length; deck.tracks.push(track); }
+        if (!deck.playlist) deck.playlist = { name: 'Моя очередь', path: null };
+        this.displayTracks(target.deckId);
+        this.updateDeckUI();
+        this.updateTrackCounter();
+        this.saveStoredData();
+        if (autoplay) {
+            // Keep outgoing audio alive until the local incoming player starts, even with fades disabled.
+            if (this.isPlaying && !this.isPaused && !this.isCrossfading && this.musicPlayer && this.musicPlayerTrack !== track) {
+                this.startCrossfadeTo(target.deckId, index, { onlineHandoff: true });
+            } else if (!this.isCrossfading) this.playTrackInDeck(target.deckId, index);
+            else return false;
+        }
+        return true;
     }
 
     filterTracksInDeck(deckId, query) {
@@ -2570,6 +2598,7 @@ class TheatreSoundMixer {
                         try { player.volume(this.musicVolume); } catch {}
                     }
                 }
+                fadeInApplied = true;
                 this.updateStatus(`Воспроизведение: ${this.getTrackTitle(track)}`);
                 this.startProgressTracking();
                 this.updateVuMeters();
@@ -2670,7 +2699,7 @@ class TheatreSoundMixer {
                 const deckId = this.playingDeck || this.activeDeck;
                 const deck = this.decks[deckId];
                 if (deck && deck.tracks && deck.currentTrackIndex + 1 >= deck.tracks.length) {
-                    this.stopMusic();
+                    this.stopMusic({ cancelOnline: false });
                     this.updateStatus('Воспроизведение завершено');
                 } else {
                     this.nextTrack();
@@ -2678,7 +2707,7 @@ class TheatreSoundMixer {
                 break;
             }
             case 'single':
-                this.stopMusic();
+                this.stopMusic({ cancelOnline: false });
                 break;
         }
     }
@@ -2730,8 +2759,9 @@ class TheatreSoundMixer {
         return requestedMs;
     }
 
-    startCrossfadeTo(targetDeckId, targetIndex, { automatic = false } = {}) {
-        if (!this.shouldCrossfadeTo(targetDeckId, targetIndex) || this.isCrossfading) {
+    startCrossfadeTo(targetDeckId, targetIndex, { automatic = false, onlineHandoff = false } = {}) {
+        const configuredFade = this.shouldCrossfadeTo(targetDeckId, targetIndex);
+        if ((!configuredFade && !onlineHandoff) || this.isCrossfading) {
             this.playTrackInDeck(targetDeckId, targetIndex, { forceDirect: true });
             return;
         }
@@ -2750,7 +2780,7 @@ class TheatreSoundMixer {
             return;
         }
 
-        const fadeMs = this.getCrossfadeDurationMs(outgoingPlayer);
+        const fadeMs = onlineHandoff && !configuredFade ? 0 : this.getCrossfadeDurationMs(outgoingPlayer);
         this.isCrossfading = true;
         this.crossfadeOutgoingDeck = outgoingDeckId;
 
@@ -2766,7 +2796,7 @@ class TheatreSoundMixer {
 
         const incomingPlayer = this.loadTrack(targetIndex, {
             preserveCurrent: true,
-            initialVolume: 0,
+            initialVolume: fadeMs > 0 ? 0 : this.musicVolume,
             fadeInMs: fadeMs,
             deckId: targetDeckId,
             onPlaybackStart: () => {
@@ -2948,6 +2978,7 @@ class TheatreSoundMixer {
     }
 
     pauseMusic() {
+        this.onlinePlayIntent = (this.onlinePlayIntent || 0) + 1;
         if (!this.musicPlayer) return;
         if (this.pendingMusicStart && !this.isPlaying) {
             this.stopMusic({ silent: true });
@@ -2971,7 +3002,8 @@ class TheatreSoundMixer {
         }
     }
 
-    stopMusic({ silent = false } = {}) {
+    stopMusic({ silent = false, cancelOnline = !silent } = {}) {
+        if (cancelOnline) this.onlinePlayIntent = (this.onlinePlayIntent || 0) + 1;
         const player = this.musicPlayer;
         this.musicPlayer = null;
         this.musicPlayerDeck = null;
@@ -4107,6 +4139,7 @@ class TheatreSoundMixer {
                 return [deckId, {
                     playlist: deck.playlist,
                     trackOrder: deck.tracks.map(track => track.path),
+                    onlineTrackIds: deck.tracks.filter(track => track.onlineId).map(track => track.onlineId),
                     currentTrackPath: deck.tracks[deck.currentTrackIndex]?.path,
                     filterQuery: deck.filterQuery
                 }];
@@ -4181,10 +4214,20 @@ class TheatreSoundMixer {
             if (data.musicFolder === this.config?.musicFolder && data.decks && typeof data.decks === 'object') {
                 await Promise.all(['A', 'B'].map(async deckId => {
                     const saved = data.decks[deckId];
-                    if (typeof saved?.playlist?.path !== 'string') return;
+                    if (!saved?.playlist || (typeof saved.playlist.path !== 'string' && !Array.isArray(saved.onlineTrackIds))) return;
                     const requestId = ++this.playlistRequestId[deckId];
                     try {
-                        const result = await window.electronAPI.getPlaylistTracks(saved.playlist.path);
+                        const result = typeof saved.playlist.path === 'string'
+                            ? await window.electronAPI.getPlaylistTracks(saved.playlist.path)
+                            : { success: true, data: [] };
+                        if (Array.isArray(saved.onlineTrackIds) && window.electronAPI.getOnlineLibrary) {
+                            const library = await window.electronAPI.getOnlineLibrary();
+                            if (library.success) {
+                                const ids = new Set(saved.onlineTrackIds);
+                                result.data = [...(result.data || []), ...library.data.filter(track => ids.has(track.onlineId))];
+                                result.success = true;
+                            }
+                        }
                         if (requestId !== this.playlistRequestId[deckId] || !result.success || !Array.isArray(result.data)) return;
                         const deck = this.decks[deckId];
                         deck.playlist = saved.playlist;

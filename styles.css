@@ -3081,3 +3081,23 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
     color: var(--accent-purple);
     border-color: rgba(157, 78, 221, 0.25);
 }
+/* Internet search uses the existing deck controls and surfaces. */
+.online-music { margin: 8px 0; padding: 8px 12px; background: var(--bg-secondary, #181818); border: 1px solid var(--border-color, #313131); border-radius: 8px; flex-shrink: 0; }
+.online-music summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.online-search-form, .online-toolbar, .online-result, .online-job { display: flex; gap: 8px; align-items: center; }
+.online-search-form { margin-top: 8px; flex-wrap: wrap; }
+.online-search-form input { flex: 1 1 200px; min-width: 0; padding: 8px 12px; }
+.online-music input, .online-music select { color: inherit; background: var(--bg-primary, #181818); border: 1px solid var(--border-color, #313131); border-radius: 4px; }
+.online-music select { padding: 4px; }
+.online-toolbar { margin: 8px 0; flex-wrap: wrap; font-size: 12px; }
+.online-toolbar label { white-space: nowrap; }
+.online-results { max-height: 200px; overflow: auto; }
+.online-result { padding: 8px 0; }
+.online-track-info { flex: 1; min-width: 0; }
+.online-track-info strong, .online-track-info span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.online-track-info span, .online-note { font-size: 12px; color: var(--text-secondary, #aaa); }
+.online-note { margin: 8px 0 0; }
+.online-jobs { max-height: 96px; overflow: auto; }
+.online-job { justify-content: space-between; padding: 4px 0; font-size: 12px; }
+.online-job span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.online-music :focus-visible { outline: 2px solid var(--accent-color, #4f9fff); outline-offset: 2px; }

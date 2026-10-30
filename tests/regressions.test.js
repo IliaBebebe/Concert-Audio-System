@@ -281,6 +281,41 @@ test('panel widths shrink and grow with the window while preserving preferred pr
   assert.ok(narrow.leftWidth + narrow.rightWidth + 360 + 12 <= 1000);
 });
 
+test('mixed and online-only decks restore imported IDs in saved order without autoplay', async t => {
+  const { mixer } = mixerFixture(t);
+  const previousStorage = global.localStorage;
+  const data = { musicFolder: 'music', activeDeck: 'B', decks: {
+    A: { playlist: { path: 'A' }, trackOrder: ['online.m4a', 'A0.wav'], onlineTrackIds: ['aqz-KE-bpKQ'], currentTrackPath: 'online.m4a' },
+    B: { playlist: { name: 'Моя очередь', path: null }, trackOrder: ['online.m4a'], onlineTrackIds: ['aqz-KE-bpKQ'], currentTrackPath: 'online.m4a' }
+  } };
+  global.localStorage = { getItem: () => JSON.stringify(data) };
+  t.after(() => { global.localStorage = previousStorage; });
+  mixer.config = { musicFolder: 'music' };
+  mixer.updateCrossfadeControls = () => {};
+  window.electronAPI.getPlaylistTracks = async () => ({ success: true, data: [{ path: 'A0.wav' }] });
+  window.electronAPI.getOnlineLibrary = async () => ({ success: true, data: [{ onlineId: 'aqz-KE-bpKQ', path: 'online.m4a' }] });
+  await mixer.loadStoredData();
+  assert.deepEqual(mixer.decks.A.tracks.map(track => track.path), ['online.m4a', 'A0.wav']);
+  assert.equal(mixer.decks.B.tracks[0].onlineId, 'aqz-KE-bpKQ');
+  assert.equal(mixer.isPlaying, false);
+});
+
+test('online handoff with fades disabled keeps outgoing sound until incoming onplay and starts at master volume', t => {
+  const { mixer } = mixerFixture(t);
+  mixer.loadTrack(0, { deckId: 'A' });
+  mixer.isPlaying = true; mixer.playingDeck = 'A';
+  const outgoing = mixer.musicPlayer;
+  outgoing.play();
+  mixer.crossfadeEnabled = false; mixer.deckCrossfadeEnabled = false;
+  mixer.startCrossfadeTo('B', 0, { onlineHandoff: true });
+  const incoming = mixer.musicPlayer;
+  assert.equal(Boolean(outgoing.unloaded), false);
+  assert.equal(incoming.volume(), mixer.musicVolume);
+  incoming.options.onplay();
+  assert.equal(outgoing.faded.to, 0);
+  assert.equal(outgoing.faded.ms, 0);
+});
+
 test('oversized saved panel preferences cannot hide the center panel', t => {
   const { mixer } = mixerFixture(t);
   const sizes = mixer.getResponsivePanelWidths(1000, 0.8, 0.8);

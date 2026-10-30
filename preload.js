@@ -5,6 +5,18 @@ const { contextBridge, ipcRenderer } = require('electron');
  * Все методы валидируют входные параметры перед отправкой в main process
  */
 contextBridge.exposeInMainWorld('electronAPI', {
+  searchOnline: query => ipcRenderer.invoke('online-search', query),
+  getOnlineLibrary: () => ipcRenderer.invoke('online-library'),
+  removeOnlineTrack: id => ipcRenderer.invoke('online-remove', id),
+  prepareOnlineTrack: id => ipcRenderer.invoke('online-prepare', id),
+  cancelOnlineTrack: id => ipcRenderer.invoke('online-cancel', id),
+  openOnlineLibrary: () => ipcRenderer.invoke('online-open-library'),
+  onOnlineProgress: callback => {
+    if (typeof callback !== 'function') throw new Error('Ожидался обработчик прогресса');
+    const listener = (_event, progress) => callback(progress);
+    ipcRenderer.on('online-progress', listener);
+    return () => ipcRenderer.removeListener('online-progress', listener);
+  },
   /**
    * Читает директории из папки с музыкой
    * @param {string} [customPath] - Опциональный путь (должен быть внутри musicFolder)
