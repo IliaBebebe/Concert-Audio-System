@@ -130,6 +130,8 @@ class TheatreSoundMixer {
         this.decks = this.deckManager.decks;
 
         this.musicPlayer = null;
+        this.musicPlayerDeck = null;
+        this.musicPlayerTrack = null;
         this.soundEffects = new Map();
         this.selectedPad = null;
         this.isPlaying = false;
@@ -590,7 +592,6 @@ class TheatreSoundMixer {
             ['leftPadsSection', '.left-panel > .section:nth-of-type(3)'],
             ['playlistsContainer', '#playlistsContainer'],
             ['soundPadsGrid', '#soundPadsGrid'],
-            ['tracksContainer', '#tracksContainer'],
             ['nowPlaying', '.now-playing'],
             ['progressSection', '.progress-section'],
             ['volumeSection', '.volume-section'],
@@ -1402,11 +1403,12 @@ class TheatreSoundMixer {
 
     async loadPlaylist(playlist, explicitDeck = null) {
         const targetDeck = explicitDeck || this.activeDeck;
+        if (!this.decks[targetDeck] || !playlist?.path) return;
         const currentReq = (this.playlistRequestId && this.playlistRequestId[targetDeck] !== undefined)
             ? ++this.playlistRequestId[targetDeck]
             : 0;
         try {
-            this.updateStatus(`Загрузка в Deck ${targetDeck}: ${playlist.name}`);
+            this.updateStatus(`Загрузка в деку ${targetDeck}: ${playlist.name}`);
             const result = await window.electronAPI.getPlaylistTracks(playlist.path);
             if (this.playlistRequestId && this.playlistRequestId[targetDeck] !== currentReq) return;
             
@@ -1427,21 +1429,15 @@ class TheatreSoundMixer {
                 const searchInput = document.getElementById(targetDeck === 'A' ? 'trackSearchInputA' : 'trackSearchInputB');
                 if (searchInput) searchInput.value = '';
 
-                if (!this.playingDeck || this.playingDeck === targetDeck) {
-                    this.currentPlaylist = playlist;
-                    this.playlistTracks = result.data;
-                    this.currentTrackIndex = 0;
-                    this.trackFilterQuery = '';
-                }
-
                 this.displayTracks(targetDeck);
                 this.updateDeckUI();
                 this.updateTrackCounter();
-                this.updateStatus(`Плейлист загружен в Deck ${targetDeck}: ${playlist.name}`, 'success');
+                this.updateStatus(`Плейлист загружен в деку ${targetDeck}: ${playlist.name}`, 'success');
                 
                 if (!this.isPlaying && !this.playingDeck && this.activeDeck === targetDeck && deck.tracks.length > 0) {
                     this.loadTrack(0, { deckId: targetDeck });
                 }
+                this.saveStoredData();
             } else {
                 throw new Error(result.error);
             }
@@ -1490,7 +1486,7 @@ class TheatreSoundMixer {
                     deckBadge.className = 'playlist-deck-badge';
                     button.appendChild(deckBadge);
                 }
-                deckBadge.textContent = 'Deck A';
+                deckBadge.textContent = 'A';
                 deckBadge.className = 'playlist-deck-badge';
             } else if (isDeckB) {
                 if (!deckBadge) {
@@ -1498,7 +1494,7 @@ class TheatreSoundMixer {
                     deckBadge.className = 'playlist-deck-badge deck-b';
                     button.appendChild(deckBadge);
                 }
-                deckBadge.textContent = 'Deck B';
+                deckBadge.textContent = 'B';
                 deckBadge.className = 'playlist-deck-badge deck-b';
             } else if (deckBadge) {
                 deckBadge.remove();
@@ -1537,7 +1533,7 @@ class TheatreSoundMixer {
         this.displayTracks();
         this.updateDeckUI();
         this.updateTrackCounter();
-        this.clearWaveform('Waveform ожидает трек');
+        this.clearWaveform('Осциллограмма появится после выбора трека');
     }
 
     displayTracks(targetDeckId = null) {
@@ -1572,11 +1568,47 @@ class TheatreSoundMixer {
             const pendingTrackLoads = [];
             const isDragEnabled = !filterQuery;
 
+            if (list.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'deck-empty-state';
+                const title = document.createElement('strong');
+                title.textContent = filterQuery ? 'Ничего не найдено' : `Дека ${deckId} готова к загрузке`;
+                const hint = document.createElement('span');
+                hint.textContent = filterQuery ? 'Измените запрос или очистите поиск' : 'Выберите эту деку, затем плейлист слева';
+                empty.append(title, hint);
+                if (filterQuery) {
+                    const clear = document.createElement('button');
+                    clear.type = 'button';
+                    clear.className = 'deck-empty-action';
+                    clear.textContent = 'Очистить поиск';
+                    clear.addEventListener('click', () => {
+                        const search = document.getElementById(`trackSearchInput${deckId}`);
+                        if (search) search.value = '';
+                        this.filterTracksInDeck(deckId, '');
+                        search?.focus();
+                    });
+                    empty.appendChild(clear);
+                }
+                fragment.appendChild(empty);
+            }
+
             list.forEach(({ t: track, i: index }) => {
                 const row = document.createElement('div');
                 row.className = 'track-row';
                 row.dataset.index = String(index);
                 row.dataset.deck = deckId;
+                row.addEventListener('keydown', (event) => {
+                    if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.code) || !isDragEnabled) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const targetIndex = index + (event.code === 'ArrowUp' ? -1 : 1);
+                    const result = this.deckManager.reorderTrack(deckId, index, targetIndex, event.code === 'ArrowDown');
+                    if (!result) return;
+                    this.displayTracks(deckId);
+                    this.highlightCurrentTrack();
+                    this.saveStoredData();
+                    document.querySelector(`#${containerId} .track-btn[data-index="${result.insertAt}"]`)?.focus();
+                });
 
                 // Drag handle
                 const dragHandle = document.createElement('div');
@@ -1601,6 +1633,7 @@ class TheatreSoundMixer {
                 btn.className = 'track-btn';
                 btn.dataset.index = String(index);
                 btn.dataset.deck = deckId;
+                btn.title = 'Воспроизвести. Alt+↑/↓: изменить порядок';
                 const isCurrentDeck = this.playingDeck ? (this.playingDeck === deckId) : (this.activeDeck === deckId);
                 if (isCurrentDeck && index === deck.currentTrackIndex) {
                     btn.classList.add('active');
@@ -1760,7 +1793,8 @@ class TheatreSoundMixer {
         this.displayTracks(deckId);
         this.highlightCurrentTrack();
         this.updateTrackCounter();
-        this.updateStatus(`Deck ${deckId}: трек перемещён на позицию ${insertAt + 1}`);
+        this.updateStatus(`Дека ${deckId}: трек перемещён на позицию ${insertAt + 1}`);
+        this.saveStoredData();
     }
 
     handleTrackDragEnd(e) {
@@ -1774,6 +1808,8 @@ class TheatreSoundMixer {
 
     playTrackInDeck(deckId, index, options = {}) {
         const { forceDirect = false } = options;
+        const deck = this.decks[deckId];
+        if (!deck || !Number.isInteger(index) || !deck.tracks[index]) return;
 
         if (!forceDirect && this.shouldCrossfadeTo(deckId, index)) {
             this.startCrossfadeTo(deckId, index, options);
@@ -1787,7 +1823,6 @@ class TheatreSoundMixer {
         this.activeDeck = deckId;
         this.playingDeck = deckId;
 
-        const deck = this.decks[deckId];
         this.currentPlaylist = deck.playlist;
         this.playlistTracks = deck.tracks;
         this.currentTrackIndex = index;
@@ -1795,6 +1830,7 @@ class TheatreSoundMixer {
 
         this.loadTrack(index, { ...options, deckId });
         this.playMusic();
+        this.saveStoredData();
         this.highlightCurrentTrack();
         this.updateDeckUI();
     }
@@ -1807,9 +1843,6 @@ class TheatreSoundMixer {
     filterTracksInDeck(deckId, query) {
         if (!this.decks[deckId]) return;
         this.decks[deckId].filterQuery = (query || '').toLowerCase().trim();
-        if (this.activeDeck === deckId) {
-            this.trackFilterQuery = this.decks[deckId].filterQuery;
-        }
         this.displayTracks(deckId);
     }
 
@@ -1820,6 +1853,7 @@ class TheatreSoundMixer {
     setActiveDeck(deckId) {
         if (deckId !== 'A' && deckId !== 'B') return;
         this.activeDeck = deckId;
+        if (this.viewMode !== 'split' && this.viewMode !== deckId) this.setViewMode(deckId);
 
         const deck = this.decks[deckId];
         if (!this.playingDeck) {
@@ -1827,29 +1861,34 @@ class TheatreSoundMixer {
             this.playlistTracks = deck.tracks;
             this.currentTrackIndex = deck.currentTrackIndex;
         }
-        this.trackFilterQuery = deck.filterQuery || '';
 
-        if (!this.isPlaying && !this.isPaused) {
+        if (!this.isPlaying && !this.isPaused && !this.pendingMusicStart) {
             if (deck && deck.tracks && deck.tracks.length > 0) {
                 const track = deck.tracks[deck.currentTrackIndex || 0];
                 if (track) {
-                    this.updateCurrentTrackDisplay(track);
-                    this.loadWaveformForTrack(track);
+                    if (this.musicPlayerDeck !== deckId || this.musicPlayerTrack !== track) {
+                        this.loadTrack(deck.currentTrackIndex || 0, { deckId });
+                    } else {
+                        this.updateCurrentTrackDisplay(track);
+                        this.loadWaveformForTrack(track);
+                    }
                 }
             } else {
+                if (this.musicPlayer) this.stopMusic({ silent: true });
                 const currentTrackEl = document.getElementById('currentTrack');
                 if (currentTrackEl) {
                     currentTrackEl.textContent = 'Трек не выбран';
                     currentTrackEl.title = '';
                 }
-                this.clearWaveform('Waveform ожидает трек');
+                this.clearWaveform('Осциллограмма появится после выбора трека');
             }
         }
 
         this.updateDeckUI();
         this.updatePlaylistSelection();
+        this.highlightCurrentTrack();
         this.updateTrackCounter();
-        this.updateStatus(`Выбран целевой ${deckId === 'A' ? 'Deck A' : 'Deck B'}`);
+        this.updateStatus(`Выбран целевой дек ${deckId}`);
         this.saveStoredData();
     }
 
@@ -1871,6 +1910,9 @@ class TheatreSoundMixer {
         btnSplit?.classList.toggle('active', mode === 'split');
         btnA?.classList.toggle('active', mode === 'A');
         btnB?.classList.toggle('active', mode === 'B');
+        [btnSplit, btnA, btnB].forEach((button) => {
+            button?.setAttribute('aria-pressed', String(button.classList.contains('active')));
+        });
 
         if (mode === 'A' || mode === 'B') {
             this.setActiveDeck(mode);
@@ -1890,7 +1932,7 @@ class TheatreSoundMixer {
         const badge = document.getElementById('activeDeckBadge');
 
         if (nameA) {
-            nameA.textContent = this.decks.A.playlist ? this.decks.A.playlist.name : 'Плейлист A (не выбран)';
+            nameA.textContent = this.decks.A.playlist ? this.decks.A.playlist.name : 'Выберите плейлист';
         }
         if (countA) {
             const total = this.decks.A.tracks?.length || 0;
@@ -1898,7 +1940,7 @@ class TheatreSoundMixer {
         }
 
         if (nameB) {
-            nameB.textContent = this.decks.B.playlist ? this.decks.B.playlist.name : 'Плейлист B (не выбран)';
+            nameB.textContent = this.decks.B.playlist ? this.decks.B.playlist.name : 'Выберите плейлист';
         }
         if (countB) {
             const total = this.decks.B.tracks?.length || 0;
@@ -1910,19 +1952,22 @@ class TheatreSoundMixer {
 
         const activeBadgeDeck = this.activeDeck;
         if (badge) {
-            badge.textContent = activeBadgeDeck === 'A' ? 'DECK A' : 'DECK B';
+            badge.textContent = `ДЕКА ${activeBadgeDeck}`;
             badge.classList.toggle('deck-b', activeBadgeDeck === 'B');
         }
 
-        const isDeckPlaying = (deckId) => this.playingDeck === deckId && (this.isPlaying || this.pendingMusicStart || this.isCrossfading) && !this.isPaused;
+        const isDeckPlaying = (deckId) => this.playingDeck === deckId && this.isPlaying && !this.isPaused;
         const isDeckPaused = (deckId) => this.playingDeck === deckId && this.isPaused;
-        const hasRetiringAudio = (deckId) => Boolean(this.isCrossfading && this.retiringMusicPlayers.size > 0 && this.playingDeck !== deckId);
+        const hasRetiringAudio = (deckId) => Boolean(this.isCrossfading && this.retiringMusicPlayers.size > 0 && this.crossfadeOutgoingDeck === deckId);
 
         const updatePill = (element, deckId) => {
             if (!element) return;
             element.classList.remove('playing', 'paused', 'active', 'standby', 'crossfading');
 
-            if (isDeckPlaying(deckId)) {
+            if (this.pendingMusicStart && this.musicPlayerDeck === deckId) {
+                element.textContent = 'ЗАГРУЗКА';
+                element.classList.add('active');
+            } else if (isDeckPlaying(deckId)) {
                 element.textContent = 'ИГРАЕТ ▶';
                 element.classList.add('playing');
             } else if (isDeckPaused(deckId)) {
@@ -1932,16 +1977,19 @@ class TheatreSoundMixer {
                 element.textContent = 'КРОССФЕЙД ⇄';
                 element.classList.add('crossfading');
             } else if (this.activeDeck === deckId) {
-                element.textContent = 'АКТИВЕН';
+                element.textContent = 'ВЫБРАНА';
                 element.classList.add('active');
             } else {
-                element.textContent = 'ОЖИДАНИЕ';
+                element.textContent = 'ГОТОВА';
                 element.classList.add('standby');
             }
         };
 
         updatePill(stateA, 'A');
         updatePill(stateB, 'B');
+        ['A', 'B'].forEach((deckId) => {
+            document.getElementById(`deckHeader${deckId}`)?.setAttribute('aria-pressed', String(this.activeDeck === deckId));
+        });
 
         this.updatePlaylistSelection();
     }
@@ -2147,6 +2195,33 @@ class TheatreSoundMixer {
         });
     }
 
+    setupDialogKeyboard(overlay, canClose = () => true) {
+        const previousFocus = document.activeElement;
+        const close = () => {
+            if (!canClose()) return;
+            overlay.remove();
+            if (previousFocus?.isConnected) previousFocus.focus();
+        };
+        overlay.addEventListener('keydown', event => {
+            if (event.code === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                close();
+            } else if (event.code === 'Tab') {
+                const elements = Array.from(overlay.querySelectorAll('input:not(:disabled), button:not(:disabled)'));
+                const first = elements[0];
+                const last = elements[elements.length - 1];
+                if (!first) { event.preventDefault(); return; }
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault(); last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault(); first.focus();
+                }
+            }
+        });
+        return close;
+    }
+
     openTrackMetadataEditor(deckIdOrIndex, maybeIndex) {
         let deckId = this.activeDeck;
         let index = deckIdOrIndex;
@@ -2155,8 +2230,8 @@ class TheatreSoundMixer {
             index = maybeIndex;
         }
 
-        const deck = this.decks[deckId] || this.decks[this.activeDeck];
-        const track = deck.tracks[index] || this.playlistTracks[index];
+        const deck = this.decks[deckId];
+        const track = deck?.tracks[index];
         if (!track) return;
 
         const existing = document.querySelector('.metadata-modal-overlay');
@@ -2204,8 +2279,8 @@ class TheatreSoundMixer {
         const numberInput = overlay.querySelector('input[name="trackNumber"]');
         const startOffsetInput = overlay.querySelector('input[name="startOffset"]');
         const sourceName = overlay.querySelector('.metadata-source-name');
-        const close = () => overlay.remove();
         let isSubmitting = false;
+        const close = this.setupDialogKeyboard(overlay, () => !isSubmitting);
         const setSubmitting = (value) => {
             isSubmitting = value;
             form.querySelectorAll('input, button').forEach((element) => {
@@ -2227,7 +2302,15 @@ class TheatreSoundMixer {
             if (isSubmitting) return;
             setSubmitting(true);
             try {
-                if (await this.clearTrackMetadata(deckId, index)) close();
+                const currentIndex = deck.tracks.indexOf(track);
+                if (currentIndex < 0) {
+                    this.updateStatus('Плейлист изменился. Откройте параметры трека заново', 'warning');
+                    return;
+                }
+                if (await this.clearTrackMetadata(deckId, currentIndex)) {
+                    setSubmitting(false);
+                    close();
+                }
             } finally {
                 setSubmitting(false);
             }
@@ -2246,13 +2329,21 @@ class TheatreSoundMixer {
             }
             setSubmitting(true);
             try {
-                const saved = await this.saveTrackMetadata(deckId, index, {
+                const currentIndex = deck.tracks.indexOf(track);
+                if (currentIndex < 0) {
+                    this.updateStatus('Плейлист изменился. Откройте параметры трека заново', 'warning');
+                    return;
+                }
+                const saved = await this.saveTrackMetadata(deckId, currentIndex, {
                     title: titleInput.value,
                     artist: artistInput.value,
                     trackNumber: numberInput.value,
                     startOffset
                 });
-                if (saved) close();
+                if (saved) {
+                    setSubmitting(false);
+                    close();
+                }
             } finally {
                 setSubmitting(false);
             }
@@ -2273,8 +2364,8 @@ class TheatreSoundMixer {
             metadata = maybeMetadata;
         }
 
-        const deck = this.decks[deckId] || this.decks[this.activeDeck];
-        const track = deck?.tracks?.[index] || this.playlistTracks[index];
+        const deck = this.decks[deckId];
+        const track = deck?.tracks?.[index];
         if (!track) return false;
         const playlistAtStart = deck?.playlist || this.currentPlaylist;
 
@@ -2331,8 +2422,8 @@ class TheatreSoundMixer {
             index = maybeIndex;
         }
 
-        const deck = this.decks[deckId] || this.decks[this.activeDeck];
-        const track = deck?.tracks?.[index] || this.playlistTracks[index];
+        const deck = this.decks[deckId];
+        const track = deck?.tracks?.[index];
         if (!track) return false;
         const playlistAtStart = deck?.playlist || this.currentPlaylist;
 
@@ -2384,12 +2475,14 @@ class TheatreSoundMixer {
         const deckId = options.deckId || this.playingDeck || this.activeDeck;
         const deck = this.decks[deckId];
         const tracks = deck?.tracks || this.playlistTracks;
-        if (index < 0 || index >= tracks.length) return;
+        if (!Number.isInteger(index) || index < 0 || index >= tracks.length) return;
 
         const {
             preserveCurrent = false,
             initialVolume = this.musicVolume,
-            fadeInMs = 0
+            fadeInMs = 0,
+            onPlaybackStart,
+            onPlaybackError
         } = options;
 
         if (!preserveCurrent) {
@@ -2400,11 +2493,11 @@ class TheatreSoundMixer {
             this.isPlaying = false;
         }
 
-        if (preserveCurrent || this.isPlaying || this.pendingMusicStart) {
-            this.playingDeck = deckId;
-        }
+        if (preserveCurrent) this.playingDeck = deckId;
         if (deck) deck.currentTrackIndex = index;
         const track = tracks[index];
+        this.musicPlayerDeck = deckId;
+        this.musicPlayerTrack = track;
 
         const playerToken = ++this.musicPlayerToken;
         let player = null;
@@ -2420,6 +2513,9 @@ class TheatreSoundMixer {
             this.playingDeck = null;
             this.stopProgressTracking();
             try { player.unload(); } catch {}
+            this.musicPlayerDeck = null;
+            this.musicPlayerTrack = null;
+            if (onPlaybackError?.()) return;
             this.crossfadeTimers.forEach((timer) => clearTimeout(timer));
             this.crossfadeTimers.clear();
             this.retiringMusicPlayers.forEach((p) => {
@@ -2453,6 +2549,7 @@ class TheatreSoundMixer {
                 this.isPlaying = true;
                 this.isPaused = false;
                 this.playingDeck = deckId;
+                if (!fadeInApplied) onPlaybackStart?.();
                 if (fadeInMs > 0 && !fadeInApplied) {
                     fadeInApplied = true;
                     try {
@@ -2511,9 +2608,14 @@ class TheatreSoundMixer {
             },
             onplayerror: () => {
                 if (!isCurrentPlayer()) return;
+                if (onPlaybackError) {
+                    discardFailedPlayer('Ошибка воспроизведения трека');
+                    return;
+                }
                 this.pendingMusicStart = false;
                 this.isPlaying = false;
                 this.isPaused = false;
+                this.playingDeck = deckId;
                 this.stopProgressTracking(false);
                 this.updateStatus('Ошибка воспроизведения', 'error');
                 this.updateDeckUI();
@@ -2627,6 +2729,8 @@ class TheatreSoundMixer {
         const outgoingDeckId = this.playingDeck || this.activeDeck;
         const outgoingDeck = this.decks[outgoingDeckId];
         const outgoingTrack = outgoingDeck?.tracks?.[outgoingDeck.currentTrackIndex];
+        const outgoingIndex = outgoingDeck.currentTrackIndex;
+        const outgoingToken = this.musicPlayerToken;
 
         const incomingDeck = this.decks[targetDeckId];
         const incomingTrack = incomingDeck?.tracks?.[targetIndex];
@@ -2637,6 +2741,7 @@ class TheatreSoundMixer {
 
         const fadeMs = this.getCrossfadeDurationMs(outgoingPlayer);
         this.isCrossfading = true;
+        this.crossfadeOutgoingDeck = outgoingDeckId;
 
         this.activeDeck = targetDeckId;
         this.playingDeck = targetDeckId;
@@ -2645,13 +2750,45 @@ class TheatreSoundMixer {
         this.currentTrackIndex = targetIndex;
         incomingDeck.currentTrackIndex = targetIndex;
 
-        this.fadeOutAndUnloadMusicPlayer(outgoingPlayer, fadeMs);
+        // Keep the outgoing audio alive while the next file loads.
+        this.retiringMusicPlayers.add(outgoingPlayer);
 
         const incomingPlayer = this.loadTrack(targetIndex, {
             preserveCurrent: true,
             initialVolume: 0,
             fadeInMs: fadeMs,
-            deckId: targetDeckId
+            deckId: targetDeckId,
+            onPlaybackStart: () => {
+                this.fadeOutAndUnloadMusicPlayer(outgoingPlayer, fadeMs);
+            },
+            onPlaybackError: () => {
+                this.crossfadeTimers.forEach(clearTimeout);
+                this.crossfadeTimers.clear();
+                this.retiringMusicPlayers.delete(outgoingPlayer);
+                this.isCrossfading = false;
+                this.crossfadeOutgoingDeck = null;
+                if (!outgoingPlayer.playing()) {
+                    this.stopMusic({ silent: true });
+                    this.updateStatus('Не удалось загрузить следующий трек', 'error');
+                    return true;
+                }
+                this.musicPlayer = outgoingPlayer;
+                this.musicPlayerToken = outgoingToken;
+                this.musicPlayerDeck = outgoingDeckId;
+                this.musicPlayerTrack = outgoingTrack;
+                this.playingDeck = outgoingDeckId;
+                outgoingDeck.currentTrackIndex = outgoingIndex;
+                this.isPlaying = true;
+                this.isPaused = false;
+                this.automaticCrossfadeBlockedPlayer = outgoingPlayer;
+                this.updateCurrentTrackDisplay(outgoingTrack);
+                this.updateMediaSessionMetadata(outgoingTrack);
+                this.loadWaveformForTrack(outgoingTrack);
+                this.startProgressTracking();
+                this.highlightCurrentTrack();
+                this.updateStatus('Следующий трек недоступен. Текущий продолжает играть', 'error');
+                return true;
+            }
         });
 
         if (!incomingPlayer) {
@@ -2661,16 +2798,10 @@ class TheatreSoundMixer {
 
         this.playMusic({ force: true });
 
-        const timer = setTimeout(() => {
-            this.crossfadeTimers.delete(timer);
-            this.isCrossfading = false;
-        }, fadeMs + 150);
-        this.crossfadeTimers.add(timer);
-
         const fromTitle = outgoingTrack ? this.getTrackTitle(outgoingTrack) : 'Трек';
         const toTitle = this.getTrackTitle(incomingTrack);
-        const deckSwitchText = outgoingDeckId !== targetDeckId ? ` [Deck ${outgoingDeckId} → ${targetDeckId}]` : '';
-        this.updateStatus(`${automatic ? 'Авто-' : ''}Crossfade${deckSwitchText}: ${fromTitle} → ${toTitle}`);
+        const deckSwitchText = outgoingDeckId !== targetDeckId ? ` [${outgoingDeckId} → ${targetDeckId}]` : '';
+        this.updateStatus(`${automatic ? 'Авто-' : ''}Переход${deckSwitchText}: ${fromTitle} → ${toTitle}`);
         this.highlightCurrentTrack();
         this.updateDeckUI();
     }
@@ -2686,7 +2817,7 @@ class TheatreSoundMixer {
 
         try {
             const currentVolume = Number(player.volume());
-            const startVol = (Number.isFinite(currentVolume) && currentVolume > 0) ? currentVolume : this.musicVolume;
+            const startVol = Number.isFinite(currentVolume) ? currentVolume : this.musicVolume;
             player.fade(startVol, 0, durationMs);
         } catch {
             try { player.volume(0); } catch {}
@@ -2699,12 +2830,18 @@ class TheatreSoundMixer {
                 player.stop();
                 player.unload();
             } catch {}
+            if (this.retiringMusicPlayers.size === 0) {
+                this.isCrossfading = false;
+                this.crossfadeOutgoingDeck = null;
+                this.updateDeckUI();
+            }
         }, durationMs + 200);
         this.crossfadeTimers.add(timer);
     }
 
     maybeStartAutomaticCrossfade(player, playerToken, seek, duration) {
         if (!this.crossfadeEnabled
+            || this.automaticCrossfadeBlockedPlayer === player
             || this.playbackMode !== 'sequential'
             || this.isCrossfading
             || this.musicPlayer !== player
@@ -2735,11 +2872,13 @@ class TheatreSoundMixer {
     }
 
     playMusic(options = {}) {
-        const { force = false } = options;
+        if (this.pendingMusicStart) return;
         if (!this.isPlaying && !this.isPaused) {
             const targetDeckId = this.activeDeck;
             const deck = this.decks[targetDeckId];
-            if (!this.musicPlayer || this.playingDeck !== targetDeckId) {
+            const cuedDeckId = this.musicPlayerDeck ?? this.playingDeck;
+            if (!this.musicPlayer || cuedDeckId !== targetDeckId ||
+                (this.musicPlayerTrack && this.musicPlayerTrack !== deck?.tracks?.[deck.currentTrackIndex])) {
                 if (!deck || !deck.tracks || deck.tracks.length === 0) {
                     this.updateStatus('Сначала выберите трек', 'warning');
                     return;
@@ -2763,7 +2902,7 @@ class TheatreSoundMixer {
         if (!player) return;
 
         const isPlayerActuallyPlaying = Boolean(player.playing && player.playing());
-        if (!force && !this.isPaused && (this.pendingMusicStart || isPlayerActuallyPlaying)) {
+        if (this.pendingMusicStart || (!this.isPaused && isPlayerActuallyPlaying)) {
             return;
         }
 
@@ -2819,6 +2958,9 @@ class TheatreSoundMixer {
     stopMusic({ silent = false } = {}) {
         const player = this.musicPlayer;
         this.musicPlayer = null;
+        this.musicPlayerDeck = null;
+        this.musicPlayerTrack = null;
+        this.crossfadeOutgoingDeck = null;
         this.musicPlayerToken++;
         this.pendingMusicStart = false;
         if (this.musicRetryTimeout) {
@@ -3028,7 +3170,7 @@ class TheatreSoundMixer {
         const panel = document.getElementById('waveformPanel');
         if (!canvas || !panel) return;
 
-        this.clearWaveform('Waveform ожидает трек');
+        this.clearWaveform('Осциллограмма появится после выбора трека');
         this.waveformResizeObserver = new ResizeObserver(() => this.drawWaveform());
         this.waveformResizeObserver.observe(panel);
     }
@@ -3058,7 +3200,7 @@ class TheatreSoundMixer {
         const requestId = ++this.waveformRequestId;
         this.updateWaveformProgress(0);
         if (!track?.path) {
-            this.clearWaveform('Waveform ожидает трек');
+            this.clearWaveform('Осциллограмма появится после выбора трека');
             return;
         }
 
@@ -3293,6 +3435,7 @@ class TheatreSoundMixer {
         const name = this.getPadLabel(padIndex);
         pad.textContent = this.getPadDisplayName(padIndex);
         pad.title = name.startsWith('Пад ') ? '' : name;
+        pad.setAttribute('aria-label', `Пэд ${padIndex + 1}: ${name}`);
     }
 
     nextEffectGeneration(padIndex) {
@@ -3405,17 +3548,36 @@ class TheatreSoundMixer {
 
         const padIndex = this.selectedPad;
         const current = this.getPadLabel(padIndex);
-        const name = prompt('Название для пэда:', current);
-        if (name === null) return;
-
-        const normalizedName = name.trim() || `Пад ${padIndex + 1}`;
-        const soundData = this.soundEffects.get(padIndex);
-        if (soundData) soundData.name = normalizedName;
-        this.padLabels.set(padIndex, normalizedName);
-        this.updatePadLabel(padIndex);
-        const padStatus = document.getElementById('padStatus');
-        if (padStatus) padStatus.textContent = `Выбран: ${normalizedName}`;
-        this.saveStoredData();
+        document.querySelector('.metadata-modal-overlay')?.remove();
+        const overlay = document.createElement('div');
+        overlay.className = 'metadata-modal-overlay';
+        overlay.innerHTML = `<form class="metadata-modal" role="dialog" aria-modal="true" aria-label="Название пэда">
+            <div class="metadata-modal-header"><h3>Название пэда</h3>
+                <button type="button" class="metadata-close-btn" aria-label="Закрыть"><i class="fas fa-times"></i></button></div>
+            <label class="metadata-field"><span>Название</span><input name="name" maxlength="200" autocomplete="off"></label>
+            <div class="metadata-actions"><button type="button" class="metadata-secondary-btn">Отмена</button>
+                <button type="submit" class="metadata-primary-btn">Сохранить</button></div></form>`;
+        const input = overlay.querySelector('input');
+        input.value = current;
+        const close = this.setupDialogKeyboard(overlay);
+        overlay.querySelector('.metadata-close-btn').addEventListener('click', close);
+        overlay.querySelector('.metadata-secondary-btn').addEventListener('click', close);
+        overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+        overlay.querySelector('form').addEventListener('submit', event => {
+            event.preventDefault();
+            const normalizedName = input.value.trim() || `Пад ${padIndex + 1}`;
+            const soundData = this.soundEffects.get(padIndex);
+            if (soundData) soundData.name = normalizedName;
+            this.padLabels.set(padIndex, normalizedName);
+            this.updatePadLabel(padIndex);
+            const padStatus = document.getElementById('padStatus');
+            if (padStatus) padStatus.textContent = `Выбран: ${normalizedName}`;
+            this.saveStoredData();
+            close();
+        });
+        document.body.appendChild(overlay);
+        input.focus();
+        input.select();
     }
 
     playSoundEffect(padIndex) {
@@ -3513,16 +3675,17 @@ class TheatreSoundMixer {
             const duration = sound.duration();
             if (duration && duration > 0) this.startPadProgress(padIndex, duration);
 
-            const finish = () => this.finishPadSound(padIndex, soundData, generation, soundId);
+            const finish = () => {
+                ['end', 'stop', 'playerror'].forEach(event => sound.off?.(event, finish, soundId));
+                this.finishPadSound(padIndex, soundData, generation, soundId);
+            };
             sound.once('end', finish, soundId);
             sound.once('stop', finish, soundId);
             sound.once('playerror', finish, soundId);
             this.updateStatus(`Эффект: ${soundData.name}`, 'success');
         } catch {
-            // Play failed — force-clear pad state since no soundId was generated
-            this.padActiveSoundIds.delete(padIndex);
-            this.stopPadProgress(padIndex);
-            pad?.classList.remove('playing');
+            // An earlier overlapping effect may still be playing.
+            this.finishPadSound(padIndex, soundData, generation);
             this.updateStatus('Ошибка воспроизведения эффекта', 'error');
         }
     }
@@ -3719,10 +3882,6 @@ class TheatreSoundMixer {
     handleHotkeys(event) {
         const metadataModal = document.querySelector('.metadata-modal-overlay');
         if (metadataModal) {
-            if (event.code === 'Escape') {
-                event.preventDefault();
-                metadataModal.remove();
-            }
             return;
         }
 
@@ -3730,8 +3889,16 @@ class TheatreSoundMixer {
         const tagName = event.target?.tagName;
         if (tagName === 'INPUT' || tagName === 'TEXTAREA' || event.target?.isContentEditable) return;
 
+        if (event.code === 'Tab') return;
+        if (event.shiftKey && (event.code === 'KeyA' || event.code === 'KeyB')) {
+            event.preventDefault();
+            this.setActiveDeck(event.code === 'KeyA' ? 'A' : 'B');
+            return;
+        }
+        if (event.code === 'Space' && event.target?.closest?.('button, [role="button"], select')) return;
+
         const repeatedTriggerKeys = new Set([
-            'Tab', 'Space', 'Escape', 'KeyM', 'Digit0', 'Digit1', 'Digit2', 'Digit3', 'Digit4',
+            'Space', 'Escape', 'KeyM', 'Digit0', 'Digit1', 'Digit2', 'Digit3', 'Digit4',
             'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Minus', 'Equal',
             'Numpad0', 'Numpad1', 'Numpad2', 'Numpad3', 'Numpad4', 'Numpad5',
             'Numpad6', 'Numpad7', 'Numpad8', 'Numpad9'
@@ -3742,10 +3909,6 @@ class TheatreSoundMixer {
         }
 
         switch (event.code) {
-            case 'Tab':
-                event.preventDefault();
-                this.setActiveDeck(this.activeDeck === 'A' ? 'B' : 'A');
-                break;
             case 'Space':
                 event.preventDefault();
                 if (this.isPlaying && !this.isPaused) {
@@ -3879,6 +4042,7 @@ class TheatreSoundMixer {
     }
 
     saveStoredData() {
+        if (this.restoringStoredData) return;
         if (this._saveStoredDataTimeout) {
             clearTimeout(this._saveStoredDataTimeout);
         }
@@ -3897,6 +4061,7 @@ class TheatreSoundMixer {
     }
 
     _writeStoredData() {
+        if (this.restoringStoredData) return;
         const data = {
             soundEffects: Array.from(this.soundEffects.entries())
                 .filter(([, soundData]) => typeof soundData?.path === 'string' && soundData.path)
@@ -3913,7 +4078,17 @@ class TheatreSoundMixer {
             deckCrossfadeEnabled: this.deckCrossfadeEnabled,
             crossfadeDuration: this.crossfadeDuration,
             viewMode: this.viewMode,
-            activeDeck: this.activeDeck
+            activeDeck: this.activeDeck,
+            musicFolder: this.config?.musicFolder,
+            decks: Object.fromEntries(['A', 'B'].map(deckId => {
+                const deck = this.decks[deckId];
+                return [deckId, {
+                    playlist: deck.playlist,
+                    trackOrder: deck.tracks.map(track => track.path),
+                    currentTrackPath: deck.tracks[deck.currentTrackIndex]?.path,
+                    filterQuery: deck.filterQuery
+                }];
+            }))
         };
         try {
             localStorage.setItem('theatreSoundMixer', JSON.stringify(data));
@@ -3923,6 +4098,7 @@ class TheatreSoundMixer {
     }
 
     async loadStoredData() {
+        this.restoringStoredData = true;
         try {
             const stored = localStorage.getItem('theatreSoundMixer');
             if (!stored) return;
@@ -3980,7 +4156,36 @@ class TheatreSoundMixer {
                     });
                 }
             }
-        } catch {}
+            if (data.musicFolder === this.config?.musicFolder && data.decks && typeof data.decks === 'object') {
+                await Promise.all(['A', 'B'].map(async deckId => {
+                    const saved = data.decks[deckId];
+                    if (typeof saved?.playlist?.path !== 'string') return;
+                    const requestId = ++this.playlistRequestId[deckId];
+                    try {
+                        const result = await window.electronAPI.getPlaylistTracks(saved.playlist.path);
+                        if (requestId !== this.playlistRequestId[deckId] || !result.success || !Array.isArray(result.data)) return;
+                        const deck = this.decks[deckId];
+                        deck.playlist = saved.playlist;
+                        const ranks = new Map((Array.isArray(saved.trackOrder) ? saved.trackOrder : []).map((path, index) => [path, index]));
+                        deck.tracks = result.data.sort((a, b) => (ranks.get(a.path) ?? Infinity) - (ranks.get(b.path) ?? Infinity));
+                        deck.currentTrackIndex = Math.max(0, deck.tracks.findIndex(track => track.path === saved.currentTrackPath));
+                        deck.filterQuery = typeof saved.filterQuery === 'string' ? saved.filterQuery : '';
+                        const search = document.getElementById(`trackSearchInput${deckId}`);
+                        if (search) search.value = deck.filterQuery;
+                    } catch (error) {
+                        CAS_LOGGER.warn(`Не удалось восстановить деку ${deckId}:`, error.message);
+                    }
+                }));
+                const deck = this.decks[this.activeDeck];
+                if (deck.tracks.length && !this.musicPlayer) {
+                    this.loadTrack(deck.currentTrackIndex, { deckId: this.activeDeck });
+                }
+            }
+        } catch (error) {
+            CAS_LOGGER.warn('Не удалось восстановить настройки:', error.message);
+        } finally {
+            this.restoringStoredData = false;
+        }
     }
 
     updateStatus(message, type = 'info') {
@@ -4014,11 +4219,14 @@ class TheatreSoundMixer {
         grid.innerHTML = '';
         
         for (let i = 0; i < 12; i++) {
-            const pad = document.createElement('div');
+            const pad = document.createElement('button');
+            pad.type = 'button';
             pad.className = 'sound-pad';
             pad.textContent = this.getPadDisplayName(i);
             pad.dataset.index = i;
             pad.dataset.key = i + 1;
+            pad.setAttribute('aria-label', `Пэд ${i + 1}: ${this.getPadLabel(i)}`);
+            pad.addEventListener('focus', () => this.selectPad(i));
             
             pad.addEventListener('click', () => this.playSoundEffect(i));
             pad.addEventListener('contextmenu', (e) => {

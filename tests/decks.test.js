@@ -198,8 +198,13 @@ test('setActiveDeck refreshes cued track display and waveform when playback is s
     let waveformTrack = null;
     mixer.updateCurrentTrackDisplay = (track) => { displayedTrack = track; };
     mixer.loadWaveformForTrack = (track) => { waveformTrack = track; };
+    mixer.loadTrack = (index, { deckId }) => {
+        mixer.updateCurrentTrackDisplay(mixer.decks[deckId].tracks[index]);
+        mixer.loadWaveformForTrack(mixer.decks[deckId].tracks[index]);
+    };
     mixer.updateDeckUI = () => {};
     mixer.updatePlaylistSelection = () => {};
+    mixer.highlightCurrentTrack = () => {};
     mixer.updateTrackCounter = () => {};
     mixer.updateStatus = () => {};
     mixer.saveStoredData = () => {};

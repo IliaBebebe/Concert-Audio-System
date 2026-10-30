@@ -20,12 +20,12 @@
   },
   "devDependencies": {
     "@fortawesome/fontawesome-free": "^6.7.2",
-    "electron": "^43.1.0",
+    "electron": "^43.8.4",
     "electron-builder": "^26.15.3",
     "howler": "^2.2.4"
   },
   "dependencies": {
-    "music-metadata": "^11.13.0"
+    "music-metadata": "^11.16.1"
   },
   "engines": {
     "node": ">=22.12.0"

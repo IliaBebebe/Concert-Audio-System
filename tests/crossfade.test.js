@@ -135,7 +135,7 @@ test('shouldCrossfadeTo returns false when music is paused, stopped, or duration
     assert.strictEqual(mixer.shouldCrossfadeTo('A', 1), false);
 });
 
-test('playMusic with force: true starts new player even if isPlaying is true', () => {
+test('playMusic starts a new player and prevents duplicate pending starts even with force', () => {
     const mixer = createMockMixer();
     let playCallCount = 0;
     mixer.musicPlayer = {
@@ -155,9 +155,9 @@ test('playMusic with force: true starts new player even if isPlaying is true', (
     mixer.playMusic();
     assert.strictEqual(playCallCount, 1);
 
-    // Calling playMusic with force: true also plays
+    // A second call must not enqueue another sound while the first is pending.
     mixer.playMusic({ force: true });
-    assert.strictEqual(playCallCount, 2);
+    assert.strictEqual(playCallCount, 1);
 });
 
 test('pauseMusic cleans up retiring crossfade players immediately', () => {
