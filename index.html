@@ -188,11 +188,18 @@
                             <span class="volume-value" id="musicVolumeValue">70%</span>
                         </div>
                         <div class="volume-slider-container vertical">
-                            <input type="range" class="volume-slider vertical" id="musicVolume" min="0" max="100" value="70" orient="vertical" aria-label="Громкость музыки">
-                            <div class="vu-meter-container vertical">
-                                <div class="vu-meter" id="musicVuMeter">
-                                    <div class="vu-bar"></div>
+                            <div class="channel-fader">
+                                <div class="fader-ticks" aria-hidden="true"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div>
+                                <input type="range" class="volume-slider vertical" id="musicVolume" min="0" max="100" value="70" step="1" aria-label="Громкость музыки">
+                            </div>
+                            <div class="channel-meter">
+                                <div class="meter-scale" aria-hidden="true"><span>0</span><span>−6</span><span>−18</span><span>−36</span><span>−60</span></div>
+                                <div class="vu-meter-container vertical">
+                                    <div class="vu-meter" id="musicVuMeter" title="Пиковый уровень музыки: от −60 до 0 dBFS" aria-hidden="true">
+                                        <div class="vu-bar"></div><div class="vu-peak" hidden></div><span class="vu-clip">CLIP</span>
+                                    </div>
                                 </div>
+                                <span class="meter-reading" title="Пиковый уровень, dBFS"><span id="musicLevelValue">−∞</span> <small>dBFS</small></span>
                             </div>
                         </div>
                     </div>
@@ -204,11 +211,18 @@
                             <span class="volume-value" id="effectsVolumeValue">70%</span>
                         </div>
                         <div class="volume-slider-container vertical">
-                            <input type="range" class="volume-slider vertical" id="effectsVolume" min="0" max="100" value="70" orient="vertical" aria-label="Громкость эффектов">
-                            <div class="vu-meter-container vertical">
-                                <div class="vu-meter" id="effectsVuMeter">
-                                    <div class="vu-bar"></div>
+                            <div class="channel-fader">
+                                <div class="fader-ticks" aria-hidden="true"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div>
+                                <input type="range" class="volume-slider vertical" id="effectsVolume" min="0" max="100" value="70" step="1" aria-label="Громкость эффектов">
+                            </div>
+                            <div class="channel-meter">
+                                <div class="meter-scale" aria-hidden="true"><span>0</span><span>−6</span><span>−18</span><span>−36</span><span>−60</span></div>
+                                <div class="vu-meter-container vertical">
+                                    <div class="vu-meter" id="effectsVuMeter" title="Пиковый уровень эффектов: от −60 до 0 dBFS" aria-hidden="true">
+                                        <div class="vu-bar"></div><div class="vu-peak" hidden></div><span class="vu-clip">CLIP</span>
+                                    </div>
                                 </div>
+                                <span class="meter-reading" title="Пиковый уровень, dBFS"><span id="effectsLevelValue">−∞</span> <small>dBFS</small></span>
                             </div>
                         </div>
                     </div>

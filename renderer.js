@@ -35,6 +35,44 @@ const CAS_LOGGER = {
     error(...args) { console.error('[CAS]', ...args); }
 };
 
+// Sample-peak meter: 0 dBFS is full scale; the visible range is -60..0 dBFS.
+class CASPeakMeter {
+    constructor() { this.reset(); }
+
+    reset() {
+        this.levelDb = -60;
+        this.peakDb = -60;
+        this.holdUntil = 0;
+        this.clipUntil = 0;
+        this.lastTime = null;
+    }
+
+    update(samples, now) {
+        let peak = 0;
+        for (const sample of samples) {
+            if (Number.isFinite(sample)) peak = Math.max(peak, Math.abs(sample));
+        }
+        const db = peak > 0 ? 20 * Math.log10(peak) : -Infinity;
+        const seconds = this.lastTime === null ? 0 : Math.max(0, (now - this.lastTime) / 1000);
+        this.lastTime = now;
+        this.levelDb = Math.min(0, Math.max(-60, db, this.levelDb - 24 * seconds));
+        if (db >= this.peakDb) {
+            this.peakDb = Math.min(0, db);
+            this.holdUntil = now + 1000;
+        } else if (now > this.holdUntil) {
+            const releaseSeconds = Math.min(seconds, (now - this.holdUntil) / 1000);
+            this.peakDb = Math.max(-60, this.levelDb, this.peakDb - 24 * releaseSeconds);
+        }
+        if (peak >= 1) this.clipUntil = now + 1000;
+        return {
+            level: (this.levelDb + 60) / 60,
+            peak: (this.peakDb + 60) / 60,
+            db: this.levelDb,
+            clipping: this.clipUntil > now
+        };
+    }
+}
+
 class CASDeckManager {
     constructor() {
         this.decks = {
@@ -182,10 +220,6 @@ class TheatreSoundMixer {
         
         // VU-метры
         this.vuMeterInterval = null;
-        this.lastMusicLevel = 0;
-        this.lastEffectsLevel = 0;
-        this.musicVuBar = null;
-        this.effectsVuBar = null;
         this.audioContext = null;
         this.musicAnalyser = null;
         this.effectsAnalyser = null;
@@ -339,9 +373,17 @@ class TheatreSoundMixer {
     }
     
     initVuMeters() {
-        // Кэшируем ссылки на DOM элементы
-        this.musicVuBar = document.querySelector('#musicVuMeter .vu-bar');
-        this.effectsVuBar = document.querySelector('#effectsVuMeter .vu-bar');
+        this.levelMeters = {};
+        this.meterDisplays = {};
+        for (const type of ['music', 'effects']) {
+            const meter = document.getElementById(`${type}VuMeter`);
+            this.levelMeters[type] = new CASPeakMeter();
+            this.meterDisplays[type] = {
+                meter,
+                peak: meter?.querySelector('.vu-peak'),
+                readout: document.getElementById(`${type}LevelValue`)
+            };
+        }
         this.setupAudioAnalysers();
         this.startVuMeters();
     }
@@ -356,16 +398,27 @@ class TheatreSoundMixer {
 
         const createAnalyser = () => {
             const analyser = this.audioContext.createAnalyser();
-            analyser.fftSize = 1024;
-            analyser.smoothingTimeConstant = 0.72;
+            analyser.fftSize = 2048;
             analyser.connect(this.audioContext.destination);
             return analyser;
         };
 
         this.musicAnalyser = this.musicAnalyser || createAnalyser();
         this.effectsAnalyser = this.effectsAnalyser || createAnalyser();
-        this.musicAnalyserData = this.musicAnalyserData || new Uint8Array(this.musicAnalyser.fftSize);
-        this.effectsAnalyserData = this.effectsAnalyserData || new Uint8Array(this.effectsAnalyser.fftSize);
+        this.meterChannels ||= {};
+        for (const type of ['music', 'effects']) {
+            if (this.meterChannels[type]) continue;
+            // Read L/R separately: a mono downmix would hide opposite-phase stereo peaks.
+            const splitter = this.audioContext.createChannelSplitter(2);
+            this[`${type}Analyser`].connect(splitter);
+            this.meterChannels[type] = [0, 1].map(channel => {
+                const analyser = this.audioContext.createAnalyser();
+                analyser.fftSize = 2048;
+                splitter.connect(analyser, channel);
+                return analyser;
+            });
+            this[`${type}AnalyserData`] = new Float32Array(4096);
+        }
     }
 
     resumeAudioContext() {
@@ -429,7 +482,7 @@ class TheatreSoundMixer {
         
         this.vuMeterInterval = setInterval(() => {
             this.updateVuMeters();
-        }, 100);
+        }, 33);
     }
     
     pauseVuMeters() {
@@ -438,25 +491,23 @@ class TheatreSoundMixer {
             this.vuMeterInterval = null;
         }
 
-        if (this.musicVuBar) this.musicVuBar.style.height = '0%';
-        if (this.effectsVuBar) this.effectsVuBar.style.height = '0%';
+        for (const type of ['music', 'effects']) {
+            this.levelMeters?.[type]?.reset();
+            this.renderLevelMeter(type, { level: 0, peak: 0, db: -60, clipping: false });
+        }
+    }
+
+    renderLevelMeter(type, reading) {
+        const display = this.meterDisplays?.[type];
+        if (!display?.meter) return;
+        display.meter.style.setProperty('--meter-level', `${reading.level * 100}%`);
+        display.meter.style.setProperty('--meter-peak', `${reading.peak * 100}%`);
+        display.meter.dataset.clipping = String(reading.clipping);
+        if (display.peak) display.peak.hidden = reading.peak <= 0;
+        if (display.readout) display.readout.textContent = reading.db <= -60 ? '−∞' : reading.db.toFixed(1);
     }
 
     updateVuMeters() {
-        const getLevel = (analyser, buffer) => {
-            if (!analyser || !buffer || this.audioContext?.state !== 'running') return 0;
-            analyser.getByteTimeDomainData(buffer);
-
-            let sum = 0;
-            for (let i = 0; i < buffer.length; i++) {
-                const centered = (buffer[i] - 128) / 128;
-                sum += centered * centered;
-            }
-
-            const rms = Math.sqrt(sum / buffer.length);
-            return Math.min(1, rms * 3.8);
-        };
-
         this.connectHowlToAnalyser(this.musicPlayer, 'music');
         this.retiringMusicPlayers.forEach((player) => this.connectHowlToAnalyser(player, 'music'));
         this.soundEffects.forEach((soundData) => this.connectHowlToAnalyser(soundData?.sound, 'effects'));
@@ -464,22 +515,20 @@ class TheatreSoundMixer {
         const hasRetiringMusic = Array.from(this.retiringMusicPlayers).some((player) => {
             try { return player?.playing(); } catch { return false; }
         });
-        const musicTarget = (this.isPlaying && !this.isPaused) || hasRetiringMusic
-            ? getLevel(this.musicAnalyser, this.musicAnalyserData)
-            : 0;
-        const effectsTarget = Array.from(this.soundEffects.values()).some((soundData) => soundData?.sound?.playing())
-            ? getLevel(this.effectsAnalyser, this.effectsAnalyserData)
-            : 0;
-
-        this.lastMusicLevel = Math.max(musicTarget, this.lastMusicLevel * 0.82);
-        this.lastEffectsLevel = Math.max(effectsTarget, this.lastEffectsLevel * 0.78);
-
-        if (this.musicVuBar) {
-            this.musicVuBar.style.height = `${Math.round(this.lastMusicLevel * 100)}%`;
-        }
-
-        if (this.effectsVuBar) {
-            this.effectsVuBar.style.height = `${Math.round(this.lastEffectsLevel * 100)}%`;
+        const active = {
+            music: (this.isPlaying && !this.isPaused) || hasRetiringMusic,
+            effects: Array.from(this.soundEffects.values()).some((soundData) => soundData?.sound?.playing())
+        };
+        const now = performance.now();
+        for (const type of ['music', 'effects']) {
+            const buffer = this[`${type}AnalyserData`];
+            const channels = this.meterChannels?.[type];
+            if (!buffer || !this.levelMeters?.[type]) continue;
+            if (active[type] && channels && this.audioContext?.state === 'running') {
+                channels.forEach((analyser, channel) => analyser.getFloatTimeDomainData(buffer.subarray(channel * 2048, (channel + 1) * 2048)));
+            }
+            else buffer.fill(0);
+            this.renderLevelMeter(type, this.levelMeters[type].update(buffer, now));
         }
     }
 
@@ -4542,6 +4591,7 @@ if (typeof module !== 'undefined' && module.exports) {
         CAS_CONFIG,
         CAS_LOGGER,
         CASDeckManager,
+        CASPeakMeter,
         TheatreSoundMixer
     };
 }
