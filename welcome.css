@@ -14,7 +14,7 @@ body {
     background: #272727; border: 1px solid #ffffff16; border-radius: 16px;
     box-shadow: 0 16px 48px #0004; -webkit-app-region: drag;
 }
-.logo { display: block; width: 192px; max-width: 85%; height: auto; margin: 0 auto 12px; border-radius: 6px; }
+.logo { display: block; width: 192px; max-width: 85%; height: 92px; object-fit: cover; object-position: center 32%; margin: 0 auto 12px; }
 .title { margin: 0; font-size: 18px; line-height: 28px; font-weight: 700; letter-spacing: 0; }
 .welcome-subtitle { margin: 8px auto 24px; max-width: 340px; color: #a6a6ad; font-size: 14px; line-height: 20px; text-wrap: pretty; }
 .button-container { display: flex; justify-content: center; }
