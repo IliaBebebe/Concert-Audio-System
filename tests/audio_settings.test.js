@@ -293,3 +293,127 @@ test('audioSettings persistence: round-trip serialization saves and restores use
     assert.equal(freshMixer.audioSettings.trimSilenceEnabled, false, 'Restored trimSilenceEnabled matches saved');
 });
 
+test('drawWaveform: renders inactive silence regions in gray and active audio in blue gradient', () => {
+    const mixer = Object.create(TheatreSoundMixer.prototype);
+    mixer.audioSettings = {
+        trimSilenceEnabled: true,
+        trimSilenceStart: true,
+        trimSilenceEnd: true
+    };
+    mixer.silenceBoundsCache = new Map();
+    mixer.currentWaveformTrack = {
+        path: '/test/track.mp3',
+        duration: 100,
+        silenceBounds: { startSec: 10, endSec: 90, duration: 100 }
+    };
+    mixer.waveformPeaks = [0.1, 0.2, 0.5, 0.8, 0.9, 0.8, 0.5, 0.2, 0.1, 0.05];
+    mixer.getWaveformPeaksForWidth = () => mixer.waveformPeaks;
+
+    const fillStylesRecorded = [];
+    const mockContext = {
+        createLinearGradient: (x0, y0, x1, y1) => {
+            const grad = { stops: [], addColorStop(pos, col) { this.stops.push({ pos, col }); } };
+            return grad;
+        },
+        clearRect: () => {},
+        fillRect: (x, y, w, h) => {
+            fillStylesRecorded.push(mockContext.fillStyle);
+        },
+        beginPath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        stroke: () => {}
+    };
+
+    const mockCanvas = {
+        getBoundingClientRect: () => ({ width: 1000, height: 100 }),
+        width: 1000,
+        height: 100,
+        getContext: () => mockContext
+    };
+
+    // Mock global document
+    global.document = {
+        getElementById: (id) => (id === 'trackWaveform' ? mockCanvas : null)
+    };
+
+    try {
+        mixer.drawWaveform();
+        // Peaks at 0 (frac 0.05 < 0.10) and peak at 9 (frac 0.95 > 0.90) are inactive!
+        // Middle peaks are active.
+        const uniqueGradients = new Set(fillStylesRecorded.filter(f => typeof f === 'object'));
+        assert.equal(uniqueGradients.size, 2, 'Uses both inactive and active gradients for peaks');
+
+        // Now test with trimSilenceEnabled = false
+        mixer.audioSettings.trimSilenceEnabled = false;
+        fillStylesRecorded.length = 0;
+        mixer.drawWaveform();
+        const noTrimGradients = new Set(fillStylesRecorded.filter(f => typeof f === 'object'));
+        assert.equal(noTrimGradients.size, 1, 'Uses only active gradient when silence trim is disabled');
+    } finally {
+        delete global.document;
+    }
+});
+
+test('updateTimeDisplays: stage ending warning alerts at <=15s and <=5s thresholds', () => {
+    const mixer = Object.create(TheatreSoundMixer.prototype);
+    mixer.audioSettings = { trimSilenceEnabled: false };
+    mixer.isPlaying = true;
+    mixer.isPaused = false;
+    mixer.formatTime = (sec) => {
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    };
+
+    const remainingClasses = new Set();
+    const remainingEl = {
+        textContent: '',
+        classList: {
+            add: (...cls) => cls.forEach(c => remainingClasses.add(c)),
+            remove: (...cls) => cls.forEach(c => remainingClasses.delete(c)),
+            contains: (c) => remainingClasses.has(c)
+        }
+    };
+    const currentEl = { textContent: '' };
+    const totalEl = { textContent: '' };
+
+    global.document = {
+        getElementById: (id) => {
+            if (id === 'remainingTimeDisplay') return remainingEl;
+            if (id === 'currentTimeDisplay') return currentEl;
+            if (id === 'totalTimeDisplay') return totalEl;
+            return null;
+        },
+        querySelectorAll: () => []
+    };
+
+    try {
+        // Track duration 100, seek 80 -> remaining 20s (normal)
+        const mockPlayer1 = { duration: () => 100, seek: () => 80 };
+        mixer.updateTimeDisplays(mockPlayer1);
+        assert.equal(remainingClasses.has('warning'), false);
+        assert.equal(remainingClasses.has('danger'), false);
+
+        // Seek 88 -> remaining 12s (stage ending warning)
+        const mockPlayer2 = { duration: () => 100, seek: () => 88 };
+        mixer.updateTimeDisplays(mockPlayer2);
+        assert.equal(remainingClasses.has('warning'), true);
+        assert.equal(remainingClasses.has('ending-warning'), true);
+        assert.equal(remainingClasses.has('danger'), false);
+
+        // Seek 97 -> remaining 3s (critical stage ending alert)
+        const mockPlayer3 = { duration: () => 100, seek: () => 97 };
+        mixer.updateTimeDisplays(mockPlayer3);
+        assert.equal(remainingClasses.has('danger'), true);
+        assert.equal(remainingClasses.has('ending-critical'), true);
+        assert.equal(remainingClasses.has('warning'), false);
+
+        // Pause or stop clears warning
+        mixer.clearRemainingTimeWarning();
+        assert.equal(remainingClasses.size, 0, 'clearRemainingTimeWarning clears all alert classes');
+    } finally {
+        delete global.document;
+    }
+});
+

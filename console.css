@@ -846,6 +846,56 @@ button:active:not(:disabled) { filter: brightness(0.92); }
 .time-display { justify-content: flex-start; gap: 4px; margin-bottom: 8px; font-family: inherit; font-size: 12px; font-variant-numeric: tabular-nums; }
 .time-display span { background: transparent; border: 0; padding: 0; min-width: 0; }
 .time-display span:last-child { margin-left: auto; color: var(--text-muted); }
+.time-display span#remainingTimeDisplay.warning,
+.time-display span#remainingTimeDisplay.is-warning,
+.time-display span#remainingTimeDisplay.ending-warning {
+    margin-left: auto;
+    color: #ff9f0a !important;
+    font-weight: 700;
+    text-shadow: 0 0 8px rgba(255, 159, 10, 0.7), 0 0 16px rgba(255, 159, 10, 0.35);
+    background: rgba(255, 159, 10, 0.14) !important;
+    padding: 1px 7px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 159, 10, 0.4);
+    animation: stageEndingPulse 1.2s ease-in-out infinite alternate;
+}
+.time-display span#remainingTimeDisplay.danger,
+.time-display span#remainingTimeDisplay.is-critical,
+.time-display span#remainingTimeDisplay.ending-critical {
+    margin-left: auto;
+    color: #ff453a !important;
+    font-weight: 800;
+    text-shadow: 0 0 10px rgba(255, 69, 58, 0.85), 0 0 20px rgba(255, 69, 58, 0.5);
+    background: rgba(255, 69, 58, 0.18) !important;
+    padding: 1px 7px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 69, 58, 0.5);
+    animation: stageEndingPulseFast 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes stageEndingPulse {
+    0% {
+        opacity: 0.85;
+        text-shadow: 0 0 4px rgba(255, 159, 10, 0.4);
+    }
+    100% {
+        opacity: 1;
+        text-shadow: 0 0 12px rgba(255, 159, 10, 0.9), 0 0 22px rgba(255, 159, 10, 0.45);
+    }
+}
+
+@keyframes stageEndingPulseFast {
+    0% {
+        opacity: 0.82;
+        transform: scale(0.98);
+        text-shadow: 0 0 6px rgba(255, 69, 58, 0.55);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1.02);
+        text-shadow: 0 0 14px rgba(255, 69, 58, 1), 0 0 26px rgba(255, 69, 58, 0.65);
+    }
+}
 .waveform-panel { height: 64px; min-height: 48px; margin-bottom: 8px; border-color: var(--border-primary); border-radius: 4px; background: #181818; box-shadow: none; }
 .waveform-panel::before { display: none; }
 .waveform-state { font-family: inherit; font-size: 12px; letter-spacing: 0; text-transform: none; }

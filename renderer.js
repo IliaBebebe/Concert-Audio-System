@@ -224,6 +224,7 @@ class TheatreSoundMixer {
         this.waveformCache = new Map();
         this.waveformRequestId = 0;
         this.waveformPeaks = [];
+        this.currentWaveformTrack = null;
         this.waveformResizeObserver = null;
         
         // Режимы воспроизведения
@@ -3498,6 +3499,7 @@ class TheatreSoundMixer {
             this.crossfadeTimers.forEach((timer) => clearTimeout(timer));
             this.crossfadeTimers.clear();
             this.isCrossfading = false;
+            this.clearRemainingTimeWarning();
             this.updateDeckUI();
         }
     }
@@ -3644,7 +3646,16 @@ class TheatreSoundMixer {
         this.progressAnimationFrame = frameId;
     }
 
+    clearRemainingTimeWarning() {
+        if (typeof document === 'undefined') return;
+        const remainingDisplay = document.getElementById('remainingTimeDisplay');
+        if (remainingDisplay) {
+            remainingDisplay.classList.remove('warning', 'danger', 'is-warning', 'is-critical', 'ending-warning', 'ending-critical');
+        }
+    }
+
     updateTimeDisplays(player = this.musicPlayer) {
+        if (typeof document === 'undefined') return;
         if (player) {
             try {
                 const seek = player.seek();
@@ -3653,7 +3664,11 @@ class TheatreSoundMixer {
                 if (!isNaN(seek) && !isNaN(duration) && duration > 0) {
                     const currentTime = this.formatTime(seek);
                     const totalTime = this.formatTime(duration);
-                    const remaining = Math.max(0, duration - seek);
+                    const effectiveEnd = this.getTrackEffectiveEnd(this.musicPlayerTrack, duration);
+                    const targetEnd = (Number.isFinite(effectiveEnd) && effectiveEnd > 0 && effectiveEnd <= duration)
+                        ? effectiveEnd
+                        : duration;
+                    const remaining = Math.max(0, targetEnd - seek);
                     const remainingTime = `-${this.formatTime(remaining)}`;
                     
                     if (!this._cachedTimeDisplays) {
@@ -3677,11 +3692,13 @@ class TheatreSoundMixer {
                     if (displays.total) displays.total.textContent = totalTime;
                     if (displays.remaining) {
                         displays.remaining.textContent = remainingTime;
-                        displays.remaining.classList.remove('warning', 'danger');
-                        if (remaining <= 10) {
-                            displays.remaining.classList.add('danger');
-                        } else if (remaining <= 30) {
-                            displays.remaining.classList.add('warning');
+                        displays.remaining.classList.remove('warning', 'danger', 'is-warning', 'is-critical', 'ending-warning', 'ending-critical');
+                        
+                        const isPlaying = this.isPlaying && !this.isPaused && remaining > 0;
+                        if (isPlaying && remaining <= 5) {
+                            displays.remaining.classList.add('danger', 'is-critical', 'ending-critical');
+                        } else if (isPlaying && remaining <= 15) {
+                            displays.remaining.classList.add('warning', 'is-warning', 'ending-warning');
                         }
                     }
                 }
@@ -3708,7 +3725,7 @@ class TheatreSoundMixer {
         if (totalTimeDisplay) totalTimeDisplay.textContent = '0:00';
         if (remainingTimeDisplay) {
             remainingTimeDisplay.textContent = '-0:00';
-            remainingTimeDisplay.classList.remove('warning', 'danger');
+            this.clearRemainingTimeWarning();
         }
         
         this.lastTimeUpdate = null;
@@ -3754,6 +3771,7 @@ class TheatreSoundMixer {
     }
 
     clearWaveform(message = 'Waveform недоступна') {
+        this.currentWaveformTrack = null;
         this.waveformPeaks = [];
         this.updateWaveformProgress(0);
         const canvas = document.getElementById('trackWaveform');
@@ -3772,6 +3790,7 @@ class TheatreSoundMixer {
             return;
         }
 
+        this.currentWaveformTrack = track;
         const cachedPeaks = this.waveformCache.get(track.path);
         if (cachedPeaks) {
             this.waveformPeaks = cachedPeaks;
@@ -3928,13 +3947,14 @@ class TheatreSoundMixer {
     }
 
     drawWaveform() {
+        if (typeof document === 'undefined') return;
         const canvas = document.getElementById('trackWaveform');
         if (!canvas) return;
 
         const rect = canvas.getBoundingClientRect();
         const width = Math.max(1, Math.floor(rect.width));
         const height = Math.max(1, Math.floor(rect.height));
-        const scale = window.devicePixelRatio || 1;
+        const scale = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
         const targetWidth = Math.floor(width * scale);
         const targetHeight = Math.floor(height * scale);
 
@@ -3952,22 +3972,100 @@ class TheatreSoundMixer {
         const visiblePeaks = this.getWaveformPeaksForWidth(targetWidth, scale);
         if (visiblePeaks.length === 0) return;
 
+        const currentTrack = this.currentWaveformTrack
+            || this.musicPlayerTrack
+            || this.decks[this.playingDeck || this.activeDeck]?.tracks?.[this.decks[this.playingDeck || this.activeDeck]?.currentTrackIndex]
+            || null;
+
+        const bounds = currentTrack?.silenceBounds || (currentTrack?.path ? this.silenceBoundsCache?.get(currentTrack.path) : null);
+        const duration = (this.musicPlayer && this.musicPlayerTrack === currentTrack ? this.musicPlayer.duration() : 0)
+            || bounds?.duration
+            || currentTrack?.duration
+            || 0;
+
+        let startFrac = 0;
+        let endFrac = 1;
+        let hasTrim = false;
+
+        if (currentTrack && duration > 0) {
+            const effectiveStart = this.getTrackEffectiveStart(currentTrack);
+            const effectiveEnd = this.getTrackEffectiveEnd(currentTrack, duration);
+            if (effectiveStart > 0) {
+                startFrac = Math.min(1, Math.max(0, effectiveStart / duration));
+            }
+            if (effectiveEnd > 0 && effectiveEnd < duration) {
+                endFrac = Math.min(1, Math.max(startFrac, effectiveEnd / duration));
+            }
+            hasTrim = (startFrac > 0.002) || (endFrac < 0.998);
+        }
+
+        // Subtly shade inactive trim zones in the background
+        if (hasTrim) {
+            context.fillStyle = 'rgba(0, 0, 0, 0.24)';
+            if (startFrac > 0) {
+                const xStartBoundary = Math.round(startFrac * targetWidth);
+                context.fillRect(0, 0, xStartBoundary, targetHeight);
+            }
+            if (endFrac < 1) {
+                const xEndBoundary = Math.round(endFrac * targetWidth);
+                context.fillRect(xEndBoundary, 0, targetWidth - xEndBoundary, targetHeight);
+            }
+        }
+
         const centerY = targetHeight / 2;
         const pitch = targetWidth / visiblePeaks.length;
         const barGap = pitch >= 4 * scale ? Math.min(1.5 * scale, pitch * 0.28) : Math.max(0, pitch * 0.18);
         const barWidth = Math.max(0.5, pitch - barGap);
-        const gradient = context.createLinearGradient(0, 0, 0, targetHeight);
-        gradient.addColorStop(0, 'rgba(131, 184, 255, 0.88)');
-        gradient.addColorStop(0.5, 'rgba(106, 168, 255, 0.58)');
-        gradient.addColorStop(1, 'rgba(45, 204, 112, 0.62)');
-        context.fillStyle = gradient;
 
+        // Active section gradient: vibrant blue -> cyan -> subtle green accent
+        const activeGradient = context.createLinearGradient(0, 0, 0, targetHeight);
+        activeGradient.addColorStop(0, 'rgba(131, 184, 255, 0.92)');
+        activeGradient.addColorStop(0.5, 'rgba(106, 168, 255, 0.65)');
+        activeGradient.addColorStop(1, 'rgba(45, 204, 112, 0.68)');
+
+        // Inactive trimmed silence sections gradient: muted slate gray
+        const inactiveGradient = context.createLinearGradient(0, 0, 0, targetHeight);
+        inactiveGradient.addColorStop(0, 'rgba(145, 150, 160, 0.42)');
+        inactiveGradient.addColorStop(0.5, 'rgba(120, 125, 135, 0.26)');
+        inactiveGradient.addColorStop(1, 'rgba(105, 110, 120, 0.36)');
+
+        let lastFill = null;
         visiblePeaks.forEach((peak, index) => {
+            const barFrac = (index + 0.5) / visiblePeaks.length;
+            const isInactive = hasTrim && (barFrac < startFrac || barFrac > endFrac);
+            const fill = isInactive ? inactiveGradient : activeGradient;
+
+            if (fill !== lastFill) {
+                context.fillStyle = fill;
+                lastFill = fill;
+            }
+
             const barHeight = Math.max(2 * scale, peak * targetHeight * 0.82);
             const x = index * pitch + barGap / 2;
             const y = centerY - barHeight / 2;
             context.fillRect(x, y, barWidth, barHeight);
         });
+
+        // Boundary lines for trim cut points
+        if (hasTrim) {
+            context.lineWidth = Math.max(1, Math.round(scale));
+            if (startFrac > 0.003) {
+                const xStart = Math.round(startFrac * targetWidth);
+                context.strokeStyle = 'rgba(131, 184, 255, 0.45)';
+                context.beginPath();
+                context.moveTo(xStart + 0.5, 0);
+                context.lineTo(xStart + 0.5, targetHeight);
+                context.stroke();
+            }
+            if (endFrac < 0.997) {
+                const xEnd = Math.round(endFrac * targetWidth);
+                context.strokeStyle = 'rgba(131, 184, 255, 0.45)';
+                context.beginPath();
+                context.moveTo(xEnd + 0.5, 0);
+                context.lineTo(xEnd + 0.5, targetHeight);
+                context.stroke();
+            }
+        }
     }
 
     updateWaveformProgress(progress) {
@@ -4864,6 +4962,7 @@ class TheatreSoundMixer {
                 this.audioSettings.trimSilenceEnabled = e.target.checked;
                 this.syncSettingsUI();
                 this.saveStoredData();
+                this.drawWaveform();
             });
         }
 
@@ -4872,6 +4971,7 @@ class TheatreSoundMixer {
             trimStart.addEventListener('change', (e) => {
                 this.audioSettings.trimSilenceStart = e.target.checked;
                 this.saveStoredData();
+                this.drawWaveform();
             });
         }
 
@@ -4880,6 +4980,7 @@ class TheatreSoundMixer {
             trimEnd.addEventListener('change', (e) => {
                 this.audioSettings.trimSilenceEnd = e.target.checked;
                 this.saveStoredData();
+                this.drawWaveform();
             });
         }
 
@@ -4893,6 +4994,7 @@ class TheatreSoundMixer {
                 this.audioSettings.trimSilenceThreshold = Number(e.target.value);
                 this.silenceBoundsCache.clear();
                 this.saveStoredData();
+                this.drawWaveform();
             });
         }
 
