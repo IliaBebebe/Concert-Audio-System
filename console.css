@@ -74,7 +74,7 @@ button:active:not(:disabled) { filter: brightness(0.92); }
 .header { padding: 4px 0 12px; margin: 0; border: 0; background: transparent; box-shadow: none; }
 .header::after { display: none; }
 /* The original transparent artwork has generous padding; frame it without altering its pixels. */
-.header .logo { display: block; width: 168px; max-width: 90%; max-height: none; height: 80px; object-fit: cover; object-position: center 32%; margin: 0 auto; border-radius: 0; transform: none; box-shadow: none; filter: none; }
+.header .logo { display: block; width: 300px; max-width: 100%; max-height: none; height: auto; aspect-ratio: 2.1; object-fit: cover; object-position: center 32%; margin: 0 auto; border-radius: 0; transform: none; box-shadow: none; filter: none; transition: none; }
 .header .logo:hover { transform: none; filter: none; }
 .section, .tracks-section, .now-playing, .progress-section, .volume-section, .countdown-section, .hotkeys-info {
     background: #272727; border: 1px solid var(--border-primary); border-radius: 8px;
@@ -247,7 +247,7 @@ kbd { padding: 0 4px; border: 1px solid var(--border-secondary); border-radius: 
 @media (max-height: 800px) {
     .left-panel, .right-panel { padding: 12px; gap: 8px; }
     .center-panel { padding: 12px 8px; }
-    .header .logo { width: 144px; height: 68px; }
+    .header .logo { width: 224px; height: auto; }
     .header { padding-bottom: 4px; }
     .sound-pad { height: 48px; min-height: 48px; }
     .section, .now-playing, .progress-section, .volume-section, .countdown-section, .hotkeys-info { padding: 8px; }
@@ -326,3 +326,26 @@ kbd { padding: 0 4px; border: 1px solid var(--border-secondary); border-radius: 
 .workspace-dialog-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 @media (max-width: 1100px) { .workspace-board > .tracks-section { grid-column: 1 / -1; } }
 @media (max-height: 800px) { .workspace-pinned-logo { padding: 12px; } }
+
+/* The sidebar reserves room for the logo and all twelve pads; only the library scrolls. */
+.left-panel { gap: 8px; }
+.left-panel > .header { padding: 0 0 4px; }
+.left-panel > #playlistsSection { flex: 1 1 176px; min-height: 176px; height: auto !important; resize: none; }
+.left-panel > #playlistsSection > h2 { margin-bottom: 8px; padding-bottom: 0; }
+.left-panel > #playlistsSection > .btn-refresh { min-height: 28px; margin-bottom: 8px; }
+.left-panel > #soundPadsSection { flex: 0 0 auto; min-height: 0; height: auto !important; resize: none; overflow: visible; }
+.left-panel > #soundPadsSection .section-header { display: block; padding: 0; margin-bottom: 8px; border: 0; }
+.left-panel > #soundPadsSection .section-header h2 { padding-bottom: 0; }
+.left-panel > #soundPadsSection .pad-status { display: block; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.left-panel > #soundPadsSection .sound-pads-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; height: auto !important; overflow: visible; }
+.left-panel > #soundPadsSection .sound-pad { height: 48px; min-height: 48px; padding: 4px; }
+.left-panel > #soundPadsSection .pads-controls { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 8px; }
+.left-panel > #soundPadsSection .pads-btn { min-height: 28px; padding: 4px; }
+.left-panel > #soundPadsSection .pad-action-label { display: none; }
+.left-panel > #soundPadsSection .pads-btn .fas { margin: 0; }
+@media (max-height: 800px) {
+    .left-panel > #playlistsSection { flex-basis: 160px; min-height: 160px; }
+    .left-panel > #soundPadsSection .sound-pad { height: 40px; min-height: 40px; }
+}
+.workspace-board-hint { min-height: 144px; }
+@media (max-height: 800px) { .workspace-board-hint { min-height: 112px; } }
