@@ -1844,7 +1844,8 @@ class TheatreSoundMixer {
             name.className = 'playlist-title';
             name.textContent = playlist.name;
             const count = document.createElement('small');
-            count.textContent = `(${playlist.trackCount} треков)`;
+            count.className = 'playlist-track-count';
+            count.textContent = `${playlist.trackCount} треков`;
             btn.append(icon, name, count);
             btn.addEventListener('click', () => this.loadPlaylist(playlist));
             container.appendChild(btn);
@@ -1924,31 +1925,42 @@ class TheatreSoundMixer {
             let deckBadge = button.querySelector('.playlist-deck-badge');
             const isDeckA = btnPath === pathA;
             const isDeckB = btnPath === pathB;
+            const trackCountEl = button.querySelector('small, .playlist-track-count');
+
+            const placeBadgeBeforeCount = (badge) => {
+                if (trackCountEl) {
+                    if (badge.nextSibling !== trackCountEl) {
+                        button.insertBefore(badge, trackCountEl);
+                    }
+                } else if (!badge.parentElement) {
+                    button.appendChild(badge);
+                }
+            };
 
             if (isDeckA && isDeckB) {
                 if (!deckBadge) {
                     deckBadge = document.createElement('span');
                     deckBadge.className = 'playlist-deck-badge';
-                    button.appendChild(deckBadge);
                 }
                 deckBadge.textContent = 'A+B';
                 deckBadge.className = 'playlist-deck-badge';
+                placeBadgeBeforeCount(deckBadge);
             } else if (isDeckA) {
                 if (!deckBadge) {
                     deckBadge = document.createElement('span');
                     deckBadge.className = 'playlist-deck-badge';
-                    button.appendChild(deckBadge);
                 }
                 deckBadge.textContent = 'A';
                 deckBadge.className = 'playlist-deck-badge';
+                placeBadgeBeforeCount(deckBadge);
             } else if (isDeckB) {
                 if (!deckBadge) {
                     deckBadge = document.createElement('span');
                     deckBadge.className = 'playlist-deck-badge deck-b';
-                    button.appendChild(deckBadge);
                 }
                 deckBadge.textContent = 'B';
                 deckBadge.className = 'playlist-deck-badge deck-b';
+                placeBadgeBeforeCount(deckBadge);
             } else if (deckBadge) {
                 deckBadge.remove();
             }
