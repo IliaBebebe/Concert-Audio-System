@@ -405,18 +405,286 @@ button:active:not(:disabled) { filter: brightness(0.92); }
 .control-btn:hover, .stop-btn:hover { background: #414141; box-shadow: none; transform: none; }
 .play-btn { background: #356953; border-color: #72bfab60; color: #e2f4ec; }
 .play-btn:hover { background: #427c63; box-shadow: none; transform: none; }
-.playback-settings { margin-top: 0; padding-top: 12px; border-top-color: var(--border-primary); }
-.playback-settings h3 { margin-bottom: 8px; }
-.playback-options.compact { gap: 4px; }
-.radio-label { border-radius: 4px; background: #1f1f1f; padding: 8px; }
-.radio-text { font-size: 12px; letter-spacing: 0; text-transform: none; }
-.radio-custom { width: 12px; height: 12px; min-width: 12px; box-shadow: none; border-width: 1px; }
-.radio-label input:checked + .radio-custom { box-shadow: none; }
-.crossfade-settings { padding: 12px 0 0; margin-top: 8px; border-color: var(--border-primary); gap: 12px; }
-.crossfade-toggle { font-size: 12px; letter-spacing: 0; text-transform: none; }
-.toggle-switch { background: #414141; border: 0; box-shadow: none; }
-.crossfade-toggle input:checked + .toggle-switch, .crossfade-decks-toggle input:checked + .toggle-switch { background: #638fc8; box-shadow: none; }
-.crossfade-duration span { font-family: inherit; font-size: 12px; }
+/* --- macOS Playback & Crossfade Settings --- */
+.playback-settings {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+}
+
+.playback-settings h3 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #8e8e93;
+    margin-bottom: 8px;
+}
+
+.playback-settings h3 i {
+    font-size: 11px;
+    color: #0a84ff;
+}
+
+.playback-options.compact {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+    padding: 2px;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 7px;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.radio-label:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.radio-label:has(input:checked) {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.radio-text {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: #a1a1aa;
+    letter-spacing: 0;
+    text-transform: none;
+    transition: color 0.15s ease;
+}
+
+.radio-label input:checked ~ .radio-text {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.radio-custom {
+    width: 10px;
+    height: 10px;
+    min-width: 10px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.35);
+    background: transparent;
+    box-shadow: none;
+    position: relative;
+    transition: all 0.15s ease;
+}
+
+.radio-label input:checked + .radio-custom {
+    border-color: #0a84ff;
+    background: #0a84ff;
+    box-shadow: none;
+}
+
+.radio-label input:checked + .radio-custom::after {
+    content: "";
+    width: 4px;
+    height: 4px;
+    background: #ffffff;
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.crossfade-settings {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 8px;
+    padding: 7px 10px;
+    min-height: 38px;
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 7px;
+    box-sizing: border-box;
+}
+
+.crossfade-toggles {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: 0 0 auto;
+}
+
+.crossfade-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: #c7c7cc;
+    letter-spacing: 0;
+    text-transform: none;
+    margin: 0;
+    transition: color 0.15s ease;
+}
+
+.crossfade-toggle:hover {
+    color: #ffffff;
+}
+
+.crossfade-toggle input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+/* macOS Toggle Switch inside crossfade-toggle */
+.crossfade-toggle .toggle-switch,
+.toggle-switch {
+    width: 32px;
+    height: 18px;
+    border-radius: 999px;
+    background: #39393d;
+    border: none;
+    position: relative;
+    flex: 0 0 32px;
+    transition: background-color 0.2s cubic-bezier(0.2, 0.8, 0.3, 1);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.crossfade-toggle .toggle-switch::after,
+.toggle-switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.3, 1), background-color 0.2s ease;
+}
+
+.crossfade-toggle input:checked + .toggle-switch,
+.crossfade-decks-toggle input:checked + .toggle-switch {
+    background: #34c759 !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+
+.crossfade-toggle input:checked + .toggle-switch::after,
+.crossfade-decks-toggle input:checked + .toggle-switch::after {
+    transform: translateX(14px) !important;
+    background: #ffffff !important;
+}
+
+.crossfade-toggle input:focus-visible + .toggle-switch {
+    outline: 2px solid #0a84ff;
+    outline-offset: 2px;
+}
+
+.crossfade-duration {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    margin-left: auto;
+    min-width: 0;
+}
+
+.crossfade-duration input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 96px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.16);
+    outline: none;
+    cursor: pointer;
+    margin: 0;
+    transition: opacity 0.2s ease;
+}
+
+.crossfade-duration input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    border: none;
+}
+
+.crossfade-duration input[type="range"]:hover:not(:disabled):::-webkit-slider-thumb {
+    transform: scale(1.12);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.crossfade-duration input[type="range"]:focus-visible {
+    outline: 2px solid #0a84ff;
+    outline-offset: 3px;
+}
+
+.crossfade-duration input[type="range"]:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.crossfade-duration input[type="range"]:disabled::-webkit-slider-thumb {
+    cursor: not-allowed;
+    background: #8e8e93;
+    box-shadow: none;
+}
+
+#crossfadeDurationValue {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 20px;
+    padding: 0 6px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+    font-variant-numeric: tabular-nums;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    box-sizing: border-box;
+    text-align: center;
+    transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+#crossfadeDurationValue.is-disabled {
+    opacity: 0.35;
+    color: #8e8e93;
+    border-color: rgba(255, 255, 255, 0.04);
+}
 
 .right-panel { gap: 12px; }
 .now-playing { min-height: 88px; flex-shrink: 0; }
