@@ -117,6 +117,26 @@ class CASWorkspaceController {
             (block.tagName === 'DETAILS' ? block.querySelector('summary') : block).appendChild(handle);
         });
         this.layout = new CASWorkspaceLayout([...this.blocks.keys()], saved);
+        this.settingsPanel = document.getElementById('workspace-panel-settings');
+        this.settingsBtn = document.getElementById('workspaceSettingsBtn');
+        this.isSettingsOpen = false;
+
+        this.settingsBtn?.addEventListener('click', () => {
+            if (this.isSettingsOpen) {
+                this.deactivateSettings();
+            } else {
+                this.activateSettings();
+            }
+        });
+
+        document.getElementById('openSettings')?.addEventListener('click', () => {
+            this.activateSettings();
+        });
+
+        document.getElementById('closeSettingsBtn')?.addEventListener('click', () => {
+            this.deactivateSettings();
+        });
+
         const main = this.boards.get('main');
         this.bindDrop(main, () => 'main');
         const add = document.getElementById('workspaceAdd');
@@ -183,12 +203,47 @@ class CASWorkspaceController {
         return id;
     }
     activate(id, focus = false) {
+        if (this.isSettingsOpen) {
+            this.isSettingsOpen = false;
+            if (this.settingsPanel) this.settingsPanel.hidden = true;
+            if (this.settingsBtn) {
+                this.settingsBtn.classList.remove('active');
+                this.settingsBtn.setAttribute('aria-selected', 'false');
+            }
+        }
         if (!this.layout.activate(id)) return;
         this.closeTransfer();
         this.render();
         this.persist();
         if (focus) this.focusTab();
         requestAnimationFrame(() => this.mixer.drawWaveform());
+    }
+    activateSettings() {
+        this.isSettingsOpen = true;
+        this.closeTransfer();
+        for (const board of this.boards.values()) {
+            board.hidden = true;
+        }
+        if (this.settingsPanel) this.settingsPanel.hidden = false;
+        if (this.settingsBtn) {
+            this.settingsBtn.classList.add('active');
+            this.settingsBtn.setAttribute('aria-selected', 'true');
+        }
+        this.tablist.querySelectorAll('.workspace-tab').forEach(t => {
+            t.setAttribute('aria-selected', 'false');
+            t.tabIndex = -1;
+        });
+        if (this.mixer) this.mixer.updateStatus('Открыты настройки Concert Audio System');
+    }
+    deactivateSettings() {
+        if (!this.isSettingsOpen) return;
+        this.isSettingsOpen = false;
+        if (this.settingsPanel) this.settingsPanel.hidden = true;
+        if (this.settingsBtn) {
+            this.settingsBtn.classList.remove('active');
+            this.settingsBtn.setAttribute('aria-selected', 'false');
+        }
+        this.activate(this.layout.activeTab || 'main', true);
     }
     reveal(key) {
         const owner = this.layout.owner(key);
@@ -325,9 +380,9 @@ class CASWorkspaceController {
             button.dataset.tabId = tab.id;
             button.title = tab.id === 'main' ? tab.title : `${tab.title} (двойной клик — переименовать)`;
             button.setAttribute('role', 'tab');
-            button.setAttribute('aria-controls', `workspace-panel-${tab.id}`);
-            button.setAttribute('aria-selected', String(tab.id === this.layout.activeTab));
-            button.tabIndex = tab.id === this.layout.activeTab ? 0 : -1;
+            const isTabActive = !this.isSettingsOpen && tab.id === this.layout.activeTab;
+            button.setAttribute('aria-selected', String(isTabActive));
+            button.tabIndex = isTabActive ? 0 : -1;
 
             const titleSpan = document.createElement('span');
             titleSpan.className = 'workspace-tab-title';
@@ -360,7 +415,7 @@ class CASWorkspaceController {
             this.bindDrop(button, () => tab.id);
             this.tablist.appendChild(button);
             const board = this.boards.get(tab.id) || this.createBoard(tab);
-            board.hidden = tab.id !== this.layout.activeTab;
+            board.hidden = this.isSettingsOpen || (tab.id !== this.layout.activeTab);
         }
         for (const [key, entry] of this.blocks) {
             if (this.layout.owner(key) === 'main') entry.returnButton.remove();

@@ -1,4 +1,4 @@
-﻿# Dependencies
+# Dependencies
 node_modules/
 tools/
 npm-debug.log*
@@ -67,6 +67,7 @@ music/
 *.tmp
 *.temp
 .cache/
+test-profile*/
 
 
 *.zip

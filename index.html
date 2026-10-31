@@ -22,6 +22,7 @@
         <div class="workspace-actions">
             <button type="button" class="toolbar-button" id="openOnlineSearch"><i class="fas fa-search" aria-hidden="true"></i> Поиск музыки</button>
             <button type="button" class="toolbar-button icon-button" id="openKeyboardHelp" aria-label="Горячие клавиши" aria-controls="keyboardHelp" aria-expanded="false" title="Горячие клавиши"><i class="fas fa-keyboard" aria-hidden="true"></i></button>
+            <button type="button" class="toolbar-button icon-button" id="openSettings" aria-label="Настройки" title="Настройки системы (тишина, стабилизация, звук)"><i class="fas fa-gear" aria-hidden="true"></i></button>
             <time class="current-time" id="currentTime" title="Местное время">--:--:--</time>
         </div>
     </header>
@@ -31,6 +32,8 @@
             <button type="button" id="workspaceAdd" class="toolbar-button icon-button" aria-label="Новая вкладка" title="Новая вкладка; сюда можно перетащить блок"><i class="fas fa-plus" aria-hidden="true"></i></button>
             <button type="button" id="workspaceRename" class="toolbar-button icon-button" aria-label="Переименовать вкладку" title="Переименовать вкладку"><i class="fas fa-pen" aria-hidden="true"></i></button>
             <button type="button" id="workspaceDelete" class="toolbar-button icon-button" aria-label="Удалить вкладку и вернуть её блоки на Основную" title="Удалить вкладку и вернуть её блоки на Основную"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            <span class="workspace-nav-divider" aria-hidden="true"></span>
+            <button type="button" id="workspaceSettingsBtn" class="toolbar-button workspace-settings-tab" aria-label="Настройки звука и системы" title="Настройки: обрезка тишины, стабилизация звука, система"><i class="fas fa-gear" aria-hidden="true"></i> <span>Настройки</span></button>
         </div>
     </nav>
     <main id="workspacePanels">
@@ -294,6 +297,175 @@
                 <div><i class="fas fa-key"></i> 1-12 - звуковые пады</div>
                 <div><i class="fas fa-key"></i> M - mute (паника)</div>
             </details>
+        </div>
+    </div>
+
+    <!-- Панель настроек (Вкладка «Настройки») -->
+    <div class="workspace-settings-container" id="workspace-panel-settings" role="tabpanel" aria-labelledby="workspaceSettingsBtn" tabindex="0" hidden>
+        <div class="settings-view">
+            <header class="settings-header">
+                <div class="settings-title-group">
+                    <h2><i class="fas fa-sliders-h" aria-hidden="true"></i> Настройки Concert Audio System</h2>
+                    <p class="settings-subtitle">Автообрезка тишины, стабилизация громкости и конфигурация звука</p>
+                </div>
+                <button type="button" class="toolbar-button settings-back-btn" id="closeSettingsBtn">
+                    <i class="fas fa-arrow-left" aria-hidden="true"></i> К декам
+                </button>
+            </header>
+
+            <div class="settings-body">
+                <!-- Секция 1: Обрезка тишины -->
+                <section class="settings-card" id="cardTrimSilence">
+                    <div class="settings-card-header">
+                        <div class="settings-card-icon"><i class="fas fa-scissors" aria-hidden="true"></i></div>
+                        <div class="settings-card-title-text">
+                            <h3>Автоматическая обрезка тишины</h3>
+                            <p>Пропускает мёртвые цифровые паузы в начале и конце треков для мгновенного старта фонограммы и чистого перехода без задержек.</p>
+                        </div>
+                        <label class="macos-switch" title="Включить / выключить автообрезку тишины">
+                            <input type="checkbox" id="settingTrimSilenceEnabled" checked>
+                            <span class="macos-switch-track"></span>
+                        </label>
+                    </div>
+
+                    <div class="settings-card-content" id="trimSilenceOptions">
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <label for="settingTrimSilenceStart"><strong>Обрезать тишину в начале</strong></label>
+                                <span>Устраняет задержку перед вступлением — трек звучит сразу после запуска</span>
+                            </div>
+                            <label class="macos-switch">
+                                <input type="checkbox" id="settingTrimSilenceStart" checked>
+                                <span class="macos-switch-track"></span>
+                            </label>
+                        </div>
+
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <label for="settingTrimSilenceEnd"><strong>Обрезать тишину в конце</strong></label>
+                                <span>Завершает трек и переходит к следующему сразу после естественного затухания</span>
+                            </div>
+                            <label class="macos-switch">
+                                <input type="checkbox" id="settingTrimSilenceEnd" checked>
+                                <span class="macos-switch-track"></span>
+                            </label>
+                        </div>
+
+                        <div class="setting-row slider-row">
+                            <div class="setting-info">
+                                <label for="settingTrimSilenceThreshold"><strong>Порог тишины</strong></label>
+                                <span>Звуки тише этого уровня считаются тишиной. <span class="badge-tag">−48 dBFS оптимально</span></span>
+                            </div>
+                            <div class="setting-control-group">
+                                <input type="range" id="settingTrimSilenceThreshold" min="-60" max="-30" step="1" value="-48" aria-label="Порог тишины в dBFS">
+                                <span class="setting-value-badge" id="settingTrimSilenceThresholdVal">-48 dB</span>
+                            </div>
+                        </div>
+
+                        <div class="setting-row slider-row">
+                            <div class="setting-info">
+                                <label for="settingTrimSilencePadding"><strong>Защитный запас (Safety Margin)</strong></label>
+                                <span>Гарантирует сохранность мягкой атаки инструментов, дыхания и естественных хвостов реверберации</span>
+                            </div>
+                            <div class="setting-control-group">
+                                <input type="range" id="settingTrimSilencePadding" min="20" max="250" step="10" value="80" aria-label="Защитный запас в миллисекундах">
+                                <span class="setting-value-badge" id="settingTrimSilencePaddingVal">80 мс</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Секция 2: Стабилизация громкости -->
+                <section class="settings-card" id="cardVolumeStabilization">
+                    <div class="settings-card-header">
+                        <div class="settings-card-icon"><i class="fas fa-wave-square" aria-hidden="true"></i></div>
+                        <div class="settings-card-title-text">
+                            <h3>Стабилизация и нормализация громкости</h3>
+                            <p>Аппаратный компрессор Web Audio динамического диапазона сглаживает резкие перепады громкости и защищает акустику зала от перегрузок.</p>
+                        </div>
+                        <label class="macos-switch" title="Включить / выключить стабилизацию громкости">
+                            <input type="checkbox" id="settingVolumeStabilizationEnabled" checked>
+                            <span class="macos-switch-track"></span>
+                        </label>
+                    </div>
+
+                    <div class="settings-card-content" id="volumeStabilizationOptions">
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <label for="settingVolumeStabilizationMode"><strong>Режим компрессора</strong></label>
+                                <span>Характер обработки динамического диапазона спектакля</span>
+                            </div>
+                            <select id="settingVolumeStabilizationMode" class="macos-select" aria-label="Режим компрессора">
+                                <option value="theatre" selected>Театральный (Мягкий) — сохраняет драматургию</option>
+                                <option value="balanced">Сбалансированный — стандартный сценический</option>
+                                <option value="aggressive">Плотный — высокая компрессия</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <label for="settingVolumeNormalizationEnabled"><strong>Автовыравнивание фонограмм (Normalizer)</strong></label>
+                                <span>Подтягивает тихо записанные фонограммы к единому целевому уровню</span>
+                            </div>
+                            <label class="macos-switch">
+                                <input type="checkbox" id="settingVolumeNormalizationEnabled">
+                                <span class="macos-switch-track"></span>
+                            </label>
+                        </div>
+
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <label for="settingVolumeTargetLevel"><strong>Целевой уровень громкости</strong></label>
+                                <span>Стандарт громкости для автоматического выравнивания</span>
+                            </div>
+                            <select id="settingVolumeTargetLevel" class="macos-select" aria-label="Целевой уровень громкости">
+                                <option value="-14" selected>-14 dBFS (Театральный стандарт)</option>
+                                <option value="-18">-18 dBFS (Широкий динамический диапазон)</option>
+                                <option value="-10">-10 dBFS (Эстрадный уровень)</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Секция 3: Задел под расширенные настройки системы -->
+                <section class="settings-card">
+                    <div class="settings-card-header">
+                        <div class="settings-card-icon"><i class="fas fa-folder-open" aria-hidden="true"></i></div>
+                        <div class="settings-card-title-text">
+                            <h3>Хранилище и библиотека</h3>
+                            <p>Управление папкой с музыкой, кэшем анализа и горячими клавишами.</p>
+                        </div>
+                    </div>
+                    <div class="settings-card-content">
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <strong>Папка с музыкой</strong>
+                                <span id="settingsCurrentMusicFolder">Папка не выбрана</span>
+                            </div>
+                            <button type="button" class="toolbar-button" id="settingsChangeFolderBtn">
+                                <i class="fas fa-folder" aria-hidden="true"></i> Выбрать…
+                            </button>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <strong>Кэш анализа и осциллограмм</strong>
+                                <span>Очищает кэшированные границы тишины и волны для повторного анализа</span>
+                            </div>
+                            <button type="button" class="toolbar-button" id="settingsClearCacheBtn">
+                                <i class="fas fa-trash-can" aria-hidden="true"></i> Очистить кэш
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Подвал настроек -->
+                <div class="settings-footer">
+                    <span class="settings-save-notice"><i class="fas fa-check-circle" aria-hidden="true"></i> Настройки сохраняются автоматически</span>
+                    <button type="button" class="toolbar-button" id="resetAudioSettingsBtn">
+                        <i class="fas fa-rotate-left" aria-hidden="true"></i> Сбросить по умолчанию
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
     </main>

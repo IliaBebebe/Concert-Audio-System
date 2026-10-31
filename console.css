@@ -641,3 +641,332 @@ kbd { padding: 0 4px; border: 1px solid var(--border-secondary); border-radius: 
 }
 .workspace-board-hint { min-height: 144px; }
 @media (max-height: 800px) { .workspace-board-hint { min-height: 112px; } }
+
+/* ==========================================================================
+   macOS Settings Panel & Audio Controls
+   ========================================================================== */
+
+.workspace-nav-divider {
+    width: 1px;
+    height: 18px;
+    background: rgba(255, 255, 255, 0.14);
+    margin: 0 4px;
+    align-self: center;
+    flex-shrink: 0;
+}
+
+.workspace-settings-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.workspace-settings-tab:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.workspace-settings-tab[aria-selected="true"] {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.workspace-settings-tab .fas {
+    font-size: 11px;
+}
+
+.workspace-settings-container {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    background: #161618;
+    color: var(--text-primary);
+    z-index: 5;
+    padding: 24px 32px 48px;
+    box-sizing: border-box;
+}
+
+.settings-view {
+    max-width: 820px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-title-group h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    letter-spacing: -0.01em;
+}
+
+.settings-title-group h2 i {
+    color: #0a84ff;
+    font-size: 18px;
+}
+
+.settings-subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.settings-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    padding: 6px 14px;
+}
+
+.settings-card {
+    background: #202024;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+}
+
+.settings-card-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.settings-card-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: rgba(10, 132, 255, 0.16);
+    color: #0a84ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.settings-card-title-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.settings-card-title-text h3 {
+    font-size: 14.5px;
+    font-weight: 600;
+    margin: 0 0 3px;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+}
+
+.settings-card-title-text p {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0;
+    line-height: 1.45;
+}
+
+.settings-card-content {
+    padding: 4px 20px 8px;
+}
+
+.setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    min-height: 44px;
+}
+
+.setting-row:last-child {
+    border-bottom: none;
+}
+
+.setting-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-width: 520px;
+}
+
+.setting-info label,
+.setting-info strong {
+    font-size: 13px;
+    font-weight: 500;
+    color: #e5e5ea;
+    cursor: pointer;
+}
+
+.setting-info span {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.badge-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 4px;
+    background: rgba(10, 132, 255, 0.18);
+    color: #5ac8fa;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.setting-control-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.setting-control-group input[type="range"] {
+    accent-color: #0a84ff;
+    width: 140px;
+    cursor: pointer;
+}
+
+.setting-value-badge {
+    min-width: 56px;
+    text-align: center;
+    padding: 3px 8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* macOS Toggle Switch */
+.macos-switch {
+    position: relative;
+    display: inline-block;
+    width: 42px;
+    height: 24px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.macos-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.macos-switch-track {
+    position: absolute;
+    inset: 0;
+    background-color: #39393d;
+    border-radius: 24px;
+    transition: background-color 0.2s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.macos-switch-track::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background-color: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.macos-switch input:checked + .macos-switch-track {
+    background-color: #34c759;
+}
+
+.macos-switch input:checked + .macos-switch-track::after {
+    transform: translateX(18px);
+}
+
+.macos-switch input:focus-visible + .macos-switch-track {
+    outline: 2px solid #0a84ff;
+    outline-offset: 2px;
+}
+
+/* macOS Select */
+.macos-select {
+    min-height: 32px;
+    padding: 4px 30px 4px 12px;
+    font-size: 12.5px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background-color: #2c2c2e;
+    color: #ffffff;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    transition: all 0.15s ease;
+}
+
+.macos-select:hover {
+    border-color: rgba(255, 255, 255, 0.24);
+    background-color: #333336;
+}
+
+.macos-select:focus-visible {
+    outline: 2px solid #0a84ff;
+    border-color: #0a84ff;
+}
+
+/* Settings Footer */
+.settings-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 14px;
+    margin-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-save-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #8e8e93;
+}
+
+.settings-save-notice .fa-check-circle {
+    color: #34c759;
+}

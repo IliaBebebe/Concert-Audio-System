@@ -22,6 +22,33 @@ const CAS_CONFIG = Object.freeze({
     },
     STORAGE: {
         THROTTLE_MS: 400
+    },
+    SETTINGS: {
+        TRIM_SILENCE: {
+            DEFAULT_ENABLED: true,
+            DEFAULT_START: true,
+            DEFAULT_END: true,
+            DEFAULT_THRESHOLD_DB: -48,
+            MIN_THRESHOLD_DB: -60,
+            MAX_THRESHOLD_DB: -30,
+            DEFAULT_PADDING_MS: 80,
+            MIN_PADDING_MS: 20,
+            MAX_PADDING_MS: 250,
+            MIN_DETECTABLE_SILENCE_SEC: 0.12,
+            MIN_END_SILENCE_SEC: 0.35,
+            MIN_TRACK_DURATION_SEC: 2.0
+        },
+        STABILIZER: {
+            DEFAULT_ENABLED: true,
+            DEFAULT_MODE: 'theatre',
+            DEFAULT_NORMALIZATION_ENABLED: false,
+            DEFAULT_TARGET_LUFS: -14,
+            MODES: {
+                theatre: { threshold: -24, knee: 30, ratio: 3, attack: 0.005, release: 0.300 },
+                balanced: { threshold: -18, knee: 20, ratio: 4, attack: 0.003, release: 0.250 },
+                aggressive: { threshold: -12, knee: 10, ratio: 8, attack: 0.001, release: 0.150 }
+            }
+        }
     }
 });
 
@@ -221,16 +248,33 @@ class TheatreSoundMixer {
         // Интервал для часов
         this.clockInterval = null;
         
-        // VU-метры
+        // VU-метры и аудиоузлы
         this.vuMeterInterval = null;
         this.audioContext = null;
         this.musicAnalyser = null;
         this.effectsAnalyser = null;
+        this.musicNormalizerGain = null;
+        this.musicCompressor = null;
+        this.musicNodesConnected = false;
         this.musicAnalyserData = null;
         this.effectsAnalyserData = null;
         this.connectedAudioNodes = new WeakSet();
         this.audioSources = new WeakMap();
         this.audioSourceTypes = new WeakMap();
+
+        // Опции обрезки тишины и стабилизации звука
+        this.audioSettings = {
+            trimSilenceEnabled: CAS_CONFIG.SETTINGS.TRIM_SILENCE.DEFAULT_ENABLED,
+            trimSilenceStart: CAS_CONFIG.SETTINGS.TRIM_SILENCE.DEFAULT_START,
+            trimSilenceEnd: CAS_CONFIG.SETTINGS.TRIM_SILENCE.DEFAULT_END,
+            trimSilenceThreshold: CAS_CONFIG.SETTINGS.TRIM_SILENCE.DEFAULT_THRESHOLD_DB,
+            trimSilencePadding: CAS_CONFIG.SETTINGS.TRIM_SILENCE.DEFAULT_PADDING_MS,
+            volumeStabilizationEnabled: CAS_CONFIG.SETTINGS.STABILIZER.DEFAULT_ENABLED,
+            volumeStabilizationMode: CAS_CONFIG.SETTINGS.STABILIZER.DEFAULT_MODE,
+            volumeNormalizationEnabled: CAS_CONFIG.SETTINGS.STABILIZER.DEFAULT_NORMALIZATION_ENABLED,
+            volumeTargetLevel: CAS_CONFIG.SETTINGS.STABILIZER.DEFAULT_TARGET_LUFS
+        };
+        this.silenceBoundsCache = new Map();
         
         // Прогресс падов
         this.padProgressIntervals = new Map();
@@ -381,6 +425,13 @@ class TheatreSoundMixer {
             const seek = player.seek();
             const duration = player.duration();
             if (duration > 0 && !isNaN(seek) && !isNaN(duration)) {
+                const effectiveEnd = this.getTrackEffectiveEnd(this.musicPlayerTrack, duration);
+                if (this.audioSettings?.trimSilenceEnabled && this.audioSettings?.trimSilenceEnd && effectiveEnd < duration - 0.25) {
+                    if (seek >= effectiveEnd) {
+                        this.handleTrackEnd(player, playerToken);
+                        return;
+                    }
+                }
                 this.maybeStartAutomaticCrossfade(player, playerToken, seek, duration);
             }
         } catch {}
@@ -418,6 +469,29 @@ class TheatreSoundMixer {
 
         this.musicAnalyser = this.musicAnalyser || createAnalyser();
         this.effectsAnalyser = this.effectsAnalyser || createAnalyser();
+
+        if (!this.musicNormalizerGain && typeof this.audioContext.createGain === 'function') {
+            this.musicNormalizerGain = this.audioContext.createGain();
+            try {
+                this.musicNormalizerGain.gain.setValueAtTime(1.0, this.audioContext.currentTime);
+            } catch {}
+        }
+
+        if (!this.musicCompressor && typeof this.audioContext.createDynamicsCompressor === 'function') {
+            this.musicCompressor = this.audioContext.createDynamicsCompressor();
+            this.applyStabilizerSettings();
+        }
+
+        if (!this.musicNodesConnected && this.musicNormalizerGain && this.musicCompressor && this.musicAnalyser) {
+            try {
+                this.musicNormalizerGain.connect(this.musicCompressor);
+                this.musicCompressor.connect(this.musicAnalyser);
+                this.musicNodesConnected = true;
+            } catch (err) {
+                CAS_LOGGER.debug('Ошибка связывания Web Audio узлов стабилизатора:', err);
+            }
+        }
+
         this.meterChannels ||= {};
         for (const type of ['music', 'effects']) {
             if (this.meterChannels[type]) continue;
@@ -434,6 +508,58 @@ class TheatreSoundMixer {
         }
     }
 
+    applyStabilizerSettings() {
+        if (!this.audioContext || !this.musicCompressor) return;
+        const now = this.audioContext.currentTime;
+        const isEnabled = Boolean(this.audioSettings?.volumeStabilizationEnabled);
+
+        if (!isEnabled) {
+            try {
+                this.musicCompressor.threshold.setTargetAtTime(0, now, 0.05);
+                this.musicCompressor.ratio.setTargetAtTime(1, now, 0.05);
+                this.musicCompressor.knee.setTargetAtTime(0, now, 0.05);
+                this.musicCompressor.attack.setTargetAtTime(0.003, now, 0.05);
+                this.musicCompressor.release.setTargetAtTime(0.25, now, 0.05);
+            } catch {}
+            if (this.musicNormalizerGain) {
+                try { this.musicNormalizerGain.gain.setTargetAtTime(1.0, now, 0.05); } catch {}
+            }
+            return;
+        }
+
+        const mode = this.audioSettings?.volumeStabilizationMode || 'theatre';
+        const params = CAS_CONFIG.SETTINGS.STABILIZER.MODES[mode] || CAS_CONFIG.SETTINGS.STABILIZER.MODES.theatre;
+
+        try {
+            this.musicCompressor.threshold.setTargetAtTime(params.threshold, now, 0.05);
+            this.musicCompressor.knee.setTargetAtTime(params.knee, now, 0.05);
+            this.musicCompressor.ratio.setTargetAtTime(params.ratio, now, 0.05);
+            this.musicCompressor.attack.setTargetAtTime(params.attack, now, 0.05);
+            this.musicCompressor.release.setTargetAtTime(params.release, now, 0.05);
+        } catch {}
+
+        this.updateTrackNormalization(this.musicPlayerTrack);
+    }
+
+    updateTrackNormalization(track) {
+        if (!this.audioContext || !this.musicNormalizerGain) return;
+        const now = this.audioContext.currentTime;
+        if (!this.audioSettings?.volumeStabilizationEnabled || !this.audioSettings?.volumeNormalizationEnabled) {
+            try { this.musicNormalizerGain.gain.setTargetAtTime(1.0, now, 0.05); } catch {}
+            return;
+        }
+
+        const peak = track?.peakLevel;
+        if (typeof peak === 'number' && peak > 0.01 && peak <= 1.0) {
+            const targetDb = Number(this.audioSettings.volumeTargetLevel) || -14;
+            const targetAmp = Math.pow(10, targetDb / 20);
+            const factor = Math.max(0.5, Math.min(1.8, targetAmp / peak));
+            try { this.musicNormalizerGain.gain.setTargetAtTime(factor, now, 0.05); } catch {}
+        } else {
+            try { this.musicNormalizerGain.gain.setTargetAtTime(1.0, now, 0.05); } catch {}
+        }
+    }
+
     resumeAudioContext() {
         if (this.audioContext?.state === 'suspended') {
             this.audioContext.resume().catch(() => {});
@@ -444,7 +570,7 @@ class TheatreSoundMixer {
         if (!howl) return;
         this.setupAudioAnalysers();
 
-        const analyser = type === 'effects' ? this.effectsAnalyser : this.musicAnalyser;
+        const analyser = type === 'effects' ? this.effectsAnalyser : (this.musicNormalizerGain || this.musicAnalyser);
         if (!analyser || !Array.isArray(howl._sounds)) return;
 
         howl._sounds.forEach((sound) => {
@@ -1104,6 +1230,7 @@ class TheatreSoundMixer {
         this.updateCountdownDisplay();
         await this.loadStoredData();
         this.updateCrossfadeControls();
+        this.initSettingsUI();
         await this.refreshPlaylists();
         this.initWindowControls();
         this.updateDeckUI();
@@ -1397,6 +1524,146 @@ class TheatreSoundMixer {
     getTrackStartOffset(track) {
         const startOffset = Number(track?.startOffset ?? track?.metadataOverride?.startOffset);
         return Number.isFinite(startOffset) && startOffset > 0 ? startOffset : 0;
+    }
+
+    getTrackEffectiveStart(track) {
+        const manualOffset = this.getTrackStartOffset(track);
+        if (manualOffset > 0) return manualOffset;
+
+        if (!this.audioSettings?.trimSilenceEnabled || !this.audioSettings?.trimSilenceStart) {
+            return 0;
+        }
+
+        const bounds = track?.silenceBounds || this.silenceBoundsCache.get(track?.path);
+        return (bounds && typeof bounds.startSec === 'number' && bounds.startSec > 0) ? bounds.startSec : 0;
+    }
+
+    getTrackEffectiveEnd(track, totalDuration) {
+        const fallback = Number.isFinite(totalDuration) && totalDuration > 0 ? totalDuration : 0;
+        if (!this.audioSettings?.trimSilenceEnabled || !this.audioSettings?.trimSilenceEnd) {
+            return fallback;
+        }
+
+        const bounds = track?.silenceBounds || this.silenceBoundsCache.get(track?.path);
+        if (bounds && typeof bounds.endSec === 'number' && bounds.endSec > 0 && bounds.endSec < fallback) {
+            return bounds.endSec;
+        }
+        return fallback;
+    }
+
+    detectSilenceBounds(audioBuffer, options = {}) {
+        if (!audioBuffer || typeof audioBuffer.length !== 'number' || audioBuffer.length === 0) {
+            return { startSec: 0, endSec: 0, rawStartSec: 0, rawEndSec: 0, peakLevel: 1.0, duration: 0 };
+        }
+
+        const duration = audioBuffer.duration || (audioBuffer.length / (audioBuffer.sampleRate || 44100));
+        const sampleRate = audioBuffer.sampleRate || 44100;
+        const totalSamples = audioBuffer.length;
+        const channelCount = Math.min(2, audioBuffer.numberOfChannels || 1);
+
+        const config = CAS_CONFIG.SETTINGS.TRIM_SILENCE;
+        if (duration < config.MIN_TRACK_DURATION_SEC) {
+            return { startSec: 0, endSec: duration, rawStartSec: 0, rawEndSec: duration, peakLevel: 1.0, duration };
+        }
+
+        const thresholdDb = Number(options.thresholdDb ?? this.audioSettings?.trimSilenceThreshold ?? config.DEFAULT_THRESHOLD_DB);
+        const thresholdAmp = Math.pow(10, thresholdDb / 20);
+        const paddingMs = Number(options.paddingMs ?? this.audioSettings?.trimSilencePadding ?? config.DEFAULT_PADDING_MS);
+        const paddingSec = Math.max(0.02, paddingMs / 1000);
+        const endPaddingSec = Math.max(0.20, paddingSec * 2.5); // post-roll safety to preserve reverb tails
+
+        const channels = [];
+        for (let c = 0; c < channelCount; c++) {
+            channels.push(audioBuffer.getChannelData(c));
+        }
+
+        const blockSize = 256;
+        let firstSoundSample = 0;
+        let foundStart = false;
+
+        // Scan forward in blocks for the first sound
+        for (let i = 0; i < totalSamples; i += blockSize) {
+            const blockEnd = Math.min(totalSamples, i + blockSize);
+            let blockMax = 0;
+            for (let c = 0; c < channelCount; c++) {
+                const samples = channels[c];
+                for (let s = i; s < blockEnd; s += 8) {
+                    const abs = Math.abs(samples[s] || 0);
+                    if (abs > blockMax) blockMax = abs;
+                }
+            }
+            if (blockMax >= thresholdAmp) {
+                firstSoundSample = i;
+                foundStart = true;
+                break;
+            }
+        }
+
+        let lastSoundSample = totalSamples;
+        let foundEnd = false;
+
+        // Scan backward in blocks for the last sound
+        for (let i = totalSamples - blockSize; i >= 0; i -= blockSize) {
+            const blockEnd = Math.min(totalSamples, i + blockSize);
+            let blockMax = 0;
+            for (let c = 0; c < channelCount; c++) {
+                const samples = channels[c];
+                for (let s = i; s < blockEnd; s += 8) {
+                    const abs = Math.abs(samples[s] || 0);
+                    if (abs > blockMax) blockMax = abs;
+                }
+            }
+            if (blockMax >= thresholdAmp) {
+                lastSoundSample = blockEnd;
+                foundEnd = true;
+                break;
+            }
+        }
+
+        // Measure overall peak level for normalizer (sparse sampling)
+        let peakLevel = 0.01;
+        const stride = Math.max(1, Math.floor(totalSamples / 1000));
+        for (let c = 0; c < channelCount; c++) {
+            const samples = channels[c];
+            for (let s = 0; s < totalSamples; s += stride) {
+                const abs = Math.abs(samples[s] || 0);
+                if (abs > peakLevel) peakLevel = abs;
+            }
+        }
+
+        if (!foundStart && !foundEnd) {
+            return { startSec: 0, endSec: duration, rawStartSec: 0, rawEndSec: duration, peakLevel, duration };
+        }
+
+        const rawStartSec = firstSoundSample / sampleRate;
+        const rawEndSec = lastSoundSample / sampleRate;
+
+        // Apply pre-roll padding and protection gates
+        let effectiveStartSec = Math.max(0, rawStartSec - paddingSec);
+        if (effectiveStartSec < config.MIN_DETECTABLE_SILENCE_SEC) {
+            effectiveStartSec = 0;
+        }
+
+        // Apply post-roll padding and protection gates
+        let effectiveEndSec = Math.min(duration, rawEndSec + endPaddingSec);
+        if ((duration - effectiveEndSec) < config.MIN_END_SILENCE_SEC) {
+            effectiveEndSec = duration;
+        }
+
+        // Ensure safe boundaries
+        if (effectiveEndSec <= effectiveStartSec + 0.5) {
+            effectiveStartSec = 0;
+            effectiveEndSec = duration;
+        }
+
+        return {
+            startSec: effectiveStartSec,
+            endSec: effectiveEndSec,
+            rawStartSec,
+            rawEndSec,
+            peakLevel: Math.min(1.0, Math.max(0.01, peakLevel)),
+            duration
+        };
     }
 
     formatTrackStartOffset(seconds) {
@@ -2837,7 +3104,8 @@ class TheatreSoundMixer {
             onload: () => {
                 if (!isCurrentPlayer()) return;
                 this.connectHowlToAnalyser(player, 'music');
-                const startOffset = this.getTrackStartOffset(track);
+                this.updateTrackNormalization(track);
+                const startOffset = this.getTrackEffectiveStart(track);
                 const duration = player.duration();
                 const initialSeek = startOffset > 0 && Number.isFinite(duration) && startOffset < duration
                     ? startOffset
@@ -2958,7 +3226,8 @@ class TheatreSoundMixer {
     getCrossfadeDurationMs(player = this.musicPlayer) {
         const requestedMs = this.normalizeCrossfadeDuration(this.crossfadeDuration) * 1000;
         try {
-            const duration = player?.duration();
+            const rawDuration = player?.duration();
+            const duration = this.getTrackEffectiveEnd(this.musicPlayerTrack, rawDuration);
             const seek = player?.seek();
             if (Number.isFinite(duration) && Number.isFinite(seek) && duration > seek) {
                 return Math.max(250, Math.min(requestedMs, Math.round((duration - seek) * 1000)));
@@ -3109,12 +3378,13 @@ class TheatreSoundMixer {
         const deck = this.decks[deckId];
         if (!deck || !deck.tracks || deck.tracks.length < 2) return;
 
+        const effectiveEnd = this.getTrackEffectiveEnd(this.musicPlayerTrack, duration);
         const fadeSeconds = this.normalizeCrossfadeDuration(this.crossfadeDuration);
-        if (duration <= fadeSeconds * 1.5) {
+        if (effectiveEnd <= fadeSeconds * 1.5) {
             return;
         }
 
-        const remaining = duration - seek;
+        const remaining = effectiveEnd - seek;
         if (remaining > 0 && remaining <= fadeSeconds && seek > 0.5) {
             const nextIndex = deck.currentTrackIndex + 1;
             if (nextIndex >= deck.tracks.length) {
@@ -3166,6 +3436,16 @@ class TheatreSoundMixer {
                     player.fade(currentVol, this.musicVolume, 250);
                 }
             } catch {}
+        } else if (!this.isPaused && player) {
+            const effectiveStart = this.getTrackEffectiveStart(this.musicPlayerTrack);
+            if (effectiveStart > 0 && typeof player.seek === 'function') {
+                try {
+                    const currentSeek = player.seek();
+                    if (typeof currentSeek === 'number' && currentSeek < 0.05) {
+                        player.seek(effectiveStart);
+                    }
+                } catch {}
+            }
         }
 
         this.pendingMusicStart = true;
@@ -3322,6 +3602,13 @@ class TheatreSoundMixer {
                 const duration = player.duration();
                 
                 if (duration > 0 && !isNaN(seek) && !isNaN(duration)) {
+                    const effectiveEnd = this.getTrackEffectiveEnd(this.musicPlayerTrack, duration);
+                    if (this.audioSettings?.trimSilenceEnabled && this.audioSettings?.trimSilenceEnd && effectiveEnd < duration - 0.25) {
+                        if (seek >= effectiveEnd) {
+                            this.handleTrackEnd(player, playerToken);
+                            return;
+                        }
+                    }
                     this.maybeStartAutomaticCrossfade(player, playerToken, seek, duration);
                     if (timestamp - lastPaint >= CAS_CONFIG.UI.PROGRESS_PAINT_INTERVAL_MS) {
                         lastPaint = timestamp;
@@ -3501,6 +3788,35 @@ class TheatreSoundMixer {
                 // IPC gave us an owned buffer; decodeAudioData can consume it directly.
                 const decodedBuffer = await audioContext.decodeAudioData(audioData);
                 if (requestId !== this.waveformRequestId) return;
+
+                // Silence bounds detection & peak analysis for normalizer
+                try {
+                    const silenceAnalysis = this.detectSilenceBounds(decodedBuffer);
+                    track.silenceBounds = silenceAnalysis;
+                    track.peakLevel = silenceAnalysis.peakLevel;
+                    this.silenceBoundsCache.set(track.path, silenceAnalysis);
+
+                    if (this.musicPlayerTrack === track && this.musicPlayer && !this.isPlaying && !this.isPaused) {
+                        const effectiveStart = this.getTrackEffectiveStart(track);
+                        if (effectiveStart > 0) {
+                            const duration = this.musicPlayer.duration();
+                            if (Number.isFinite(duration) && effectiveStart < duration) {
+                                try { this.musicPlayer.seek(effectiveStart); } catch {}
+                                const progress = (effectiveStart / duration) * 100;
+                                const progressBar = document.getElementById('progressBar');
+                                if (progressBar) progressBar.value = progress;
+                                this.updateWaveformProgress(progress);
+                                this.updateTimeDisplays(this.musicPlayer);
+                            }
+                        }
+                    }
+                    if (this.musicPlayerTrack === track) {
+                        this.updateTrackNormalization(track);
+                    }
+                } catch (e) {
+                    CAS_LOGGER.debug('Ошибка анализа тишины и нормализации:', e);
+                }
+
                 const peaks = this.createWaveformPeaks(decodedBuffer, 320);
                 this.waveformCache.set(track.path, peaks);
                 while (this.waveformCache.size > 32) {
@@ -4368,6 +4684,7 @@ class TheatreSoundMixer {
             viewMode: this.viewMode,
             activeDeck: this.activeDeck,
             musicFolder: this.config?.musicFolder,
+            audioSettings: this.audioSettings,
             decks: Object.fromEntries(['A', 'B'].map(deckId => {
                 const deck = this.decks[deckId];
                 return [deckId, {
@@ -4407,6 +4724,29 @@ class TheatreSoundMixer {
             this.deckCrossfadeEnabled = Boolean(data.deckCrossfadeEnabled);
             this.crossfadeDuration = this.normalizeCrossfadeDuration(data.crossfadeDuration ?? CAS_CONFIG.CROSSFADE.DEFAULT_DURATION);
 
+            if (data.audioSettings && typeof data.audioSettings === 'object') {
+                const s = data.audioSettings;
+                if (typeof s.trimSilenceEnabled === 'boolean') this.audioSettings.trimSilenceEnabled = s.trimSilenceEnabled;
+                if (typeof s.trimSilenceStart === 'boolean') this.audioSettings.trimSilenceStart = s.trimSilenceStart;
+                if (typeof s.trimSilenceEnd === 'boolean') this.audioSettings.trimSilenceEnd = s.trimSilenceEnd;
+                if (Number.isFinite(Number(s.trimSilenceThreshold))) {
+                    this.audioSettings.trimSilenceThreshold = Math.max(-60, Math.min(-30, Number(s.trimSilenceThreshold)));
+                }
+                if (Number.isFinite(Number(s.trimSilencePadding))) {
+                    this.audioSettings.trimSilencePadding = Math.max(20, Math.min(250, Number(s.trimSilencePadding)));
+                }
+                if (typeof s.volumeStabilizationEnabled === 'boolean') this.audioSettings.volumeStabilizationEnabled = s.volumeStabilizationEnabled;
+                if (['theatre', 'balanced', 'aggressive'].includes(s.volumeStabilizationMode)) {
+                    this.audioSettings.volumeStabilizationMode = s.volumeStabilizationMode;
+                }
+                if (typeof s.volumeNormalizationEnabled === 'boolean') this.audioSettings.volumeNormalizationEnabled = s.volumeNormalizationEnabled;
+                if ([-14, -18, -10].includes(Number(s.volumeTargetLevel))) {
+                    this.audioSettings.volumeTargetLevel = Number(s.volumeTargetLevel);
+                }
+                this.syncSettingsUI();
+                this.applyStabilizerSettings();
+            }
+
             if (['split', 'A', 'B'].includes(data.viewMode)) {
                 this.setViewMode(data.viewMode);
             }
@@ -4414,18 +4754,20 @@ class TheatreSoundMixer {
                 this.setActiveDeck(data.activeDeck);
             }
 
-            const musicSlider = document.getElementById('musicVolume');
-            const effectsSlider = document.getElementById('effectsVolume');
-            const musicValue = document.getElementById('musicVolumeValue');
-            const effectsValue = document.getElementById('effectsVolumeValue');
-            if (musicSlider) musicSlider.value = this.musicVolume * 100;
-            if (effectsSlider) effectsSlider.value = this.effectsVolume * 100;
-            if (musicValue) musicValue.textContent = `${Math.round(this.musicVolume * 100)}%`;
-            if (effectsValue) effectsValue.textContent = `${Math.round(this.effectsVolume * 100)}%`;
+            if (typeof document !== 'undefined') {
+                const musicSlider = document.getElementById('musicVolume');
+                const effectsSlider = document.getElementById('effectsVolume');
+                const musicValue = document.getElementById('musicVolumeValue');
+                const effectsValue = document.getElementById('effectsVolumeValue');
+                if (musicSlider) musicSlider.value = this.musicVolume * 100;
+                if (effectsSlider) effectsSlider.value = this.effectsVolume * 100;
+                if (musicValue) musicValue.textContent = `${Math.round(this.musicVolume * 100)}%`;
+                if (effectsValue) effectsValue.textContent = `${Math.round(this.effectsVolume * 100)}%`;
 
-            const playbackModeInput = document.querySelector(`input[name="playbackMode"][value="${this.playbackMode}"]`);
-            if (playbackModeInput) playbackModeInput.checked = true;
-            this.updateCrossfadeControls();
+                const playbackModeInput = document.querySelector(`input[name="playbackMode"][value="${this.playbackMode}"]`);
+                if (playbackModeInput) playbackModeInput.checked = true;
+                this.updateCrossfadeControls();
+            }
 
             if (Array.isArray(data.padLabels)) {
                 data.padLabels.forEach((label) => {
@@ -4469,8 +4811,10 @@ class TheatreSoundMixer {
                         deck.tracks = result.data.sort((a, b) => (ranks.get(a.path) ?? Infinity) - (ranks.get(b.path) ?? Infinity));
                         deck.currentTrackIndex = Math.max(0, deck.tracks.findIndex(track => track.path === saved.currentTrackPath));
                         deck.filterQuery = typeof saved.filterQuery === 'string' ? saved.filterQuery : '';
-                        const search = document.getElementById(`trackSearchInput${deckId}`);
-                        if (search) search.value = deck.filterQuery;
+                        if (typeof document !== 'undefined') {
+                            const search = document.getElementById(`trackSearchInput${deckId}`);
+                            if (search) search.value = deck.filterQuery;
+                        }
                     } catch (error) {
                         CAS_LOGGER.warn(`Не удалось восстановить деку ${deckId}:`, error.message);
                     }
@@ -4485,6 +4829,204 @@ class TheatreSoundMixer {
         } finally {
             this.restoringStoredData = false;
         }
+    }
+
+    initSettingsUI() {
+        const openSettingsBtn = document.getElementById('openSettings');
+        if (openSettingsBtn) {
+            openSettingsBtn.addEventListener('click', () => {
+                this.workspaces?.activateSettings();
+            });
+        }
+
+        const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+        if (closeSettingsBtn) {
+            closeSettingsBtn.addEventListener('click', () => {
+                this.workspaces?.deactivateSettings();
+            });
+        }
+
+        const trimEnabled = document.getElementById('settingTrimSilenceEnabled');
+        if (trimEnabled) {
+            trimEnabled.addEventListener('change', (e) => {
+                this.audioSettings.trimSilenceEnabled = e.target.checked;
+                this.syncSettingsUI();
+                this.saveStoredData();
+            });
+        }
+
+        const trimStart = document.getElementById('settingTrimSilenceStart');
+        if (trimStart) {
+            trimStart.addEventListener('change', (e) => {
+                this.audioSettings.trimSilenceStart = e.target.checked;
+                this.saveStoredData();
+            });
+        }
+
+        const trimEnd = document.getElementById('settingTrimSilenceEnd');
+        if (trimEnd) {
+            trimEnd.addEventListener('change', (e) => {
+                this.audioSettings.trimSilenceEnd = e.target.checked;
+                this.saveStoredData();
+            });
+        }
+
+        const trimThreshold = document.getElementById('settingTrimSilenceThreshold');
+        const trimThresholdVal = document.getElementById('settingTrimSilenceThresholdVal');
+        if (trimThreshold) {
+            trimThreshold.addEventListener('input', (e) => {
+                if (trimThresholdVal) trimThresholdVal.textContent = `${e.target.value} dB`;
+            });
+            trimThreshold.addEventListener('change', (e) => {
+                this.audioSettings.trimSilenceThreshold = Number(e.target.value);
+                this.silenceBoundsCache.clear();
+                this.saveStoredData();
+            });
+        }
+
+        const trimPadding = document.getElementById('settingTrimSilencePadding');
+        const trimPaddingVal = document.getElementById('settingTrimSilencePaddingVal');
+        if (trimPadding) {
+            trimPadding.addEventListener('input', (e) => {
+                if (trimPaddingVal) trimPaddingVal.textContent = `${e.target.value} мс`;
+            });
+            trimPadding.addEventListener('change', (e) => {
+                this.audioSettings.trimSilencePadding = Number(e.target.value);
+                this.silenceBoundsCache.clear();
+                this.saveStoredData();
+            });
+        }
+
+        const volStabEnabled = document.getElementById('settingVolumeStabilizationEnabled');
+        if (volStabEnabled) {
+            volStabEnabled.addEventListener('change', (e) => {
+                this.audioSettings.volumeStabilizationEnabled = e.target.checked;
+                this.applyStabilizerSettings();
+                this.syncSettingsUI();
+                this.saveStoredData();
+            });
+        }
+
+        const volStabMode = document.getElementById('settingVolumeStabilizationMode');
+        if (volStabMode) {
+            volStabMode.addEventListener('change', (e) => {
+                this.audioSettings.volumeStabilizationMode = e.target.value;
+                this.applyStabilizerSettings();
+                this.saveStoredData();
+            });
+        }
+
+        const volNormEnabled = document.getElementById('settingVolumeNormalizationEnabled');
+        if (volNormEnabled) {
+            volNormEnabled.addEventListener('change', (e) => {
+                this.audioSettings.volumeNormalizationEnabled = e.target.checked;
+                this.applyStabilizerSettings();
+                this.saveStoredData();
+            });
+        }
+
+        const volTargetLevel = document.getElementById('settingVolumeTargetLevel');
+        if (volTargetLevel) {
+            volTargetLevel.addEventListener('change', (e) => {
+                this.audioSettings.volumeTargetLevel = Number(e.target.value);
+                this.applyStabilizerSettings();
+                this.saveStoredData();
+            });
+        }
+
+        const changeFolderBtn = document.getElementById('settingsChangeFolderBtn');
+        if (changeFolderBtn) {
+            changeFolderBtn.addEventListener('click', () => {
+                document.getElementById('chooseMusicFolder')?.click();
+            });
+        }
+
+        const clearCacheBtn = document.getElementById('settingsClearCacheBtn');
+        if (clearCacheBtn) {
+            clearCacheBtn.addEventListener('click', () => {
+                this.silenceBoundsCache.clear();
+                this.waveformCache.clear();
+                this.updateStatus('Кэш анализа и осциллограмм очищен', 'success');
+            });
+        }
+
+        const resetBtn = document.getElementById('resetAudioSettingsBtn');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                this.audioSettings = {
+                    trimSilenceEnabled: CAS_CONFIG.SETTINGS.TRIM_SILENCE.DEFAULT_ENABLED,
+                    trimSilenceStart: CAS_CONFIG.SETTINGS.TRIM_SILENCE.DEFAULT_START,
+                    trimSilenceEnd: CAS_CONFIG.SETTINGS.TRIM_SILENCE.DEFAULT_END,
+                    trimSilenceThreshold: CAS_CONFIG.SETTINGS.TRIM_SILENCE.DEFAULT_THRESHOLD_DB,
+                    trimSilencePadding: CAS_CONFIG.SETTINGS.TRIM_SILENCE.DEFAULT_PADDING_MS,
+                    volumeStabilizationEnabled: CAS_CONFIG.SETTINGS.STABILIZER.DEFAULT_ENABLED,
+                    volumeStabilizationMode: CAS_CONFIG.SETTINGS.STABILIZER.DEFAULT_MODE,
+                    volumeNormalizationEnabled: CAS_CONFIG.SETTINGS.STABILIZER.DEFAULT_NORMALIZATION_ENABLED,
+                    volumeTargetLevel: CAS_CONFIG.SETTINGS.STABILIZER.DEFAULT_TARGET_LUFS
+                };
+                this.silenceBoundsCache.clear();
+                this.syncSettingsUI();
+                this.applyStabilizerSettings();
+                this.saveStoredData();
+                this.updateStatus('Настройки звука сброшены по умолчанию', 'success');
+            });
+        }
+
+        this.syncSettingsUI();
+    }
+
+    syncSettingsUI() {
+        if (typeof document === 'undefined') return;
+        const folderEl = document.getElementById('settingsCurrentMusicFolder');
+        if (folderEl) {
+            folderEl.textContent = this.config?.musicFolder || 'Папка не выбрана';
+        }
+
+        const s = this.audioSettings;
+        if (!s) return;
+
+        const trimEnabled = document.getElementById('settingTrimSilenceEnabled');
+        if (trimEnabled) trimEnabled.checked = Boolean(s.trimSilenceEnabled);
+
+        const trimOptions = document.getElementById('trimSilenceOptions');
+        if (trimOptions) {
+            trimOptions.style.opacity = s.trimSilenceEnabled ? '1' : '0.45';
+            trimOptions.style.pointerEvents = s.trimSilenceEnabled ? 'auto' : 'none';
+        }
+
+        const trimStart = document.getElementById('settingTrimSilenceStart');
+        if (trimStart) trimStart.checked = Boolean(s.trimSilenceStart);
+
+        const trimEnd = document.getElementById('settingTrimSilenceEnd');
+        if (trimEnd) trimEnd.checked = Boolean(s.trimSilenceEnd);
+
+        const trimThreshold = document.getElementById('settingTrimSilenceThreshold');
+        if (trimThreshold) trimThreshold.value = s.trimSilenceThreshold;
+        const trimThresholdVal = document.getElementById('settingTrimSilenceThresholdVal');
+        if (trimThresholdVal) trimThresholdVal.textContent = `${s.trimSilenceThreshold} dB`;
+
+        const trimPadding = document.getElementById('settingTrimSilencePadding');
+        if (trimPadding) trimPadding.value = s.trimSilencePadding;
+        const trimPaddingVal = document.getElementById('settingTrimSilencePaddingVal');
+        if (trimPaddingVal) trimPaddingVal.textContent = `${s.trimSilencePadding} мс`;
+
+        const volStabEnabled = document.getElementById('settingVolumeStabilizationEnabled');
+        if (volStabEnabled) volStabEnabled.checked = Boolean(s.volumeStabilizationEnabled);
+
+        const volStabOptions = document.getElementById('volumeStabilizationOptions');
+        if (volStabOptions) {
+            volStabOptions.style.opacity = s.volumeStabilizationEnabled ? '1' : '0.45';
+            volStabOptions.style.pointerEvents = s.volumeStabilizationEnabled ? 'auto' : 'none';
+        }
+
+        const volStabMode = document.getElementById('settingVolumeStabilizationMode');
+        if (volStabMode) volStabMode.value = s.volumeStabilizationMode || 'theatre';
+
+        const volNormEnabled = document.getElementById('settingVolumeNormalizationEnabled');
+        if (volNormEnabled) volNormEnabled.checked = Boolean(s.volumeNormalizationEnabled);
+
+        const volTargetLevel = document.getElementById('settingVolumeTargetLevel');
+        if (volTargetLevel) volTargetLevel.value = String(s.volumeTargetLevel || -14);
     }
 
     updateStatus(message, type = 'info') {
