@@ -441,4 +441,41 @@ test('detectSilenceBounds: tracks with audio from the very beginning are never t
     assert.equal(bounds.endSec, 5, 'Tracks with sound ending at finish must end at full duration');
 });
 
+test('lucide icons: all data-lucide icons referenced in index.html exist in lucide icon set', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const lucide = require('lucide');
+
+    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    const matches = html.match(/data-lucide="([^"]+)"/g) || [];
+    const iconNames = matches.map(m => m.replace('data-lucide="', '').replace('"', ''));
+
+    function toPascalCase(str) {
+        return str.replace(/(^\w|-\w)/g, (m) => m.replace('-', '').toUpperCase());
+    }
+
+    assert.ok(iconNames.length > 0, 'Found data-lucide icons in index.html');
+    for (const name of iconNames) {
+        const pascalKey = toPascalCase(name);
+        assert.ok(
+            lucide.icons[pascalKey] || lucide.icons[name],
+            `Icon "${name}" (key "${pascalKey}") must exist in Lucide icon set`
+        );
+    }
+});
+
+test('lucide icons: assets/lucide.min.js is packaged and included in index.html script tags', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+
+    const assetPath = path.join(__dirname, '..', 'assets', 'lucide.min.js');
+    assert.ok(fs.existsSync(assetPath), 'assets/lucide.min.js must exist on disk');
+    const stat = fs.statSync(assetPath);
+    assert.ok(stat.size > 100000, 'assets/lucide.min.js must be a valid non-empty bundle');
+
+    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    assert.ok(html.includes('<script src="assets/lucide.min.js"></script>'), 'index.html must load assets/lucide.min.js');
+});
+
+
 
