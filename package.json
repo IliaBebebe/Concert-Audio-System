@@ -1,6 +1,6 @@
 {
   "name": "theatre-sound-mixer",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Professional sound mixer for theatre productions - Concert Audio System (CAS)",
   "desktopName": "concert-audio-system",
   "main": "main.js",
@@ -51,6 +51,7 @@
       "welcome.js",
       "welcome.css",
       "assets/app-icon.ico",
+      "assets/app-icon.png",
       "assets/big-logo.png",
       "assets/cas-logo-transparent.png",
       "assets/howler.min.js",
@@ -76,6 +77,7 @@
       "artifactName": "Concert-Audio-System-Setup.${ext}"
     },
     "mac": {
+      "icon": "assets/app-icon.icns",
       "target": [
         {
           "target": "dmg",
@@ -89,6 +91,7 @@
       "x64ArchFiles": "**/online-tools/darwin-*/{deno,ffmpeg}"
     },
     "linux": {
+      "icon": "assets/icons",
       "target": [
         {
           "target": "AppImage",

@@ -15,6 +15,7 @@ const CAS_CONFIG = Object.freeze({
         MAX_CONCURRENT_DURATION_LOADS: 4
     },
     UI: {
+        PROGRESS_PAINT_INTERVAL_MS: 50,
         MODAL_CLOSE_MS: 150,
         FLOATING_Z_INDEX: 1100,
         STATUS_TIMEOUT_MS: 4000
@@ -23,6 +24,8 @@ const CAS_CONFIG = Object.freeze({
         THROTTLE_MS: 400
     }
 });
+
+const CAS_SILENT_SAMPLES = Object.freeze([]);
 
 const CAS_LOGGER = {
     debug(...args) {
@@ -327,9 +330,13 @@ class TheatreSoundMixer {
         }
     }
     
+    isVisualsHidden() {
+        return Boolean(this.isWindowHidden || document.hidden);
+    }
+
     setupVisibilityHandlers() {
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
+        const updateVisibility = () => {
+            if (this.isVisualsHidden()) {
                 this.pauseVuMeters();
                 this.stopProgressTracking(false);
                 if (this.isPlaying && !this.isPaused) {
@@ -342,6 +349,13 @@ class TheatreSoundMixer {
                     this.startProgressTracking();
                 }
             }
+        };
+        document.addEventListener('visibilitychange', updateVisibility);
+        // With backgroundThrottling disabled, Chromium stays "visible" when
+        // minimized. Native window events stop graphics without slowing audio timers.
+        this.unsubscribeWindowVisibility = window.electronAPI?.onWindowVisibilityChange?.(visible => {
+            this.isWindowHidden = !visible;
+            updateVisibility();
         });
     }
 
@@ -384,8 +398,7 @@ class TheatreSoundMixer {
                 readout: document.getElementById(`${type}LevelValue`)
             };
         }
-        this.setupAudioAnalysers();
-        this.startVuMeters();
+        this.updateVuMeters();
     }
 
     setupAudioAnalysers() {
@@ -476,9 +489,7 @@ class TheatreSoundMixer {
     }
 
     startVuMeters() {
-        if (this.vuMeterInterval) {
-            clearInterval(this.vuMeterInterval);
-        }
+        if (this.vuMeterInterval || this.isVisualsHidden()) return;
         
         this.vuMeterInterval = setInterval(() => {
             this.updateVuMeters();
@@ -500,17 +511,30 @@ class TheatreSoundMixer {
     renderLevelMeter(type, reading) {
         const display = this.meterDisplays?.[type];
         if (!display?.meter) return;
-        display.meter.style.setProperty('--meter-level', `${reading.level * 100}%`);
-        display.meter.style.setProperty('--meter-peak', `${reading.peak * 100}%`);
-        display.meter.dataset.clipping = String(reading.clipping);
-        if (display.peak) display.peak.hidden = reading.peak <= 0;
-        if (display.readout) display.readout.textContent = reading.db <= -60 ? '−∞' : reading.db.toFixed(1);
+        const level = `${(reading.level * 100).toFixed(1)}%`;
+        const peak = `${(reading.peak * 100).toFixed(1)}%`;
+        const db = reading.db <= -60 ? '−∞' : reading.db.toFixed(1);
+        if (display.lastLevel !== level) {
+            display.meter.style.setProperty('--meter-level', level);
+            display.lastLevel = level;
+        }
+        if (display.lastPeak !== peak) {
+            display.meter.style.setProperty('--meter-peak', peak);
+            if (display.peak) display.peak.hidden = reading.peak <= 0;
+            display.lastPeak = peak;
+        }
+        if (display.lastClipping !== reading.clipping) {
+            display.meter.dataset.clipping = String(reading.clipping);
+            display.lastClipping = reading.clipping;
+        }
+        if (display.readout && display.lastDb !== db) {
+            display.readout.textContent = db;
+            display.lastDb = db;
+        }
     }
 
     updateVuMeters() {
-        this.connectHowlToAnalyser(this.musicPlayer, 'music');
-        this.retiringMusicPlayers.forEach((player) => this.connectHowlToAnalyser(player, 'music'));
-        this.soundEffects.forEach((soundData) => this.connectHowlToAnalyser(soundData?.sound, 'effects'));
+        if (this.isVisualsHidden()) return;
 
         const hasRetiringMusic = Array.from(this.retiringMusicPlayers).some((player) => {
             try { return player?.playing(); } catch { return false; }
@@ -519,17 +543,30 @@ class TheatreSoundMixer {
             music: (this.isPlaying && !this.isPaused) || hasRetiringMusic,
             effects: Array.from(this.soundEffects.values()).some((soundData) => soundData?.sound?.playing())
         };
+        if (active.music) {
+            this.connectHowlToAnalyser(this.musicPlayer, 'music');
+            this.retiringMusicPlayers.forEach(player => this.connectHowlToAnalyser(player, 'music'));
+        }
+        if (active.effects) {
+            this.soundEffects.forEach(soundData => this.connectHowlToAnalyser(soundData?.sound, 'effects'));
+        }
+        let needsUpdates = active.music || active.effects;
         const now = performance.now();
         for (const type of ['music', 'effects']) {
             const buffer = this[`${type}AnalyserData`];
             const channels = this.meterChannels?.[type];
-            if (!buffer || !this.levelMeters?.[type]) continue;
-            if (active[type] && channels && this.audioContext?.state === 'running') {
+            if (!this.levelMeters?.[type]) continue;
+            let samples = CAS_SILENT_SAMPLES;
+            if (active[type] && buffer && channels && this.audioContext?.state === 'running') {
                 channels.forEach((analyser, channel) => analyser.getFloatTimeDomainData(buffer.subarray(channel * 2048, (channel + 1) * 2048)));
+                samples = buffer;
             }
-            else buffer.fill(0);
-            this.renderLevelMeter(type, this.levelMeters[type].update(buffer, now));
+            const reading = this.levelMeters[type].update(samples, now);
+            this.renderLevelMeter(type, reading);
+            needsUpdates ||= reading.level > 0 || reading.peak > 0 || reading.clipping;
         }
+        if (needsUpdates) this.startVuMeters();
+        else this.pauseVuMeters();
     }
 
     getResponsivePanelWidths(width, leftRatio = 360 / 1400, rightRatio = 340 / 1400) {
@@ -3170,14 +3207,15 @@ class TheatreSoundMixer {
         const playerToken = this.musicPlayerToken;
         if (!player || !this.isPlaying || this.isPaused) return;
 
-        if (typeof document !== 'undefined' && document.hidden) {
+        if (this.isVisualsHidden()) {
             this.startBackgroundCrossfadeTracking();
             return;
         }
 
         let frameId = null;
+        let lastPaint = -Infinity;
         const progressBar = document.getElementById('progressBar');
-        const updateProgress = () => {
+        const updateProgress = (timestamp) => {
             if (this.musicPlayer !== player || this.musicPlayerToken !== playerToken || !this.isPlaying || this.isPaused) {
                 if (this.progressAnimationFrame === frameId) this.progressAnimationFrame = null;
                 return;
@@ -3188,17 +3226,17 @@ class TheatreSoundMixer {
                 const duration = player.duration();
                 
                 if (duration > 0 && !isNaN(seek) && !isNaN(duration)) {
-                    const progress = Math.min(100, Math.max(0, (seek / duration) * 100));
-                    if (progressBar) {
-                        progressBar.value = progress;
-                    }
-                    this.updateWaveformProgress(progress);
                     this.maybeStartAutomaticCrossfade(player, playerToken, seek, duration);
-                    
-                    const now = Date.now();
-                    if (!this.lastTimeUpdate || now - this.lastTimeUpdate >= 250) {
-                        this.updateTimeDisplays(player);
-                        this.lastTimeUpdate = now;
+                    if (timestamp - lastPaint >= CAS_CONFIG.UI.PROGRESS_PAINT_INTERVAL_MS) {
+                        lastPaint = timestamp;
+                        const progress = Math.min(100, Math.max(0, (seek / duration) * 100));
+                        if (progressBar) progressBar.value = progress;
+                        this.updateWaveformProgress(progress);
+                        const now = Date.now();
+                        if (!this.lastTimeUpdate || now - this.lastTimeUpdate >= CAS_CONFIG.AUDIO.PROGRESS_INTERVAL_MS) {
+                            this.updateTimeDisplays(player);
+                            this.lastTimeUpdate = now;
+                        }
                     }
                 }
             } catch {}
@@ -3231,6 +3269,14 @@ class TheatreSoundMixer {
                         };
                     }
                     const displays = this._cachedTimeDisplays;
+                    const seekControl = document.getElementById('progressBar');
+                    seekControl?.setAttribute('aria-valuetext', `${currentTime} из ${totalTime}`);
+                    if (this.lastRulerDuration !== duration) {
+                        document.querySelectorAll('.seek-ruler [data-fraction]').forEach(label => {
+                            label.textContent = this.formatTime(duration * Number(label.dataset.fraction));
+                        });
+                        this.lastRulerDuration = duration;
+                    }
                     
                     if (displays.current) displays.current.textContent = currentTime;
                     if (displays.total) displays.total.textContent = totalTime;
@@ -3342,33 +3388,40 @@ class TheatreSoundMixer {
         this.clearWaveform('Строю waveform...');
         this.setWaveformState('Строю waveform...', true);
 
-        try {
-            const result = await window.electronAPI.getAudioFileBuffer(track.path);
+        // Serialize reads and decodes. Only the latest queued selection is read;
+        // an already running decode finishes before another large buffer is allocated.
+        const previousTask = this.waveformLoadTask || Promise.resolve();
+        const task = previousTask.catch(() => {}).then(async () => {
             if (requestId !== this.waveformRequestId) return;
-            if (!result?.success || !result.data) {
-                this.clearWaveform(result?.error || 'Waveform недоступна');
-                return;
+            try {
+                const result = await window.electronAPI.getAudioFileBuffer(track.path);
+                if (requestId !== this.waveformRequestId) return;
+                if (!result?.success || !result.data) {
+                    this.clearWaveform(result?.error || 'Waveform недоступна');
+                    return;
+                }
+                const audioData = this.toArrayBuffer(result.data);
+                const audioContext = this.getWaveformAudioContext();
+                // IPC gave us an owned buffer; decodeAudioData can consume it directly.
+                const decodedBuffer = await audioContext.decodeAudioData(audioData);
+                if (requestId !== this.waveformRequestId) return;
+                const peaks = this.createWaveformPeaks(decodedBuffer, 320);
+                this.waveformCache.set(track.path, peaks);
+                while (this.waveformCache.size > 32) {
+                    this.waveformCache.delete(this.waveformCache.keys().next().value);
+                }
+                this.waveformPeaks = peaks;
+                this.drawWaveform();
+                this.setWaveformState('', false);
+            } catch {
+                if (requestId === this.waveformRequestId) {
+                    this.clearWaveform('Waveform недоступна для этого файла');
+                }
             }
-
-            const audioData = this.toArrayBuffer(result.data);
-            const audioContext = this.getWaveformAudioContext();
-            const decodedBuffer = await audioContext.decodeAudioData(audioData.slice(0));
-            if (requestId !== this.waveformRequestId) return;
-
-            const peaks = this.createWaveformPeaks(decodedBuffer, 320);
-            this.waveformCache.set(track.path, peaks);
-            while (this.waveformCache.size > 32) {
-                this.waveformCache.delete(this.waveformCache.keys().next().value);
-            }
-
-            this.waveformPeaks = peaks;
-            this.drawWaveform();
-            this.setWaveformState('', false);
-        } catch {
-            if (requestId === this.waveformRequestId) {
-                this.clearWaveform('Waveform недоступна для этого файла');
-            }
-        }
+        });
+        this.waveformLoadTask = task;
+        await task;
+        if (this.waveformLoadTask === task) this.waveformLoadTask = null;
     }
 
     toArrayBuffer(data) {
@@ -3495,10 +3548,14 @@ class TheatreSoundMixer {
 
     updateWaveformProgress(progress) {
         const panel = document.getElementById('waveformPanel');
-        const playhead = document.getElementById('waveformPlayhead');
+        const seek = document.getElementById('transportSeek');
         const clampedProgress = Math.min(100, Math.max(0, Number(progress) || 0));
-        if (panel) panel.style.setProperty('--waveform-progress', `${clampedProgress}%`);
-        if (playhead) playhead.style.left = `${clampedProgress}%`;
+        const ratio = (clampedProgress / 100).toFixed(4);
+        if (panel) {
+            panel.style.setProperty('--waveform-progress', `${clampedProgress}%`);
+            panel.style.setProperty('--seek-ratio', ratio);
+        }
+        if (seek) seek.style.setProperty('--seek-ratio', ratio);
     }
 
     seekFromWaveform(event) {
@@ -3741,6 +3798,9 @@ class TheatreSoundMixer {
                 volume: this.effectsVolume,
                 mute: this.isMuted,
                 html5: true,
+                onplay: () => {
+                    if (this.isCurrentEffectData(padIndex, soundData, generation)) this.updateVuMeters();
+                },
                 onload: () => {
                     if (!this.isCurrentEffectData(padIndex, soundData, generation)) {
                         try { sound.unload(); } catch {}
@@ -3834,9 +3894,15 @@ class TheatreSoundMixer {
         
         const pad = document.querySelector(`.sound-pad[data-index="${padIndex}"]`);
         if (!pad) return;
+        const progressBar = document.createElement('div');
+        progressBar.className = 'pad-progress-bar';
+        progressBar.setAttribute('aria-hidden', 'true');
+        progressBar.style.transform = 'scaleX(0)';
+        pad.appendChild(progressBar);
         
         const startTime = Date.now();
         const updateProgress = () => {
+            if (this.isVisualsHidden()) return;
             if (!pad.isConnected || !pad.classList.contains('playing')) {
                 this.stopPadProgress(padIndex);
                 return;
@@ -3845,13 +3911,7 @@ class TheatreSoundMixer {
             const elapsed = (Date.now() - startTime) / 1000;
             const progress = Math.min(100, (elapsed / duration) * 100);
             
-            let progressBar = pad.querySelector('.pad-progress-bar');
-            if (!progressBar) {
-                progressBar = document.createElement('div');
-                progressBar.className = 'pad-progress-bar';
-                pad.appendChild(progressBar);
-            }
-            progressBar.style.width = `${progress}%`;
+            progressBar.style.transform = `scaleX(${progress / 100})`;
             
             if (progress >= 100) {
                 this.stopPadProgress(padIndex);
@@ -4590,6 +4650,7 @@ if (typeof window !== 'undefined') {
             });
 
             window.soundMixer.stopBackgroundCrossfadeTracking();
+            window.soundMixer.unsubscribeWindowVisibility?.();
             if (window.soundMixer.waveformResizeObserver) {
                 window.soundMixer.waveformResizeObserver.disconnect();
             }

@@ -5,6 +5,14 @@ const { contextBridge, ipcRenderer } = require('electron');
  * Все методы валидируют входные параметры перед отправкой в main process
  */
 contextBridge.exposeInMainWorld('electronAPI', {
+  onWindowVisibilityChange: callback => {
+    if (typeof callback !== 'function') throw new Error('Ожидался обработчик видимости');
+    const listener = (_event, visible) => {
+      if (typeof visible === 'boolean') callback(visible);
+    };
+    ipcRenderer.on('window-visibility', listener);
+    return () => ipcRenderer.removeListener('window-visibility', listener);
+  },
   searchOnline: query => ipcRenderer.invoke('online-search', query),
   getOnlineLibrary: () => ipcRenderer.invoke('online-library'),
   removeOnlineTrack: id => ipcRenderer.invoke('online-remove', id),

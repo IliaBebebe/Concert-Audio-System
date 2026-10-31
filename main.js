@@ -11,8 +11,8 @@ const DEFAULT_WINDOW_WIDTH = 1400;
 const DEFAULT_WINDOW_HEIGHT = 900;
 const MIN_WINDOW_WIDTH = 1000;
 const MIN_WINDOW_HEIGHT = 700;
-const WELCOME_WINDOW_WIDTH = 600;
-const WELCOME_WINDOW_HEIGHT = 440;
+const WELCOME_WINDOW_WIDTH = 960;
+const WELCOME_WINDOW_HEIGHT = 640;
 const SAVE_STATE_DEBOUNCE_MS = 500;
 const WINDOW_SHOW_FALLBACK_MS = 1000;
 const METADATA_TIMEOUT_MS = 10000;
@@ -37,9 +37,7 @@ app.on('before-quit', () => onlineMusic?.dispose());
 const configPath = path.join(app.getPath('userData'), 'config.json');
 const windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
 const metadataWorkerPath = path.join(__dirname, 'metadata-worker.js');
-const appIconPath = process.platform === 'win32'
-  ? path.join(__dirname, 'assets', 'app-icon.ico')
-  : undefined;
+const appIconPath = path.join(__dirname, 'assets', process.platform === 'win32' ? 'app-icon.ico' : 'app-icon.png');
 const isDev = process.argv.includes('--dev');
 
 let mainWindow = null;
@@ -417,16 +415,17 @@ function createWelcomeWindow() {
   }
 
   const welcomePagePath = path.join(__dirname, 'welcome.html');
+  const { workAreaSize } = screen.getPrimaryDisplay();
   const window = new BrowserWindow({
-    width: WELCOME_WINDOW_WIDTH,
-    height: WELCOME_WINDOW_HEIGHT,
+    width: Math.min(WELCOME_WINDOW_WIDTH, workAreaSize.width),
+    height: Math.min(WELCOME_WINDOW_HEIGHT, workAreaSize.height),
     resizable: false,
     frame: false,
     center: true,
     show: false,
-    backgroundColor: '#0f0f0f',
+    backgroundColor: '#181818',
     icon: appIconPath,
-    webPreferences: getWindowWebPreferences()
+    webPreferences: { ...getWindowWebPreferences(), backgroundThrottling: true }
   });
   welcomeWindow = window;
   configureWebContents(window, welcomePagePath);
@@ -475,13 +474,20 @@ async function createWindow() {
   mainWindow = window;
   configureWebContents(window, htmlPath);
   Menu.setApplicationMenu(null);
+  const sendVisibility = () => {
+    if (!window.isDestroyed()) {
+      window.webContents.send('window-visibility', window.isVisible() && !window.isMinimized());
+    }
+  };
+  for (const event of ['show', 'hide', 'minimize', 'restore']) window.on(event, sendVisibility);
+  window.webContents.on('did-finish-load', sendVisibility);
 
   window.loadFile(htmlPath).catch((error) => {
     console.error('Failed to load main page:', error);
     dialog.showErrorBox('Ошибка запуска', 'Не удалось открыть главное окно приложения.');
   });
 
-  window.once('ready-to-show', () => {
+  const showMainWindow = () => {
     if (mainWindow !== window || window.isDestroyed()) {
       return;
     }
@@ -490,12 +496,13 @@ async function createWindow() {
     }
     window.show();
     window.focus();
-  });
+    if (welcomeWindow && !welcomeWindow.isDestroyed()) welcomeWindow.close();
+  };
+  window.once('ready-to-show', showMainWindow);
 
   setTimeout(() => {
     if (mainWindow === window && !window.isDestroyed() && !window.isVisible()) {
-      window.show();
-      window.focus();
+      showMainWindow();
     }
   }, WINDOW_SHOW_FALLBACK_MS);
 
@@ -840,15 +847,12 @@ ipcMain.handle('select-music-folder-and-open-main', async (event) => {
       properties: ['openDirectory']
     });
     if (result.canceled || result.filePaths.length === 0) {
-      return { success: false, error: 'Папка не выбрана' };
+      return { success: false, canceled: true, error: 'Папка не выбрана' };
     }
 
     await updateMusicFolder(result.filePaths[0]);
     await createWindow();
 
-    if (welcomeWindow && !welcomeWindow.isDestroyed()) {
-      welcomeWindow.close();
-    }
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };

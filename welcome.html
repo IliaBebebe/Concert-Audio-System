@@ -3,19 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Concert Audio System</title>
+    <title>Начало работы — Concert Audio System</title>
     <link rel="stylesheet" href="welcome.css">
 </head>
 <body>
-    <div class="welcome-container">
-        <button id="closeWelcomeBtn" type="button" aria-label="Закрыть">×</button>
-        <img src="assets/cas-logo-transparent.png" alt="Concert Audio System Logo" class="logo">
-        <h1 class="title">Concert Audio System</h1>
-        <p class="welcome-subtitle">Музыка, эффекты и переходы в одном рабочем пространстве.</p>
-        <div class="button-container">
-            <button id="selectFolderBtn">Выбрать папку с музыкой</button>
-        </div>
-        <p id="welcomeStatus" class="welcome-status" role="status" aria-live="polite"></p>
+    <div class="welcome-shell">
+        <header class="window-bar">
+            <img src="assets/cas-logo-transparent.png" alt="Concert Audio System" class="logo" draggable="false" decoding="async">
+            <button id="closeWelcomeBtn" class="close-button" type="button" aria-label="Закрыть приложение" title="Закрыть приложение">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            </button>
+        </header>
+        <main class="welcome-content">
+            <section class="welcome-intro" aria-labelledby="welcomeTitle">
+                <p class="welcome-eyebrow">Ваше рабочее пространство для звука</p>
+                <h1 id="welcomeTitle">Сцена начинается<br>со звука.</h1>
+                <p class="welcome-description" id="folderDescription">Выберите папку с музыкой.<br>Мы соберём ваши плейлисты, а вы зададите&nbsp;ритм.</p>
+                <div class="welcome-action" id="welcomeAction" aria-busy="false">
+                    <button id="selectFolderBtn" type="button" aria-describedby="folderDescription welcomeStatus">
+                        <svg class="folder-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 19V6a2 2 0 0 1 2-2h5l3 3h6a2 2 0 0 1 2 2v2M3 19l3-8h16l-3 8a2 2 0 0 1-2 1H5a2 2 0 0 1-2-1Z"/></svg>
+                        <span id="selectFolderLabel">Выбрать папку с музыкой</span>
+                        <span class="button-loader" aria-hidden="true"><i></i><i></i><i></i></span>
+                    </button>
+                </div>
+                <p id="welcomeStatus" class="welcome-status" role="status" aria-live="polite" aria-atomic="true">Папку можно изменить позже в приложении.</p>
+            </section>
+            <aside class="sound-stage" aria-label="Две деки, плавные переходы и 12 звуковых пэдов">
+                <div class="stage-caption" aria-hidden="true"><span class="signal-dot"></span>Всё для вашего выступления</div>
+                <div class="audio-art" aria-hidden="true">
+                    <div class="deck deck-a">
+                        <div class="deck-heading"><span class="deck-letter">A</span><span>Музыка</span><span class="deck-indicator"></span></div>
+                        <svg class="waveform" viewBox="0 0 320 48" preserveAspectRatio="none"><path d="M5 22.0v4.0 M15 20.5v7.0 M25 17.9v12.2 M35 15.9v16.1 M45 16.2v15.6 M55 19.0v9.9 M65 13.5v21.1 M75 8.8v30.5 M85 7.4v33.3 M95 10.4v27.1 M105 16.7v14.6 M115 8.5v31.0 M125 2.9v42.2 M135 2.5v43.0 M145 7.6v32.7 M155 15.6v16.7 M165 6.9v34.2 M175 1.8v44.3 M185 2.5v43.0 M195 8.5v31.1 M205 16.2v15.7 M215 9.1v29.9 M225 5.8v36.3 M235 7.4v33.1 M245 12.7v22.7 M255 18.2v11.6 M265 14.6v18.9 M275 13.9v20.1 M285 16.0v16.0 M295 19.1v9.7 M305 21.3v5.4 M315 22.0v4.0"/></svg>
+                        <div class="deck-timeline"><span></span><span></span><span></span><span></span><span></span></div>
+                    </div>
+                    <div class="deck deck-b">
+                        <div class="deck-heading"><span class="deck-letter">B</span><span>Следующий трек</span><span class="deck-indicator"></span></div>
+                        <svg class="waveform" viewBox="0 0 320 48" preserveAspectRatio="none"><path d="M5 22.0v4.0 M15 20.4v7.2 M25 20.5v6.9 M35 17.9v12.3 M45 14.2v19.7 M55 12.0v24.0 M65 13.0v21.9 M75 17.4v13.2 M85 11.9v24.2 M95 6.3v35.5 M105 4.6v38.9 M115 8.0v32.0 M125 15.5v17.1 M135 8.4v31.2 M145 2.3v43.4 M155 1.5v45.0 M165 6.5v35.0 M175 15.2v17.5 M185 8.3v31.4 M195 3.2v41.5 M205 3.6v40.8 M215 8.9v30.2 M225 16.7v14.6 M235 11.7v24.7 M245 8.9v30.1 M255 10.3v27.4 M265 14.6v18.9 M275 19.4v9.2 M285 17.7v12.6 M295 18.0v12.1 M305 19.9v8.1 M315 22.0v4.0"/></svg>
+                        <div class="deck-timeline"><span></span><span></span><span></span><span></span><span></span></div>
+                    </div>
+                    <div class="stage-tools">
+                        <div class="crossfader"><div class="fader-rail"><span></span></div><span>Плавные переходы</span></div>
+                        <div class="pad-bank"><div class="mini-pads"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span>12 звуковых пэдов</span></div>
+                    </div>
+                </div>
+                <p class="stage-note" aria-hidden="true">Следующий трек уже наготове.</p>
+            </aside>
+        </main>
+        <footer class="welcome-footer">
+            <span><span class="privacy-dot" aria-hidden="true"></span>Ваша музыка остаётся на компьютере</span>
+            <span class="file-formats">MP3 / WAV / FLAC и другие</span>
+        </footer>
     </div>
     <script src="welcome.js"></script>
 </body>

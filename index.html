@@ -176,7 +176,11 @@
                     <div class="waveform-playhead" id="waveformPlayhead"></div>
                     <div class="waveform-state" id="waveformState">Осциллограмма ожидает трек</div>
                 </div>
-                <input type="range" class="progress-bar" id="progressBar" min="0" max="100" value="0" aria-label="Прогресс воспроизведения">
+                <div class="transport-seek" id="transportSeek">
+                    <div class="seek-rail" aria-hidden="true"><div class="seek-fill"></div></div>
+                    <input type="range" class="progress-bar" id="progressBar" min="0" max="100" step="0.1" value="0" aria-label="Позиция воспроизведения">
+                    <div class="seek-ruler" aria-hidden="true"><span data-fraction="0">0:00</span><span data-fraction="0.25">—</span><span data-fraction="0.5">—</span><span data-fraction="0.75">—</span><span data-fraction="1">—</span></div>
+                </div>
                 </div>
             </div>
 
@@ -277,7 +281,7 @@
         </form>
     </dialog>
 
-    <footer class="workspace-footer"><div class="status" id="status" role="status" aria-live="polite">Готов к работе</div><span class="footer-hint"><kbd>Пробел</kbd> пауза <kbd>Esc</kbd> стоп</span><span class="version">1.5.0</span></footer>
+    <footer class="workspace-footer"><div class="status" id="status" role="status" aria-live="polite">Готов к работе</div><span class="footer-hint"><kbd>Пробел</kbd> пауза <kbd>Esc</kbd> стоп</span><span class="version">1.6.0</span></footer>
 
     <script src="online-ui.js"></script>
     <script src="workspaces.js"></script>
