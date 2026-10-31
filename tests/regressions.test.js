@@ -232,6 +232,27 @@ test('Space opens a focused details summary without toggling music', t => {
   assert.equal(played, false);
 });
 
+test('resizing with the main workspace hidden keeps finite panel proportions', t => {
+  const { mixer } = mixerFixture(t);
+  let boxWidth = 1400;
+  const values = new Map();
+  const listeners = new Map();
+  const container = { getBoundingClientRect: () => ({ width: boxWidth }), style: { setProperty: (name, value) => values.set(name, value) } };
+  document.querySelector = selector => selector === '.app-container' ? container : null;
+  window.innerWidth = 1400;
+  window.addEventListener = (name, handler) => listeners.set(name, handler);
+  mixer.setupBlockHeightPersistence = () => {};
+  mixer.setupResizers();
+  boxWidth = 0;
+  window.innerWidth = 1000;
+  listeners.get('resize')();
+  for (const value of values.values()) assert.ok(Number.isFinite(parseFloat(value)) && parseFloat(value) > 0);
+  boxWidth = 1000;
+  listeners.get('resize')();
+  const total = [...values.values()].reduce((sum, value) => sum + parseFloat(value), 0);
+  assert.ok(total <= 63, 'side panels must leave room for the center at the minimum window size');
+});
+
 test('Shift+B changes target deck without interrupting current playback', t => {
   const { mixer } = mixerFixture(t);
   mixer.loadTrack(0, { deckId: 'A' });

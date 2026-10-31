@@ -571,13 +571,14 @@ class TheatreSoundMixer {
         } catch {}
 
         const constrainSizes = () => {
-            const width = appContainer.getBoundingClientRect().width;
+            // A hidden workspace has no layout box. Keep ratios valid while another tab is open.
+            const width = appContainer.getBoundingClientRect().width || window.innerWidth || 1;
             const sizes = this.getResponsivePanelWidths(width, leftRatio, rightRatio);
             appContainer.style.setProperty('--left-width', `${sizes.leftWidth / width * 100}%`);
             appContainer.style.setProperty('--right-width', `${sizes.rightWidth / width * 100}%`);
         };
         const saveSizes = (sizes) => {
-            const viewportWidth = appContainer.getBoundingClientRect().width;
+            const viewportWidth = appContainer.getBoundingClientRect().width || window.innerWidth || 1;
             leftRatio = sizes.leftWidth / viewportWidth;
             rightRatio = sizes.rightWidth / viewportWidth;
             try {
