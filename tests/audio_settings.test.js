@@ -417,3 +417,28 @@ test('updateTimeDisplays: stage ending warning alerts at <=15s and <=5s threshol
     }
 });
 
+test('audioSettings: default configuration enforces clean bypass (false) for pure bit-perfect playback', () => {
+    assert.equal(CAS_CONFIG.SETTINGS.TRIM_SILENCE.DEFAULT_ENABLED, false, 'Silence trimming must be disabled by default');
+    assert.equal(CAS_CONFIG.SETTINGS.STABILIZER.DEFAULT_ENABLED, false, 'Volume stabilization must be disabled by default');
+    assert.equal(CAS_CONFIG.SETTINGS.STABILIZER.DEFAULT_NORMALIZATION_ENABLED, false, 'Normalization must be disabled by default');
+});
+
+test('detectSilenceBounds: tracks with audio from the very beginning are never trimmed at start', () => {
+    const mixer = Object.create(TheatreSoundMixer.prototype);
+    mixer.audioSettings = {
+        trimSilenceEnabled: true,
+        trimSilenceStart: true,
+        trimSilenceEnd: true,
+        trimSilenceThreshold: -48,
+        trimSilencePadding: 80
+    };
+
+    // Track with sound from 0.0s to 5.0s (no leading silence, 0s trailing silence)
+    const buffer = createMockAudioBuffer({ duration: 5, silenceStartSec: 0.0, silenceEndSec: 0.0 });
+    const bounds = mixer.detectSilenceBounds(buffer);
+
+    assert.equal(bounds.startSec, 0, 'Tracks with sound starting immediately must start strictly at 0:00');
+    assert.equal(bounds.endSec, 5, 'Tracks with sound ending at finish must end at full duration');
+});
+
+

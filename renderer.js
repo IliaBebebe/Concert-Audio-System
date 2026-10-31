@@ -25,7 +25,7 @@ const CAS_CONFIG = Object.freeze({
     },
     SETTINGS: {
         TRIM_SILENCE: {
-            DEFAULT_ENABLED: true,
+            DEFAULT_ENABLED: false,
             DEFAULT_START: true,
             DEFAULT_END: true,
             DEFAULT_THRESHOLD_DB: -48,
@@ -39,7 +39,7 @@ const CAS_CONFIG = Object.freeze({
             MIN_TRACK_DURATION_SEC: 2.0
         },
         STABILIZER: {
-            DEFAULT_ENABLED: true,
+            DEFAULT_ENABLED: false,
             DEFAULT_MODE: 'theatre',
             DEFAULT_NORMALIZATION_ENABLED: false,
             DEFAULT_TARGET_LUFS: -14,
@@ -5104,8 +5104,9 @@ class TheatreSoundMixer {
 
         const trimOptions = document.getElementById('trimSilenceOptions');
         if (trimOptions) {
-            trimOptions.style.opacity = s.trimSilenceEnabled ? '1' : '0.45';
-            trimOptions.style.pointerEvents = s.trimSilenceEnabled ? 'auto' : 'none';
+            trimOptions.classList.toggle('is-disabled', !s.trimSilenceEnabled);
+            trimOptions.style.opacity = '';
+            trimOptions.style.pointerEvents = '';
         }
 
         const trimStart = document.getElementById('settingTrimSilenceStart');
@@ -5129,8 +5130,9 @@ class TheatreSoundMixer {
 
         const volStabOptions = document.getElementById('volumeStabilizationOptions');
         if (volStabOptions) {
-            volStabOptions.style.opacity = s.volumeStabilizationEnabled ? '1' : '0.45';
-            volStabOptions.style.pointerEvents = s.volumeStabilizationEnabled ? 'auto' : 'none';
+            volStabOptions.classList.toggle('is-disabled', !s.volumeStabilizationEnabled);
+            volStabOptions.style.opacity = '';
+            volStabOptions.style.pointerEvents = '';
         }
 
         const volStabMode = document.getElementById('settingVolumeStabilizationMode');

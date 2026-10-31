@@ -319,11 +319,21 @@
                     <div class="settings-card-header">
                         <div class="settings-card-icon"><i class="fas fa-scissors" aria-hidden="true"></i></div>
                         <div class="settings-card-title-text">
-                            <h3>Автоматическая обрезка тишины</h3>
+                            <div class="setting-title-row">
+                                <h3>Автоматическая обрезка тишины</h3>
+                                <span class="settings-help-tip" tabindex="0" role="button" aria-label="Справка: Автоматическая обрезка тишины">
+                                    <i class="fas fa-circle-question" aria-hidden="true"></i>
+                                    <span class="settings-tooltip">
+                                        <strong class="settings-tooltip-title">Обрезка цифровой тишины</strong>
+                                        <span class="settings-tooltip-desc">На лету пропускает мёртвые паузы в начале и конце треков для мгновенного звучания. Если в треке нет тишины, он звучит строго с 0:00.</span>
+                                        <span class="settings-tooltip-badge"><i class="fas fa-shield-halved" aria-hidden="true"></i> Исходные файлы на диске не изменяются</span>
+                                    </span>
+                                </span>
+                            </div>
                             <p>Пропускает мёртвые цифровые паузы в начале и конце треков для мгновенного старта фонограммы и чистого перехода без задержек.</p>
                         </div>
                         <label class="macos-switch" title="Включить / выключить автообрезку тишины">
-                            <input type="checkbox" id="settingTrimSilenceEnabled" checked>
+                            <input type="checkbox" id="settingTrimSilenceEnabled">
                             <span class="macos-switch-track"></span>
                         </label>
                     </div>
@@ -331,7 +341,17 @@
                     <div class="settings-card-content" id="trimSilenceOptions">
                         <div class="setting-row">
                             <div class="setting-info">
-                                <label for="settingTrimSilenceStart"><strong>Обрезать тишину в начале</strong></label>
+                                <div class="setting-title-row">
+                                    <label for="settingTrimSilenceStart"><strong>Обрезать тишину в начале</strong></label>
+                                    <span class="settings-help-tip" tabindex="0" role="button" aria-label="Справка: Обрезка тишины в начале">
+                                        <i class="fas fa-circle-question" aria-hidden="true"></i>
+                                        <span class="settings-tooltip">
+                                            <strong class="settings-tooltip-title">Старт без задержки</strong>
+                                            <span class="settings-tooltip-desc">Пропускает паузу перед первым звуком. Полезно для моментального вступления актеров или отбивок по нажатию Play.</span>
+                                            <span class="settings-tooltip-badge"><i class="fas fa-shield-halved" aria-hidden="true"></i> Без перезаписи файлов</span>
+                                        </span>
+                                    </span>
+                                </div>
                                 <span>Устраняет задержку перед вступлением — трек звучит сразу после запуска</span>
                             </div>
                             <label class="macos-switch">
@@ -342,7 +362,17 @@
 
                         <div class="setting-row">
                             <div class="setting-info">
-                                <label for="settingTrimSilenceEnd"><strong>Обрезать тишину в конце</strong></label>
+                                <div class="setting-title-row">
+                                    <label for="settingTrimSilenceEnd"><strong>Обрезать тишину в конце</strong></label>
+                                    <span class="settings-help-tip" tabindex="0" role="button" aria-label="Справка: Обрезка тишины в конце">
+                                        <i class="fas fa-circle-question" aria-hidden="true"></i>
+                                        <span class="settings-tooltip">
+                                            <strong class="settings-tooltip-title">Переход без пустоты</strong>
+                                            <span class="settings-tooltip-desc">Завершает воспроизведение трека сразу после затухания последнего звука, не дожидаясь пустых секунд до конца файла.</span>
+                                            <span class="settings-tooltip-tip"><i class="fas fa-circle-info" aria-hidden="true"></i> Ускоряет переход к следующему треку</span>
+                                        </span>
+                                    </span>
+                                </div>
                                 <span>Завершает трек и переходит к следующему сразу после естественного затухания</span>
                             </div>
                             <label class="macos-switch">
@@ -353,8 +383,19 @@
 
                         <div class="setting-row slider-row">
                             <div class="setting-info">
-                                <label for="settingTrimSilenceThreshold"><strong>Порог тишины</strong></label>
-                                <span>Звуки тише этого уровня считаются тишиной. <span class="badge-tag">−48 dBFS оптимально</span></span>
+                                <div class="setting-title-row">
+                                    <label for="settingTrimSilenceThreshold"><strong>Порог тишины</strong></label>
+                                    <span class="badge-tag">−48 dBFS оптимально</span>
+                                    <span class="settings-help-tip" tabindex="0" role="button" aria-label="Справка: Порог тишины">
+                                        <i class="fas fa-circle-question" aria-hidden="true"></i>
+                                        <span class="settings-tooltip">
+                                            <strong class="settings-tooltip-title">Амплитудный порог тишины</strong>
+                                            <span class="settings-tooltip-desc">Уровень в dBFS, ниже которого сигнал считается тишиной. Значение −48 dB надёжно отсекает цифровой шум, не съедая тихие акустические звуки.</span>
+                                            <span class="settings-tooltip-tip"><i class="fas fa-sliders" aria-hidden="true"></i> Диапазон от −60 dB до −30 dB</span>
+                                        </span>
+                                    </span>
+                                </div>
+                                <span>Звуки тише этого уровня считаются тишиной</span>
                             </div>
                             <div class="setting-control-group">
                                 <input type="range" id="settingTrimSilenceThreshold" min="-60" max="-30" step="1" value="-48" aria-label="Порог тишины в dBFS">
@@ -364,7 +405,17 @@
 
                         <div class="setting-row slider-row">
                             <div class="setting-info">
-                                <label for="settingTrimSilencePadding"><strong>Защитный запас (Safety Margin)</strong></label>
+                                <div class="setting-title-row">
+                                    <label for="settingTrimSilencePadding"><strong>Защитный запас (Safety Margin)</strong></label>
+                                    <span class="settings-help-tip" tabindex="0" role="button" aria-label="Справка: Защитный запас">
+                                        <i class="fas fa-circle-question" aria-hidden="true"></i>
+                                        <span class="settings-tooltip">
+                                            <strong class="settings-tooltip-title">Защита атаки и затухания</strong>
+                                            <span class="settings-tooltip-desc">Временной буфер (в миллисекундах) перед звуком и после него. Защищает мягкую атаку инструментов, дыхание вокалиста и реверберационные хвосты зала.</span>
+                                            <span class="settings-tooltip-tip"><i class="fas fa-shield-halved" aria-hidden="true"></i> Рекомендуется 80–100 мс</span>
+                                        </span>
+                                    </span>
+                                </div>
                                 <span>Гарантирует сохранность мягкой атаки инструментов, дыхания и естественных хвостов реверберации</span>
                             </div>
                             <div class="setting-control-group">
@@ -380,11 +431,21 @@
                     <div class="settings-card-header">
                         <div class="settings-card-icon"><i class="fas fa-wave-square" aria-hidden="true"></i></div>
                         <div class="settings-card-title-text">
-                            <h3>Стабилизация и нормализация громкости</h3>
+                            <div class="setting-title-row">
+                                <h3>Стабилизация и нормализация громкости</h3>
+                                <span class="settings-help-tip" tabindex="0" role="button" aria-label="Справка: Стабилизация и нормализация громкости">
+                                    <i class="fas fa-circle-question" aria-hidden="true"></i>
+                                    <span class="settings-tooltip">
+                                        <strong class="settings-tooltip-title">Динамическая обработка зала</strong>
+                                        <span class="settings-tooltip-desc">Аппаратный компрессор Web Audio в реальном времени. Сглаживает перепады громкости и защищает акустику и уши зрителей от перегрузок.</span>
+                                        <span class="settings-tooltip-badge"><i class="fas fa-shield-halved" aria-hidden="true"></i> Файлы на диске не перезаписываются</span>
+                                    </span>
+                                </span>
+                            </div>
                             <p>Аппаратный компрессор Web Audio динамического диапазона сглаживает резкие перепады громкости и защищает акустику зала от перегрузок.</p>
                         </div>
                         <label class="macos-switch" title="Включить / выключить стабилизацию громкости">
-                            <input type="checkbox" id="settingVolumeStabilizationEnabled" checked>
+                            <input type="checkbox" id="settingVolumeStabilizationEnabled">
                             <span class="macos-switch-track"></span>
                         </label>
                     </div>
@@ -392,7 +453,16 @@
                     <div class="settings-card-content" id="volumeStabilizationOptions">
                         <div class="setting-row">
                             <div class="setting-info">
-                                <label for="settingVolumeStabilizationMode"><strong>Режим компрессора</strong></label>
+                                <div class="setting-title-row">
+                                    <label for="settingVolumeStabilizationMode"><strong>Режим компрессора</strong></label>
+                                    <span class="settings-help-tip" tabindex="0" role="button" aria-label="Справка: Режим компрессора">
+                                        <i class="fas fa-circle-question" aria-hidden="true"></i>
+                                        <span class="settings-tooltip">
+                                            <strong class="settings-tooltip-title">Профиль компрессии</strong>
+                                            <span class="settings-tooltip-desc">«Театральный» — сохраняет динамику и драматургию спектакля.<br>«Сбалансированный» — универсальный для концертов.<br>«Плотный» — напористый эстрадный звук и жёсткий контроль пиков.</span>
+                                        </span>
+                                    </span>
+                                </div>
                                 <span>Характер обработки динамического диапазона спектакля</span>
                             </div>
                             <select id="settingVolumeStabilizationMode" class="macos-select" aria-label="Режим компрессора">
@@ -404,7 +474,17 @@
 
                         <div class="setting-row">
                             <div class="setting-info">
-                                <label for="settingVolumeNormalizationEnabled"><strong>Автовыравнивание фонограмм (Normalizer)</strong></label>
+                                <div class="setting-title-row">
+                                    <label for="settingVolumeNormalizationEnabled"><strong>Автовыравнивание фонограмм (Normalizer)</strong></label>
+                                    <span class="settings-help-tip" tabindex="0" role="button" aria-label="Справка: Автовыравнивание фонограмм">
+                                        <i class="fas fa-circle-question" aria-hidden="true"></i>
+                                        <span class="settings-tooltip">
+                                            <strong class="settings-tooltip-title">Автоматический нормализатор</strong>
+                                            <span class="settings-tooltip-desc">Анализирует воспринимаемую громкость трека и плавно подтягивает тихо записанные фонограммы к целевому уровню без вмешательства звукорежиссёра.</span>
+                                            <span class="settings-tooltip-badge"><i class="fas fa-shield-halved" aria-hidden="true"></i> Исходные файлы остаются нетронутыми</span>
+                                        </span>
+                                    </span>
+                                </div>
                                 <span>Подтягивает тихо записанные фонограммы к единому целевому уровню</span>
                             </div>
                             <label class="macos-switch">
@@ -415,7 +495,16 @@
 
                         <div class="setting-row">
                             <div class="setting-info">
-                                <label for="settingVolumeTargetLevel"><strong>Целевой уровень громкости</strong></label>
+                                <div class="setting-title-row">
+                                    <label for="settingVolumeTargetLevel"><strong>Целевой уровень громкости</strong></label>
+                                    <span class="settings-help-tip" tabindex="0" role="button" aria-label="Справка: Целевой уровень громкости">
+                                        <i class="fas fa-circle-question" aria-hidden="true"></i>
+                                        <span class="settings-tooltip">
+                                            <strong class="settings-tooltip-title">Стандарты громкости</strong>
+                                            <span class="settings-tooltip-desc">−14 dBFS — театральный стандарт для живых постановок.<br>−18 dBFS — академическая музыка и широкий диапазон.<br>−10 dBFS — громкий эстрадный и танцевальный формат.</span>
+                                        </span>
+                                    </span>
+                                </div>
                                 <span>Стандарт громкости для автоматического выравнивания</span>
                             </div>
                             <select id="settingVolumeTargetLevel" class="macos-select" aria-label="Целевой уровень громкости">
@@ -439,7 +528,17 @@
                     <div class="settings-card-content">
                         <div class="setting-row">
                             <div class="setting-info">
-                                <strong>Папка с музыкой</strong>
+                                <div class="setting-title-row">
+                                    <strong>Папка с музыкой</strong>
+                                    <span class="settings-help-tip" tabindex="0" role="button" aria-label="Справка: Папка с музыкой">
+                                        <i class="fas fa-circle-question" aria-hidden="true"></i>
+                                        <span class="settings-tooltip">
+                                            <strong class="settings-tooltip-title">Каталог фонограмм</strong>
+                                            <span class="settings-tooltip-desc">Основная рабочая папка вашей библиотеки аудиофайлов. CAS сканирует файлы исключительно в режиме чтения.</span>
+                                            <span class="settings-tooltip-badge"><i class="fas fa-shield-halved" aria-hidden="true"></i> Режим только для чтения</span>
+                                        </span>
+                                    </span>
+                                </div>
                                 <span id="settingsCurrentMusicFolder">Папка не выбрана</span>
                             </div>
                             <button type="button" class="toolbar-button" id="settingsChangeFolderBtn">
@@ -448,7 +547,17 @@
                         </div>
                         <div class="setting-row">
                             <div class="setting-info">
-                                <strong>Кэш анализа и осциллограмм</strong>
+                                <div class="setting-title-row">
+                                    <strong>Кэш анализа и осциллограмм</strong>
+                                    <span class="settings-help-tip" tabindex="0" role="button" aria-label="Справка: Кэш анализа">
+                                        <i class="fas fa-circle-question" aria-hidden="true"></i>
+                                        <span class="settings-tooltip">
+                                            <strong class="settings-tooltip-title">Кэш аудиоанализа</strong>
+                                            <span class="settings-tooltip-desc">Хранит вычисленные точки тишины и пики волны для мгновенного отображения. При очистке треки будут проанализированы заново при первом запуске.</span>
+                                            <span class="settings-tooltip-tip"><i class="fas fa-info-circle" aria-hidden="true"></i> Не удаляет аудиофайлы</span>
+                                        </span>
+                                    </span>
+                                </div>
                                 <span>Очищает кэшированные границы тишины и волны для повторного анализа</span>
                             </div>
                             <button type="button" class="toolbar-button" id="settingsClearCacheBtn">
