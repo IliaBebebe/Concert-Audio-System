@@ -5087,6 +5087,9 @@ class TheatreSoundMixer {
         }
 
         this.syncSettingsUI();
+        if (typeof window !== 'undefined' && window.lucide) {
+            window.lucide.createIcons();
+        }
     }
 
     syncSettingsUI() {

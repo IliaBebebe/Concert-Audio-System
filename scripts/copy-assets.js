@@ -28,6 +28,11 @@ copyFile(
   path.join(assetsDirectory, 'howler.min.js')
 );
 
+copyFile(
+  path.join(projectRoot, 'node_modules', 'lucide', 'dist', 'umd', 'lucide.min.js'),
+  path.join(assetsDirectory, 'lucide.min.js')
+);
+
 const fontAwesomeDirectory = path.join(projectRoot, 'node_modules', '@fortawesome', 'fontawesome-free');
 copyFile(
   path.join(fontAwesomeDirectory, 'css', 'all.min.css'),

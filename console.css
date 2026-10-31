@@ -1414,6 +1414,48 @@ kbd { padding: 0 4px; border: 1px solid var(--border-secondary); border-radius: 
     flex-shrink: 0;
 }
 
+.settings-card-icon .lucide {
+    width: 19px;
+    height: 19px;
+    stroke-width: 2.2px;
+}
+
+.settings-help-tip .lucide {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2px;
+    display: block;
+}
+
+.settings-title-group h2 .lucide {
+    color: #0a84ff;
+    width: 20px;
+    height: 20px;
+    stroke-width: 2.2px;
+}
+
+.settings-back-btn .lucide,
+.settings-footer .toolbar-button .lucide,
+.setting-row .toolbar-button .lucide {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2px;
+}
+
+.settings-tooltip-badge .lucide,
+.settings-tooltip-tip .lucide {
+    width: 12px;
+    height: 12px;
+    stroke-width: 2.2px;
+}
+
+.settings-save-notice .lucide {
+    width: 15px;
+    height: 15px;
+    stroke-width: 2.2px;
+    color: #34c759;
+}
+
 .settings-card-title-text {
     flex: 1;
     min-width: 0;
@@ -1578,7 +1620,7 @@ kbd { padding: 0 4px; border: 1px solid var(--border-secondary); border-radius: 
     color: #ffffff;
     cursor: pointer;
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 10px center;
     transition: all 0.15s ease;

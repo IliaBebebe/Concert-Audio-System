@@ -234,6 +234,9 @@ class CASWorkspaceController {
             t.tabIndex = -1;
         });
         if (this.mixer) this.mixer.updateStatus('Открыты настройки Concert Audio System');
+        if (typeof window !== 'undefined' && window.lucide) {
+            window.lucide.createIcons();
+        }
     }
     deactivateSettings() {
         if (!this.isSettingsOpen) return;

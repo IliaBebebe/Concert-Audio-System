@@ -27,6 +27,7 @@
     "howler": "^2.2.4"
   },
   "dependencies": {
+    "lucide": "^1.66.0",
     "music-metadata": "^11.16.1"
   },
   "engines": {
@@ -55,6 +56,7 @@
       "assets/big-logo.png",
       "assets/cas-logo-transparent.png",
       "assets/howler.min.js",
+      "assets/lucide.min.js",
       "assets/fontawesome/**/*",
       "online-music.js",
       "online-ui.js",
