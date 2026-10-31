@@ -59,6 +59,22 @@ CAS помогает подготовить музыкальную програ�
 | **macOS · Intel и Apple Silicon** | [Универсальный .dmg](https://github.com/IliaBebebe/Concert-Audio-System/releases/latest/download/Concert-Audio-System-macOS.dmg) | Откройте образ и перетащите CAS в «Программы». |
 | **Linux · x64** | [AppImage](https://github.com/IliaBebebe/Concert-Audio-System/releases/latest/download/Concert-Audio-System-linux.AppImage) · [Пакет .deb](https://github.com/IliaBebebe/Concert-Audio-System/releases/latest/download/Concert-Audio-System-linux.deb) | Разрешите запуск AppImage или установите .deb в Debian / Ubuntu. |
 
+<a id="windows-smartscreen"></a>
+
+### Предупреждение Windows при скачивании или установке
+
+При скачивании или первом запуске CAS Windows может показать сообщение «Система Windows защитила ваш компьютер», «Неизвестный издатель» или предупреждение о редко скачиваемом файле. Установщик CAS 1.6.0 пока не имеет цифровой подписи издателя. SmartScreen учитывает подпись и репутацию конкретного файла, поэтому новые сборки могут вызывать такое предупреждение. [Подробнее о проверке репутации — в документации Microsoft](https://learn.microsoft.com/ru-ru/windows/apps/package-and-deploy/smartscreen-reputation).
+
+Предупреждение о неизвестном приложении само по себе не означает, что найден вирус. Перед продолжением проверьте источник: скачивайте CAS с [официального сайта](https://cas.rexcorp.space/) или из [релизов этого репозитория](https://github.com/IliaBebebe/Concert-Audio-System/releases). Сайт ведёт на те же файлы GitHub. Исходный код и [процесс сборки](https://github.com/IliaBebebe/Concert-Audio-System/actions/workflows/release.yml) открыты для проверки.
+
+Если файл получен из официального источника и сообщение касается неизвестного приложения или редких скачиваний:
+
+1. **При скачивании в Microsoft Edge:** откройте меню `⋯` рядом с файлом → **«Сохранить»** → **«Показать больше»** → **«Всё равно сохранить»**. Формулировки могут немного отличаться в зависимости от версии браузера. [Инструкция Microsoft](https://learn.microsoft.com/ru-ru/deployedge/microsoft-edge-security-smartscreen).
+2. **При запуске установщика:** в окне «Система Windows защитила ваш компьютер» нажмите **«Подробнее»**, проверьте имя `Concert-Audio-System-Setup.exe` и выберите **«Выполнить в любом случае»**.
+3. Следуйте шагам установщика. Отключать Defender, SmartScreen или добавлять папку в исключения для этого не требуется.
+
+**Если Defender сообщает об обнаруженном вирусе, трояне или другой угрозе**, не разрешайте файл и не восстанавливайте его из карантина. [Сообщите нам](https://github.com/IliaBebebe/Concert-Audio-System/issues), приложив версию CAS, ссылку загрузки и точное название угрозы или скриншот. Если кнопки продолжения нет либо запуск заблокирован Smart App Control или правилами организации, обратитесь к администратору или напишите нам; до уточнения причины не пытайтесь обходить блокировку.
+
 ## Быстрый старт
 
 1. Установите CAS для своей системы и выберите папку с музыкой.
