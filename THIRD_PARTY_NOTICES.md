@@ -1,4 +1,12 @@
-# Online music tools
+# Third-party notices
+
+## Interface font
+
+Manrope, Copyright 2018 The Manrope Project Authors. Distributed under the
+SIL Open Font License 1.1; the complete notice is in `assets/fonts/Manrope-OFL.txt`.
+Font source: https://github.com/googlefonts/manrope
+
+## Online music tools
 
 CAS launches these tools as separate executable processes. They are included in
 `resources/online-tools/<platform>-<arch>`; the pinned release URLs and SHA-256

@@ -1081,6 +1081,33 @@ class TheatreSoundMixer {
     }
 
     setupEventListeners() {
+        const revealDetachedBlock = key => {
+            const state = this.detachedBlocks.get(key);
+            if (!state) return;
+            const wasMinimized = state.windowEl.classList.contains('is-minimized');
+            if (wasMinimized) this.toggleFloatingWindowMinimized(key);
+            this.bringFloatingWindowToFront(state.windowEl);
+            return wasMinimized;
+        };
+        this.onClick('openOnlineSearch', () => {
+            revealDetachedBlock('tracks');
+            const panel = document.getElementById('onlineMusicPanel');
+            if (panel) panel.open = true;
+            document.getElementById('onlineQuery')?.focus();
+        });
+        this.onClick('openKeyboardHelp', () => {
+            const help = document.getElementById('keyboardHelp');
+            if (!help) return;
+            const wasMinimized = revealDetachedBlock('hotkeys');
+            help.open = wasMinimized || !help.open;
+            if (help.open) {
+                help.scrollIntoView({ block: 'nearest' });
+                help.querySelector('summary')?.focus();
+            }
+        });
+        document.getElementById('keyboardHelp')?.addEventListener('toggle', event => {
+            document.getElementById('openKeyboardHelp')?.setAttribute('aria-expanded', String(event.target.open));
+        });
         this.onClick('refreshPlaylists', () => this.refreshPlaylists());
         
         this.onClick('playBtn', () => this.playMusic());

@@ -7,24 +7,30 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' file:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <title>Concert Audio System (CAS)</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="console.css">
     <script src="assets/howler.min.js"></script>
     <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
 </head>
 <body>
+    <header class="workspace-toolbar">
+        <div class="workspace-title"><span class="workspace-mark" aria-hidden="true"><i class="fas fa-sliders-h"></i></span><div><strong>Рабочее пространство</strong><span>Concert Audio System</span></div></div>
+        <div class="workspace-actions">
+            <button type="button" class="toolbar-button" id="openOnlineSearch"><i class="fas fa-search" aria-hidden="true"></i> Поиск музыки</button>
+            <button type="button" class="toolbar-button icon-button" id="openKeyboardHelp" aria-label="Горячие клавиши" aria-controls="keyboardHelp" aria-expanded="false" title="Горячие клавиши"><i class="fas fa-keyboard" aria-hidden="true"></i></button>
+            <time class="current-time" id="currentTime" title="Местное время">--:--:--</time>
+        </div>
+    </header>
     <div class="app-container">
         <!-- Левая панель - плейлисты и пады -->
         <div class="left-panel">
             <div class="header">
                 <img src="assets/big-logo.png" alt="Concert Audio System" class="logo" id="logo">
-                <h1>CONCERT AUDIO SYSTEM</h1>
-                
-                <div class="version">1.4.0</div>
-                <div class="current-time" id="currentTime">--:--:--</div>
-                <div class="status" id="status" role="status" aria-live="polite">Готов к работе</div>
+                <h1>Concert Audio System</h1>
+                <p class="brand-caption">Концертный аудиопульт</p>
             </div>
             
             <div class="section">
-                <h2><i class="fas fa-list"></i> ПЛЕЙЛИСТЫ</h2>
+                <h2><i class="fas fa-list"></i> Плейлисты</h2>
                 <button class="btn-refresh" id="refreshPlaylists" aria-label="Обновить плейлисты">
                     <i class="fas fa-sync-alt"></i> Обновить
                 </button>
@@ -36,16 +42,16 @@
             <!-- Секция саунд-падов в левой панели -->
             <div class="section">
                 <div class="section-header">
-                    <h2><i class="fas fa-sliders-h"></i> ЗВУКОВЫЕ ЭФФЕКТЫ</h2>
+                    <h2><i class="fas fa-sliders-h"></i> Звуковые пэды</h2>
                     <span class="pad-status" id="padStatus">Выберите пад правой кнопкой</span>
                 </div>
                 <div class="sound-pads-grid" id="soundPadsGrid">
                     <!-- Саунд-пады будут здесь -->
                 </div>
                 <div class="pads-controls">
-                    <button class="pads-btn" id="renamePad" aria-label="Переименовать пад"><i class="fas fa-pen"></i> Переименовать</button>
-                    <button class="pads-btn" id="assignSound" aria-label="Назначить звук на пад"><i class="fas fa-file-audio"></i> Назначить звук</button>
-                    <button class="pads-btn" id="clearPad" aria-label="Очистить пад"><i class="fas fa-trash"></i> Очистить пад</button>
+                    <button class="pads-btn" id="renamePad" aria-label="Переименовать пад" title="Переименовать пад"><i class="fas fa-pen"></i> Название</button>
+                    <button class="pads-btn" id="assignSound" aria-label="Назначить звук на пад" title="Назначить звук на пад"><i class="fas fa-file-audio"></i> Назначить</button>
+                    <button class="pads-btn" id="clearPad" aria-label="Очистить пад"><i class="fas fa-trash"></i> Очистить</button>
                     <button class="pads-btn stop-all-btn" id="stopAllEffects" aria-label="Остановить все эффекты"><i class="fas fa-stop"></i> Стоп все</button>
                 </div>
             </div>
@@ -57,7 +63,7 @@
             <!-- Секция треков -->
             <div class="tracks-section">
                 <div class="decks-header-bar">
-                    <h2><i class="fas fa-music" aria-hidden="true"></i> ТРЕКИ</h2>
+                    <h2><i class="fas fa-music" aria-hidden="true"></i> Деки</h2>
                     <div class="deck-view-toggles" role="group" aria-label="Вид плейлистов">
                         <button type="button" class="deck-view-btn active" id="viewModeSplit" aria-pressed="true" title="Обе деки"><i class="fas fa-columns" aria-hidden="true"></i> Обе</button>
                         <button type="button" class="deck-view-btn" id="viewModeA" aria-pressed="false" title="Только дека A">A</button>
@@ -66,7 +72,7 @@
                     <div class="active-deck-status"><span>Загружать в</span><span class="active-deck-badge" id="activeDeckBadge">ДЕКА A</span></div>
                 </div>
                 <details class="online-music" id="onlineMusicPanel">
-                    <summary>Поиск в интернете · YouTube</summary>
+                    <summary><i class="fas fa-search" aria-hidden="true"></i> Поиск музыки <span class="source-tag">YouTube</span></summary>
                     <form id="onlineSearchForm" class="online-search-form">
                         <input type="search" id="onlineQuery" maxlength="300" placeholder="Название, исполнитель или ссылка YouTube / Music" aria-label="Поиск в YouTube">
                         <button type="submit" class="deck-view-btn" id="onlineSearchButton">Найти</button>
@@ -109,7 +115,7 @@
                 
                 <!-- Настройки воспроизведения (компактно) -->
                 <div class="playback-settings">
-                    <h3><i class="fas fa-cog"></i> РЕЖИМ ВОСПРОИЗВЕДЕНИЯ</h3>
+                    <h3><i class="fas fa-cog"></i> Воспроизведение</h3>
                     <div class="playback-options compact">
                         <label class="radio-label">
                             <input type="radio" name="playbackMode" value="sequential" checked>
@@ -154,7 +160,7 @@
         <div class="right-panel">
             <!-- Текущий трек -->
             <div class="now-playing">
-                <h3><i class="fas fa-headphones"></i> СЕЙЧАС ИГРАЕТ</h3>
+                <h3><i class="fas fa-headphones"></i> Сейчас играет</h3>
                 <div class="current-track" id="currentTrack">Трек не выбран</div>
                 <div class="track-counter" id="trackCounter">— / —</div>
             </div>
@@ -174,6 +180,7 @@
 
             <!-- Громкость -->
             <div class="volume-section">
+                <h3 class="mixer-heading"><i class="fas fa-sliders-h" aria-hidden="true"></i> Микшер</h3>
                 <div class="quick-controls">
                     <button class="pads-btn" id="panicMuteBtn">
                         <i class="fas fa-volume-mute"></i> Mute (паника)
@@ -231,7 +238,7 @@
 
             <!-- Таймер обратного отсчета -->
             <div class="countdown-section">
-                <h3><i class="fas fa-clock"></i> ТАЙМЕР</h3>
+                <h3><i class="fas fa-clock"></i> Таймер</h3>
                 <div class="countdown-display" id="countdownDisplay" aria-live="off">00:00</div>
                 <div class="countdown-controls">
                     <input type="number" class="countdown-input" id="countdownMinutes" min="0" max="59" value="0" placeholder="М" aria-label="Минуты">
@@ -244,8 +251,8 @@
             </div>
 
             <!-- Горячие клавиши -->
-            <div class="hotkeys-info">
-                <h4><i class="fas fa-keyboard"></i> Горячие клавиши:</h4>
+            <details class="hotkeys-info" id="keyboardHelp">
+                <summary><i class="fas fa-keyboard" aria-hidden="true"></i> Горячие клавиши</summary>
                 <div><i class="fas fa-key"></i> Пробел - пауза/продолжить</div>
                 <div><i class="fas fa-key"></i> Esc - остановить</div>
                 <div><i class="fas fa-key"></i> Shift+A / Shift+B - выбор деки</div>
@@ -255,9 +262,11 @@
                 <div><i class="fas fa-key"></i> Колесико мыши - громкость</div>
                 <div><i class="fas fa-key"></i> 1-12 - звуковые пады</div>
                 <div><i class="fas fa-key"></i> M - mute (паника)</div>
-            </div>
+            </details>
         </div>
     </div>
+
+    <footer class="workspace-footer"><div class="status" id="status" role="status" aria-live="polite">Готов к работе</div><span class="footer-hint"><kbd>Пробел</kbd> пауза <kbd>Esc</kbd> стоп</span><span class="version">1.4.0</span></footer>
 
     <script src="online-ui.js"></script>
     <script src="renderer.js"></script>

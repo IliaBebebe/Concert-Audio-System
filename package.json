@@ -56,7 +56,9 @@
       "online-music.js",
       "online-ui.js",
       "THIRD_PARTY_NOTICES.md",
-      "licenses/**/*"
+      "licenses/**/*",
+      "console.css",
+      "assets/fonts/**/*"
     ],
     "win": {
       "target": [
