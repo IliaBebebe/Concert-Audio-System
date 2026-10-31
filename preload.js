@@ -5,6 +5,23 @@ const { contextBridge, ipcRenderer } = require('electron');
  * Все методы валидируют входные параметры перед отправкой в main process
  */
 contextBridge.exposeInMainWorld('electronAPI', {
+  platform: process.platform,
+  windowControl: (action) => {
+    if (typeof action !== 'string' || !['minimize', 'maximize', 'close'].includes(action)) {
+      throw new Error('action must be one of: minimize, maximize, close');
+    }
+    return ipcRenderer.invoke('window-control', action);
+  },
+  isMaximized: async () => {
+    const res = await ipcRenderer.invoke('window-is-maximized');
+    return Boolean(res?.isMaximized);
+  },
+  onWindowStateChange: (callback) => {
+    if (typeof callback !== 'function') throw new Error('Ожидался обработчик изменения состояния окна');
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on('window-state-changed', listener);
+    return () => ipcRenderer.removeListener('window-state-changed', listener);
+  },
   onWindowVisibilityChange: callback => {
     if (typeof callback !== 'function') throw new Error('Ожидался обработчик видимости');
     const listener = (_event, visible) => {

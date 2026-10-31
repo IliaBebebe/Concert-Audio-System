@@ -13,6 +13,11 @@
 </head>
 <body>
     <header class="workspace-toolbar">
+        <div class="window-controls macos-window-controls" id="windowControls" role="group" aria-label="Управление окном" hidden>
+            <button type="button" class="traffic-light traffic-light-close" id="winCloseBtn" aria-label="Закрыть приложение" title="Закрыть"><span class="traffic-light-icon" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M3.5 3.5l5 5M8.5 3.5l-5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span></button>
+            <button type="button" class="traffic-light traffic-light-minimize" id="winMinBtn" aria-label="Свернуть окно" title="Свернуть"><span class="traffic-light-icon" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M2.5 6h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span></button>
+            <button type="button" class="traffic-light traffic-light-maximize" id="winMaxBtn" aria-label="Развернуть окно" title="Развернуть"><span class="traffic-light-icon" aria-hidden="true"><svg viewBox="0 0 12 12" id="winMaxIcon"><path d="M3.5 8.5l5-5M4 3.5h4.5V8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+        </div>
         <div class="workspace-title"><span class="workspace-mark" aria-hidden="true"><i class="fas fa-sliders-h"></i></span><div><strong>Рабочее пространство</strong><span>Concert Audio System</span></div></div>
         <div class="workspace-actions">
             <button type="button" class="toolbar-button" id="openOnlineSearch"><i class="fas fa-search" aria-hidden="true"></i> Поиск музыки</button>
@@ -98,6 +103,16 @@
                             <span class="deck-meta"><span class="deck-track-count" id="deckCountA">0 треков</span><span class="deck-state-pill active" id="deckStateA">ВЫБРАНА</span></span>
                         </button>
                         <div class="track-search"><i class="fas fa-search" aria-hidden="true"></i><input type="search" id="trackSearchInputA" placeholder="Поиск в деке A" aria-label="Поиск треков в деке A"></div>
+                        <div class="tracks-table-header" id="tracksHeaderA" aria-hidden="true">
+                            <span class="col-drag"></span>
+                            <div class="track-cols">
+                                <span class="col-num" title="Номер">#</span>
+                                <span class="col-name" title="Название трека">Название</span>
+                                <span class="col-artist" title="Исполнитель">Исполнитель</span>
+                                <span class="col-duration" title="Длительность">Время</span>
+                            </div>
+                            <span class="col-actions"></span>
+                        </div>
                         <div class="tracks-container" id="tracksContainerA" role="group" aria-label="Треки деки A"></div>
                     </div>
                     <div class="deck-column deck-b" id="deckColumnB" data-deck="B">
@@ -106,6 +121,16 @@
                             <span class="deck-meta"><span class="deck-track-count" id="deckCountB">0 треков</span><span class="deck-state-pill standby" id="deckStateB">ГОТОВА</span></span>
                         </button>
                         <div class="track-search"><i class="fas fa-search" aria-hidden="true"></i><input type="search" id="trackSearchInputB" placeholder="Поиск в деке B" aria-label="Поиск треков в деке B"></div>
+                        <div class="tracks-table-header" id="tracksHeaderB" aria-hidden="true">
+                            <span class="col-drag"></span>
+                            <div class="track-cols">
+                                <span class="col-num" title="Номер">#</span>
+                                <span class="col-name" title="Название трека">Название</span>
+                                <span class="col-artist" title="Исполнитель">Исполнитель</span>
+                                <span class="col-duration" title="Длительность">Время</span>
+                            </div>
+                            <span class="col-actions"></span>
+                        </div>
                         <div class="tracks-container" id="tracksContainerB" role="group" aria-label="Треки деки B"></div>
                     </div>
                 </div>

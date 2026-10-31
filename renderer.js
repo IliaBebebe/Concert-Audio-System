@@ -1105,9 +1105,69 @@ class TheatreSoundMixer {
         await this.loadStoredData();
         this.updateCrossfadeControls();
         await this.refreshPlaylists();
+        this.initWindowControls();
         this.updateDeckUI();
         this.displayTracks();
         if (window.CASOnlinePanel) this.onlinePanel = new window.CASOnlinePanel(this);
+    }
+
+    initWindowControls() {
+        const platform = window.electronAPI?.platform || 'win32';
+        const isWindows = platform === 'win32';
+        const isMac = platform === 'darwin';
+        const body = typeof document !== 'undefined' ? document.body : null;
+
+        if (body) {
+            if (isWindows) body.classList.add('platform-win32');
+            else if (isMac) body.classList.add('platform-darwin');
+            else body.classList.add('platform-linux');
+        }
+
+        const controls = typeof document !== 'undefined' ? document.getElementById('windowControls') : null;
+        if (!controls) return;
+
+        if (!isWindows || !window.electronAPI?.windowControl) {
+            controls.hidden = true;
+            return;
+        }
+
+        controls.hidden = false;
+        const closeBtn = document.getElementById('winCloseBtn');
+        const minBtn = document.getElementById('winMinBtn');
+        const maxBtn = document.getElementById('winMaxBtn');
+
+        closeBtn?.addEventListener('click', () => {
+            window.electronAPI.windowControl('close').catch(console.error);
+        });
+
+        minBtn?.addEventListener('click', () => {
+            window.electronAPI.windowControl('minimize').catch(console.error);
+        });
+
+        const updateMaxIcon = (isMaximized) => {
+            if (!maxBtn) return;
+            maxBtn.setAttribute('aria-label', isMaximized ? 'Восстановить окно' : 'Развернуть окно');
+            maxBtn.title = isMaximized ? 'Восстановить' : 'Развернуть';
+            const iconSvg = isMaximized
+                ? '<svg viewBox="0 0 12 12"><path d="M4.5 7.5L1.5 10.5M4 10.5h-2.5V8M7.5 4.5L10.5 1.5M8 1.5h2.5V4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+                : '<svg viewBox="0 0 12 12"><path d="M3.5 8.5l5-5M4 3.5h4.5V8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+            const iconSpan = maxBtn.querySelector('.traffic-light-icon');
+            if (iconSpan) iconSpan.innerHTML = iconSvg;
+        };
+
+        maxBtn?.addEventListener('click', () => {
+            window.electronAPI.windowControl('maximize').catch(console.error);
+        });
+
+        if (window.electronAPI.isMaximized) {
+            window.electronAPI.isMaximized().then(updateMaxIcon).catch(() => {});
+        }
+
+        if (window.electronAPI.onWindowStateChange) {
+            window.electronAPI.onWindowStateChange((state) => {
+                updateMaxIcon(Boolean(state?.isMaximized));
+            });
+        }
     }
 
     async loadConfig() {
@@ -1755,33 +1815,54 @@ class TheatreSoundMixer {
                     dragHandle.style.cursor = 'default';
                 }
 
+                const displayName = this.getTrackDisplayName(track, index);
                 const btn = document.createElement('button');
                 btn.className = 'track-btn';
                 btn.dataset.index = String(index);
                 btn.dataset.deck = deckId;
-                btn.title = 'Воспроизвести. Alt+↑/↓: изменить порядок';
+                btn.title = `${displayName}. Alt+↑/↓: изменить порядок`;
                 const isCurrentDeck = this.playingDeck ? (this.playingDeck === deckId) : (this.activeDeck === deckId);
-                if (isCurrentDeck && index === deck.currentTrackIndex) {
+                const isPlayingThisDeck = this.playingDeck === deckId;
+                const isCurrentIndex = index === deck.currentTrackIndex;
+                if (isCurrentDeck && isCurrentIndex) {
                     btn.classList.add('active');
                     row.classList.add('active');
+                    if (isPlayingThisDeck && this.isPlaying && !this.isPaused) {
+                        btn.classList.add('playing');
+                        row.classList.add('playing');
+                    }
                 }
 
-                const trackContent = document.createElement('div');
-                trackContent.className = 'track-content';
+                const trackCols = document.createElement('div');
+                trackCols.className = 'track-cols';
 
-                const trackInfo = document.createElement('div');
-                trackInfo.className = 'track-info';
+                const trackNum = document.createElement('span');
+                trackNum.className = 'track-num';
+                const trackNumText = document.createElement('span');
+                trackNumText.className = 'track-num-text';
+                trackNumText.textContent = String(track.trackNumber || (index + 1));
+                const trackPlayHint = document.createElement('span');
+                trackPlayHint.className = 'track-play-hint';
+                trackPlayHint.setAttribute('aria-hidden', 'true');
+                trackPlayHint.innerHTML = '<i class="fas fa-play"></i>';
+                const trackPlayingIcon = document.createElement('span');
+                trackPlayingIcon.className = 'track-playing-icon';
+                trackPlayingIcon.setAttribute('aria-hidden', 'true');
+                trackPlayingIcon.innerHTML = '<i class="fas fa-volume-high"></i>';
+                trackNum.append(trackNumText, trackPlayHint, trackPlayingIcon);
 
+                const trackTitle = this.getTrackTitle(track);
                 const trackName = document.createElement('span');
                 trackName.className = 'track-name';
-                trackName.textContent = this.getTrackDisplayName(track, index);
+                trackName.textContent = trackTitle;
+                trackName.title = trackTitle;
 
                 const trackArtist = document.createElement('span');
                 trackArtist.className = 'track-artist';
                 this.renderTrackArtist(trackArtist, track);
-
-                trackInfo.appendChild(trackName);
-                trackInfo.appendChild(trackArtist);
+                if (trackArtist.textContent) {
+                    trackArtist.title = trackArtist.textContent;
+                }
 
                 const trackDuration = document.createElement('span');
                 trackDuration.className = 'track-duration';
@@ -1789,18 +1870,17 @@ class TheatreSoundMixer {
                     ? this.formatTime(track.duration)
                     : (track.durationUnavailable ? 'N/A' : '--:--');
 
-                trackContent.appendChild(trackInfo);
-                trackContent.appendChild(trackDuration);
-                btn.appendChild(trackContent);
+                trackCols.append(trackNum, trackName, trackArtist, trackDuration);
+                btn.appendChild(trackCols);
 
                 btn.addEventListener('click', () => this.playTrackInDeck(deckId, index));
 
                 const editBtn = document.createElement('button');
                 editBtn.className = 'track-edit-btn';
                 editBtn.type = 'button';
-                editBtn.title = 'Редактировать параметры трека';
-                editBtn.setAttribute('aria-label', 'Редактировать параметры трека');
-                editBtn.innerHTML = '<i class="fas fa-pen"></i>';
+                editBtn.title = 'Параметры трека (метаданные, смещение)';
+                editBtn.setAttribute('aria-label', `Параметры трека «${displayName}»`);
+                editBtn.innerHTML = '<i class="fas fa-ellipsis"></i>';
                 editBtn.addEventListener('click', (event) => {
                     event.stopPropagation();
                     this.openTrackMetadataEditor(deckId, index);
@@ -2172,8 +2252,19 @@ class TheatreSoundMixer {
             const nameElement = row.querySelector('.track-name');
             const artistElement = row.querySelector('.track-artist');
             const durationElement = row.querySelector('.track-duration');
-            if (nameElement) nameElement.textContent = this.getTrackDisplayName(matchedTrack, index);
+            const numText = row.querySelector('.track-num-text');
+            if (numText && matchedTrack.trackNumber) {
+                numText.textContent = String(matchedTrack.trackNumber);
+            }
+            if (nameElement) {
+                const updatedTitle = this.getTrackTitle(matchedTrack);
+                nameElement.textContent = updatedTitle;
+                nameElement.title = updatedTitle;
+            }
             this.renderTrackArtist(artistElement, matchedTrack);
+            if (artistElement && artistElement.textContent) {
+                artistElement.title = artistElement.textContent;
+            }
             if (durationElement) {
                 durationElement.textContent = matchedTrack.duration
                     ? this.formatTime(matchedTrack.duration)
@@ -2338,7 +2429,9 @@ class TheatreSoundMixer {
 
         return task.then((result) => {
             if (elements.nameElement?.isConnected) {
-                elements.nameElement.textContent = this.getTrackDisplayName(track, elements.index);
+                const updatedTitle = this.getTrackTitle(track);
+                elements.nameElement.textContent = updatedTitle;
+                elements.nameElement.title = updatedTitle;
             }
             if (elements.artistElement?.isConnected) this.renderTrackArtist(elements.artistElement, track);
             if (this.playlistTracks[this.currentTrackIndex] === track) {
@@ -3188,9 +3281,12 @@ class TheatreSoundMixer {
                 const btn = row.querySelector('.track-btn');
                 const isCurrentDeck = this.playingDeck ? isPlayingThisDeck : (this.activeDeck === deckId);
                 const isActive = isCurrentDeck && rowIdx === currentIndex;
+                const isPlaying = isPlayingThisDeck && rowIdx === currentIndex && this.isPlaying && !this.isPaused;
 
                 row.classList.toggle('active', isActive);
                 btn?.classList.toggle('active', isActive);
+                row.classList.toggle('playing', isPlaying);
+                btn?.classList.toggle('playing', isPlaying);
 
                 if (isActive && isPlayingThisDeck) {
                     (row || btn).scrollIntoView({ behavior: 'smooth', block: 'nearest' });

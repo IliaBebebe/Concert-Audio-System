@@ -458,6 +458,9 @@ async function createWindow() {
   await loadWindowState();
 
   const htmlPath = path.join(__dirname, 'index.html');
+  const isWindows = process.platform === 'win32';
+  const isMac = process.platform === 'darwin';
+
   const window = new BrowserWindow({
     width: windowState.width,
     height: windowState.height,
@@ -466,7 +469,8 @@ async function createWindow() {
     minWidth: Math.min(MIN_WINDOW_WIDTH, windowState.width),
     minHeight: Math.min(MIN_WINDOW_HEIGHT, windowState.height),
     show: false,
-    titleBarStyle: 'default',
+    titleBarStyle: isWindows ? 'hidden' : (isMac ? 'hiddenInset' : 'default'),
+    ...(isWindows ? { titleBarOverlay: false } : {}),
     backgroundColor: '#0f0f0f',
     icon: appIconPath,
     webPreferences: getWindowWebPreferences()
@@ -479,8 +483,19 @@ async function createWindow() {
       window.webContents.send('window-visibility', window.isVisible() && !window.isMinimized());
     }
   };
+  const sendWindowState = () => {
+    if (!window.isDestroyed()) {
+      window.webContents.send('window-state-changed', {
+        isMaximized: window.isMaximized()
+      });
+    }
+  };
   for (const event of ['show', 'hide', 'minimize', 'restore']) window.on(event, sendVisibility);
-  window.webContents.on('did-finish-load', sendVisibility);
+  for (const event of ['maximize', 'unmaximize', 'restore']) window.on(event, sendWindowState);
+  window.webContents.on('did-finish-load', () => {
+    sendVisibility();
+    sendWindowState();
+  });
 
   window.loadFile(htmlPath).catch((error) => {
     console.error('Failed to load main page:', error);
@@ -1011,6 +1026,42 @@ ipcMain.handle('get-audio-file-buffer', async (event, filePath) => {
     console.warn('Error reading audio file for waveform:', error.message);
     return { success: false, error: error.message };
   }
+});
+
+ipcMain.handle('window-control', async (event, action) => {
+  if (!isTrustedSender(event, mainWindow)) {
+    return unauthorizedResponse();
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { success: false, error: 'Окно недоступно' };
+  }
+  switch (action) {
+    case 'minimize':
+      mainWindow.minimize();
+      return { success: true };
+    case 'maximize':
+      if (mainWindow.isMaximized()) {
+        mainWindow.unmaximize();
+      } else {
+        mainWindow.maximize();
+      }
+      return { success: true };
+    case 'close':
+      mainWindow.close();
+      return { success: true };
+    default:
+      return { success: false, error: 'Неизвестная команда управления окном' };
+  }
+});
+
+ipcMain.handle('window-is-maximized', async (event) => {
+  if (!isTrustedSender(event, mainWindow)) {
+    return unauthorizedResponse();
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { success: false, error: 'Окно недоступно' };
+  }
+  return { success: true, isMaximized: mainWindow.isMaximized() };
 });
 
 async function startApplication() {

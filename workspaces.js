@@ -125,6 +125,12 @@ class CASWorkspaceController {
         document.getElementById('workspaceRename').addEventListener('click', () => this.renameDialog(this.layout.activeTab));
         document.getElementById('workspaceDelete').addEventListener('click', () => this.deleteTab(this.layout.activeTab));
         this.tablist.addEventListener('keydown', event => {
+            if (event.target.classList.contains('workspace-tab-close')) {
+                if (event.key === ' ' || event.key === 'Enter') {
+                    event.stopPropagation();
+                }
+                return;
+            }
             const tab = event.target.closest('[role="tab"]');
             if (!tab) return;
             const index = this.layout.tabs.findIndex(item => item.id === tab.dataset.tabId);
@@ -317,13 +323,40 @@ class CASWorkspaceController {
             button.id = `workspace-tab-${tab.id}`;
             button.className = 'workspace-tab';
             button.dataset.tabId = tab.id;
-            button.textContent = tab.title;
-            button.title = tab.title;
+            button.title = tab.id === 'main' ? tab.title : `${tab.title} (двойной клик — переименовать)`;
             button.setAttribute('role', 'tab');
             button.setAttribute('aria-controls', `workspace-panel-${tab.id}`);
             button.setAttribute('aria-selected', String(tab.id === this.layout.activeTab));
             button.tabIndex = tab.id === this.layout.activeTab ? 0 : -1;
-            button.addEventListener('click', () => this.activate(tab.id, true));
+
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'workspace-tab-title';
+            titleSpan.textContent = tab.title;
+            button.appendChild(titleSpan);
+
+            if (tab.id !== 'main') {
+                const closeBtn = document.createElement('button');
+                closeBtn.type = 'button';
+                closeBtn.className = 'workspace-tab-close';
+                closeBtn.setAttribute('aria-label', `Закрыть вкладку «${tab.title}»`);
+                closeBtn.title = `Закрыть вкладку «${tab.title}»`;
+                closeBtn.innerHTML = '<i class="fas fa-xmark" aria-hidden="true"></i>';
+                closeBtn.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    this.deleteTab(tab.id);
+                });
+                button.appendChild(closeBtn);
+                button.addEventListener('dblclick', (event) => {
+                    if (event.target.closest('.workspace-tab-close')) return;
+                    this.renameDialog(tab.id);
+                });
+            }
+
+            button.addEventListener('click', (event) => {
+                if (event.target.closest('.workspace-tab-close')) return;
+                this.activate(tab.id, true);
+            });
             this.bindDrop(button, () => tab.id);
             this.tablist.appendChild(button);
             const board = this.boards.get(tab.id) || this.createBoard(tab);
