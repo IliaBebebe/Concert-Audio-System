@@ -215,10 +215,88 @@ button:active:not(:disabled) { filter: brightness(0.92); }
 .sound-pad.playing { background: #305347 !important; border-color: #72bfab !important; color: #f0f4f1 !important; box-shadow: none !important; animation: none; }
 .sound-pad::before { box-shadow: none; }
 .sound-pad.playing::before { background: var(--accent-success); box-shadow: none; }
-.pads-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin-top: 12px; }
-.pads-btn { min-height: 32px; padding: 4px 8px; font-size: 12px; line-height: 16px; text-transform: none; letter-spacing: 0; }
-.pads-controls .stop-all-btn { grid-column: auto; }
-.stop-all-btn { color: #dba2a2; }
+/* --- macOS Sound Pads Controls --- */
+.pads-controls {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    margin-top: 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.pads-controls .pads-btn {
+    height: 30px;
+    min-height: 30px;
+    max-height: 30px;
+    padding: 0;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: #e5e5ea;
+    cursor: pointer;
+    box-shadow: none;
+    transform: none;
+    box-sizing: border-box;
+    grid-column: auto;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.pads-controls .pads-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    box-shadow: none;
+    transform: none;
+}
+
+.pads-controls .pads-btn:active {
+    background: rgba(255, 255, 255, 0.04);
+    transform: scale(0.97);
+}
+
+.pads-controls .pads-btn:focus-visible {
+    outline: 2px solid #0a84ff;
+    outline-offset: 1px;
+}
+
+.pads-controls .stop-all-btn {
+    grid-column: auto;
+    margin: 0;
+    height: 30px;
+    min-height: 30px;
+    max-height: 30px;
+    color: #ff6961;
+    background: rgba(255, 69, 58, 0.1);
+    border-color: rgba(255, 69, 58, 0.25);
+}
+
+.pads-controls .stop-all-btn:hover {
+    background: rgba(255, 69, 58, 0.18);
+    border-color: rgba(255, 69, 58, 0.4);
+    color: #ff857d;
+}
+
+.pads-controls .pad-action-label {
+    display: none;
+}
+
+.pads-controls .pads-btn i,
+.pads-controls .pads-btn .fas {
+    font-size: 12px;
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    line-height: 1;
+}
 
 .tracks-section { padding: 16px; min-height: 0; height: 100%; }
 .decks-header-bar { margin-bottom: 12px; gap: 8px; }
@@ -971,10 +1049,6 @@ kbd { padding: 0 4px; border: 1px solid var(--border-secondary); border-radius: 
 .left-panel > #soundPadsSection .pad-status { display: block; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .left-panel > #soundPadsSection .sound-pads-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; height: auto !important; overflow: visible; }
 .left-panel > #soundPadsSection .sound-pad { height: 48px; min-height: 48px; padding: 4px; }
-.left-panel > #soundPadsSection .pads-controls { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 8px; }
-.left-panel > #soundPadsSection .pads-btn { min-height: 28px; padding: 4px; }
-.left-panel > #soundPadsSection .pad-action-label { display: none; }
-.left-panel > #soundPadsSection .pads-btn .fas { margin: 0; }
 @media (max-height: 800px) {
     .left-panel > #playlistsSection { flex-basis: 160px; min-height: 160px; }
     .left-panel > #soundPadsSection .sound-pad { height: 40px; min-height: 40px; }

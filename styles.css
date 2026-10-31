@@ -607,7 +607,7 @@ body {
     color: #ffffff;
     padding: 8px;
     font-size: 11px;
-    margin-top: 4px;
+    margin: 0;
 }
 
 .stop-all-btn:hover {
