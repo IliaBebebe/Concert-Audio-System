@@ -51,6 +51,8 @@ jobs:
         run: ${{ matrix.command }}
       - name: Verify packaged online music tools
         run: node scripts/check-packaged-online.js
+      - name: Verify packaged workspace interface and assets
+        run: node scripts/check-packaged-ui.js
       - uses: actions/upload-artifact@v4
         with:
           name: cas-${{ matrix.artifact }}

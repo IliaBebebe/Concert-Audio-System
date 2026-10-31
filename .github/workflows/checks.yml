@@ -30,6 +30,7 @@ jobs:
           node --check main.js
           node --check preload.js
           node --check renderer.js
+          node --check workspaces.js
           node --check metadata-worker.js
           node --check welcome.js
           node --check online-music.js

@@ -638,12 +638,11 @@ class TheatreSoundMixer {
 
     setupBlockHeightPersistence() {
         const resizableBlocks = [
-            ['leftPlaylistsSection', '.left-panel > .section:nth-of-type(2)'],
-            ['leftPadsSection', '.left-panel > .section:nth-of-type(3)'],
+            ['leftPlaylistsSection', '#playlistsSection'],
+            ['leftPadsSection', '#soundPadsSection'],
             ['playlistsContainer', '#playlistsContainer'],
             ['soundPadsGrid', '#soundPadsGrid'],
             ['nowPlaying', '.now-playing'],
-            ['progressSection', '.progress-section'],
             ['volumeSection', '.volume-section'],
             ['countdownSection', '.countdown-section'],
             ['hotkeysInfo', '.hotkeys-info']
@@ -703,12 +702,10 @@ class TheatreSoundMixer {
         this.modalCloseMs = this.readCssDuration('--modal-close-dur', 150);
 
         const detachableBlocks = [
-            { key: 'appHeader', selector: '.header', title: 'Concert Audio System' },
-            { key: 'playlists', selector: '.left-panel > .section:nth-of-type(2)', title: 'Плейлисты' },
-            { key: 'soundPads', selector: '.left-panel > .section:nth-of-type(3)', title: 'Звуковые эффекты' },
-            { key: 'tracks', selector: '.tracks-section', title: 'Треки в плейлисте', fillPlaceholder: true },
+            { key: 'playlists', selector: '#playlistsSection', title: 'Плейлисты' },
+            { key: 'soundPads', selector: '#soundPadsSection', title: 'Звуковые пэды' },
+            { key: 'tracks', selector: '.tracks-section', title: 'Деки и воспроизведение', fillPlaceholder: true },
             { key: 'nowPlaying', selector: '.now-playing', title: 'Сейчас играет' },
-            { key: 'progress', selector: '.progress-section', title: 'Прогресс' },
             { key: 'volume', selector: '.volume-section', title: 'Громкость' },
             { key: 'countdown', selector: '.countdown-section', title: 'Таймер' },
             { key: 'hotkeys', selector: '.hotkeys-info', title: 'Горячие клавиши' }
@@ -735,7 +732,7 @@ class TheatreSoundMixer {
                 this.detachBlock(definition, block);
             });
 
-            block.appendChild(detachButton);
+            (block.tagName === 'DETAILS' ? block.querySelector('summary') : block).appendChild(detachButton);
         });
 
         window.addEventListener('resize', () => this.clampFloatingWindows());
@@ -761,6 +758,7 @@ class TheatreSoundMixer {
     }
 
     detachBlock(definition, block) {
+        if (definition.key === 'appHeader' || block.classList.contains('header')) return;
         const existing = this.detachedBlocks.get(definition.key);
         if (existing) {
             this.bringFloatingWindowToFront(existing.windowEl);
@@ -873,7 +871,7 @@ class TheatreSoundMixer {
         windowEl.style.zIndex = String(this.floatingWindowZ);
     }
 
-    restoreDetachedBlock(key) {
+    restoreDetachedBlock(key, { immediate = false } = {}) {
         const state = this.detachedBlocks.get(key);
         if (!state || state.isClosing) return;
 
@@ -894,7 +892,8 @@ class TheatreSoundMixer {
 
         windowEl.classList.remove('is-open');
         windowEl.classList.add('is-closing');
-        setTimeout(finishRestore, this.modalCloseMs);
+        if (immediate) finishRestore();
+        else setTimeout(finishRestore, this.modalCloseMs);
     }
 
     toggleFloatingWindowMinimized(key) {
@@ -1060,6 +1059,7 @@ class TheatreSoundMixer {
         this.createSoundPads();
         this.setupResizers();
         this.setupDetachableBlocks();
+        if (window.CASWorkspaceController) this.workspaces = new window.CASWorkspaceController(this);
         this.setupWaveformCanvas();
         this.initVuMeters();
         this.startClock();
@@ -1082,12 +1082,13 @@ class TheatreSoundMixer {
 
     setupEventListeners() {
         const revealDetachedBlock = key => {
+            const changedWorkspace = this.workspaces?.reveal(key) || false;
             const state = this.detachedBlocks.get(key);
-            if (!state) return;
+            if (!state) return changedWorkspace;
             const wasMinimized = state.windowEl.classList.contains('is-minimized');
             if (wasMinimized) this.toggleFloatingWindowMinimized(key);
             this.bringFloatingWindowToFront(state.windowEl);
-            return wasMinimized;
+            return wasMinimized || changedWorkspace;
         };
         this.onClick('openOnlineSearch', () => {
             revealDetachedBlock('tracks');
@@ -4011,7 +4012,7 @@ class TheatreSoundMixer {
 
     handleHotkeys(event) {
         const metadataModal = document.querySelector('.metadata-modal-overlay');
-        if (metadataModal) {
+        if (metadataModal || document.querySelector('dialog[open]') || event.target?.closest?.('#workspaceTabs, .workspace-transfer-popover')) {
             return;
         }
 
@@ -4025,7 +4026,7 @@ class TheatreSoundMixer {
             this.setActiveDeck(event.code === 'KeyA' ? 'A' : 'B');
             return;
         }
-        if (event.code === 'Space' && event.target?.closest?.('button, [role="button"], select')) return;
+        if (event.code === 'Space' && event.target?.closest?.('button, [role="button"], select, summary')) return;
 
         const repeatedTriggerKeys = new Set([
             'Space', 'Escape', 'KeyM', 'Digit0', 'Digit1', 'Digit2', 'Digit3', 'Digit4',

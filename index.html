@@ -20,14 +20,20 @@
             <time class="current-time" id="currentTime" title="Местное время">--:--:--</time>
         </div>
     </header>
-    <div class="app-container">
+    <nav class="workspace-navigation" aria-label="Рабочие пространства">
+        <div id="workspaceTabs" class="workspace-tabs" role="tablist" aria-label="Вкладки рабочих пространств"></div>
+        <div class="workspace-tab-actions">
+            <button type="button" id="workspaceAdd" class="toolbar-button icon-button" aria-label="Новая вкладка" title="Новая вкладка; сюда можно перетащить блок"><i class="fas fa-plus" aria-hidden="true"></i></button>
+            <button type="button" id="workspaceRename" class="toolbar-button icon-button" aria-label="Переименовать вкладку" title="Переименовать вкладку"><i class="fas fa-pen" aria-hidden="true"></i></button>
+            <button type="button" id="workspaceDelete" class="toolbar-button icon-button" aria-label="Удалить вкладку и вернуть её блоки на Основную" title="Удалить вкладку и вернуть её блоки на Основную"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+        </div>
+    </nav>
+    <main id="workspacePanels">
+    <div class="app-container" id="workspace-panel-main" role="tabpanel" aria-labelledby="workspace-tab-main" tabindex="0">
         <!-- Левая панель - плейлисты и пады -->
         <div class="left-panel">
-            <div class="header">
-                <img src="assets/cas-logo-transparent.png" alt="Concert Audio System" class="logo" id="logo">
-            </div>
-            
-            <div class="section">
+            <div class="header" aria-label="Concert Audio System"><img src="assets/cas-logo-transparent.png" alt="Concert Audio System" class="logo" id="logo" draggable="false"></div>
+            <div class="section" id="playlistsSection">
                 <h2><i class="fas fa-list"></i> Плейлисты</h2>
                 <button class="btn-refresh" id="refreshPlaylists" aria-label="Обновить плейлисты">
                     <i class="fas fa-sync-alt"></i> Обновить
@@ -38,7 +44,7 @@
             </div>
             
             <!-- Секция саунд-падов в левой панели -->
-            <div class="section">
+            <div class="section" id="soundPadsSection">
                 <div class="section-header">
                     <h2><i class="fas fa-sliders-h"></i> Звуковые пэды</h2>
                     <span class="pad-status" id="padStatus">Выберите пад правой кнопкой</span>
@@ -161,10 +167,7 @@
                 <h3><i class="fas fa-headphones"></i> Сейчас играет</h3>
                 <div class="current-track" id="currentTrack">Трек не выбран</div>
                 <div class="track-counter" id="trackCounter">— / —</div>
-            </div>
-
-            <!-- Прогресс-бар -->
-            <div class="progress-section">
+                <div class="playback-progress">
                 <div class="time-display">
                     <span id="currentTimeDisplay">0:00</span> / <span id="totalTimeDisplay">0:00</span> • <span id="remainingTimeDisplay">-0:00</span>
                 </div>
@@ -174,6 +177,7 @@
                     <div class="waveform-state" id="waveformState">Осциллограмма ожидает трек</div>
                 </div>
                 <input type="range" class="progress-bar" id="progressBar" min="0" max="100" value="0" aria-label="Прогресс воспроизведения">
+                </div>
             </div>
 
             <!-- Громкость -->
@@ -263,10 +267,20 @@
             </details>
         </div>
     </div>
+    </main>
 
-    <footer class="workspace-footer"><div class="status" id="status" role="status" aria-live="polite">Готов к работе</div><span class="footer-hint"><kbd>Пробел</kbd> пауза <kbd>Esc</kbd> стоп</span><span class="version">1.4.0</span></footer>
+    <dialog id="workspaceDialog" class="workspace-dialog" aria-labelledby="workspaceDialogTitle">
+        <form id="workspaceNameForm">
+            <h2 id="workspaceDialogTitle">Название вкладки</h2>
+            <label>Название<input id="workspaceName" maxlength="40" required autocomplete="off"></label>
+            <div class="workspace-dialog-actions"><button type="button" id="workspaceDialogCancel" class="toolbar-button">Отмена</button><button type="submit" class="toolbar-button">Сохранить</button></div>
+        </form>
+    </dialog>
+
+    <footer class="workspace-footer"><div class="status" id="status" role="status" aria-live="polite">Готов к работе</div><span class="footer-hint"><kbd>Пробел</kbd> пауза <kbd>Esc</kbd> стоп</span><span class="version">1.5.0</span></footer>
 
     <script src="online-ui.js"></script>
+    <script src="workspaces.js"></script>
     <script src="renderer.js"></script>
 </body>
 </html>

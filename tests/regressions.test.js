@@ -223,6 +223,15 @@ test('space on a focused button is left for native activation', t => {
     preventDefault: () => assert.fail('native button activation must remain available') });
 });
 
+test('Space opens a focused details summary without toggling music', t => {
+  const { mixer } = mixerFixture(t);
+  let played = false;
+  mixer.playMusic = () => { played = true; };
+  mixer.handleHotkeys({ code: 'Space', target: { tagName: 'SUMMARY', closest: selector => selector.includes('summary') ? {} : null },
+    preventDefault() { throw new Error('Native summary activation must stay available'); } });
+  assert.equal(played, false);
+});
+
 test('Shift+B changes target deck without interrupting current playback', t => {
   const { mixer } = mixerFixture(t);
   mixer.loadTrack(0, { deckId: 'A' });
