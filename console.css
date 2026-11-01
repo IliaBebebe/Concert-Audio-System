@@ -1,4 +1,4 @@
-/* CAS console: restrained macOS-inspired chrome around the existing audio engine. */
+/* CAS console: restrained professional chrome around the existing audio engine. */
 @font-face { font-family: 'CAS Manrope'; src: url('assets/fonts/manrope-regular.ttf') format('truetype'); font-weight: 400 600; font-display: swap; }
 @font-face { font-family: 'CAS Manrope'; src: url('assets/fonts/manrope-bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
 
@@ -72,7 +72,7 @@ button:active:not(:disabled) { filter: brightness(0.92); }
     -webkit-app-region: no-drag;
 }
 
-/* macOS Window Traffic Lights (darwin only) */
+/* Window Traffic Lights (darwin only) */
 .macos-window-controls {
     display: none;
     align-items: center;
@@ -156,7 +156,7 @@ button:active:not(:disabled) { filter: brightness(0.92); }
     color: #ffffff !important;
 }
 
-/* macOS Application Menu Bar */
+/* Application Menu Bar */
 .cas-menu-bar {
     display: inline-flex;
     align-items: center;
@@ -578,7 +578,7 @@ button:active:not(:disabled) { filter: brightness(0.92); }
 .sound-pad.playing { background: #305347 !important; border-color: #72bfab !important; color: #f0f4f1 !important; box-shadow: none !important; animation: none; }
 .sound-pad::before { box-shadow: none; }
 .sound-pad.playing::before { background: var(--accent-success); box-shadow: none; }
-/* --- macOS Sound Pads Controls --- */
+/* --- Sound Pads Controls --- */
 .pads-controls {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -691,7 +691,7 @@ button:active:not(:disabled) { filter: brightness(0.92); }
 .deck-column-header { gap: 8px; padding: 4px; margin-bottom: 8px; }
 .deck-name { font-size: 12px; }
 
-/* macOS-style compact table list for tracks */
+/* Compact table list for tracks */
 .tracks-table-header {
     display: grid;
     grid-template-columns: 20px 1fr 28px;
@@ -943,7 +943,7 @@ button:active:not(:disabled) { filter: brightness(0.92); }
 .control-btn:hover, .stop-btn:hover { background: #414141; box-shadow: none; transform: none; }
 .play-btn { background: #356953; border-color: #72bfab60; color: #e2f4ec; }
 .play-btn:hover { background: #427c63; box-shadow: none; transform: none; }
-/* --- macOS Playback & Crossfade Settings --- */
+/* --- Playback & Crossfade Settings --- */
 .playback-settings {
     margin-top: 8px;
     padding: 10px 12px;
@@ -1096,7 +1096,7 @@ button:active:not(:disabled) { filter: brightness(0.92); }
     pointer-events: none;
 }
 
-/* macOS Toggle Switch inside crossfade-toggle */
+/* Toggle Switch inside crossfade-toggle */
 .crossfade-toggle .toggle-switch,
 .toggle-switch {
     width: 32px;
@@ -1852,7 +1852,7 @@ kbd { padding: 0 4px; border: 1px solid var(--border-secondary); border-radius: 
 @media (max-height: 800px) { .workspace-board-hint { min-height: 112px; } }
 
 /* ==========================================================================
-   macOS Settings Panel & Audio Controls
+   Settings Panel & Audio Controls
    ========================================================================== */
 
 .workspace-nav-divider {
@@ -2303,7 +2303,7 @@ kbd { padding: 0 4px; border: 1px solid var(--border-secondary); border-radius: 
     border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-/* macOS Toggle Switch */
+/* Toggle Switch */
 .macos-switch {
     position: relative;
     display: inline-block;
@@ -2354,7 +2354,7 @@ kbd { padding: 0 4px; border: 1px solid var(--border-secondary); border-radius: 
     outline-offset: 2px;
 }
 
-/* macOS Select */
+/* Select Dropdown */
 .macos-select {
     min-height: 32px;
     padding: 4px 30px 4px 12px;
