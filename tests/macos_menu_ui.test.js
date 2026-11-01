@@ -87,6 +87,9 @@ test('CSS: toolbar and workspace panels adjust height properly without footer', 
     assert.ok(css.includes('.win-close-btn:hover'), 'CSS must define Windows close red hover style');
     assert.ok(css.includes('#workspacePanels { position: relative; height: calc(100vh - 74px);'), 'workspacePanels height must be 100vh - 74px without footer');
     assert.ok(css.includes('.about-github-link'), 'CSS must define .about-github-link styles');
+    assert.ok(css.includes('#openSettings:hover'), 'CSS must define #openSettings:hover with micro-interaction');
+    assert.ok(css.includes('#menuTriggerSettings:hover'), 'CSS must define #menuTriggerSettings:hover');
+    assert.ok(css.includes('.track-row.active .track-duration') && css.includes('background: transparent !important'), 'Track duration in active row must have transparent background without misaligned box');
 });
 
 test('renderer & workspaces: keyboard accessibility and settings status handling', () => {

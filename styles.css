@@ -826,18 +826,19 @@ body {
 .track-duration {
     font-size: 11px;
     color: var(--text-muted);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
     flex-shrink: 0;
     min-width: 40px;
     text-align: right;
-    background: rgba(255, 255, 255, 0.03);
-    padding: 2px 6px;
-    border-radius: 4px;
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
     font-weight: 500;
 }
 
 .track-btn.active .track-duration {
-    background: rgba(74, 156, 255, 0.1);
+    background: transparent;
     color: var(--accent-primary);
 }
 

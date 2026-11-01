@@ -179,11 +179,17 @@ button:active:not(:disabled) { filter: brightness(0.92); }
     font-weight: 500;
     line-height: 18px;
     cursor: pointer;
-    transition: background-color 120ms ease, color 120ms ease;
+    transition: background-color 140ms ease, color 140ms ease;
 }
 .cas-menu-trigger:hover,
-.cas-menu-trigger.is-active {
-    background: rgba(255, 255, 255, 0.08);
+.cas-menu-trigger.is-active,
+.cas-menu-trigger:focus-visible {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    outline: none;
+}
+#menuTriggerSettings:hover {
+    background: rgba(255, 255, 255, 0.14);
     color: #ffffff;
 }
 .cas-menu-dropdown {
@@ -342,16 +348,49 @@ button:active:not(:disabled) { filter: brightness(0.92); }
     border-radius: 5px;
     cursor: pointer;
     font-size: 11.5px;
-    transition: background-color 120ms ease, color 120ms ease;
+    transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
 .toolbar-button:hover {
-    color: var(--text-primary);
-    background: var(--bg-button-hover);
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.22);
 }
 .toolbar-button.active {
     background: rgba(120, 168, 237, 0.22);
     color: #ffffff;
     border-color: rgba(120, 168, 237, 0.4);
+}
+
+/* Specific styling & micro-interaction for Settings Button */
+#openSettings {
+    position: relative;
+    transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+#openSettings .fa-gear,
+#openSettings .fas {
+    transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), color 0.15s ease;
+}
+#openSettings:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.28);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+#openSettings:hover .fa-gear,
+#openSettings:hover .fas {
+    transform: rotate(45deg);
+    color: #60a5fa;
+}
+#openSettings.active {
+    background: rgba(10, 132, 255, 0.22) !important;
+    color: #60a5fa !important;
+    border-color: rgba(10, 132, 255, 0.55) !important;
+    box-shadow: 0 0 10px rgba(10, 132, 255, 0.3) !important;
+}
+#openSettings.active:hover {
+    background: rgba(10, 132, 255, 0.32) !important;
+    color: #ffffff !important;
+    border-color: #0a84ff !important;
 }
 .icon-button {
     width: 28px;
@@ -762,15 +801,22 @@ button:active:not(:disabled) { filter: brightness(0.92); }
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.track-duration {
+.track-duration,
+.track-btn .track-duration,
+.track-btn.active .track-duration,
+.track-row .track-duration,
+.track-row.active .track-duration,
+.deck-column .track-duration {
     font-family: inherit;
     font-size: 11px;
     line-height: 24px;
     font-variant-numeric: tabular-nums;
     color: var(--text-muted);
-    background: transparent;
-    border: 0;
-    padding: 0;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
 }
 
 .track-row.active {
@@ -779,7 +825,15 @@ button:active:not(:disabled) { filter: brightness(0.92); }
 }
 .track-row.active .track-name { color: #ffffff; font-weight: 600; }
 .track-row.active .track-artist { color: #a8b8c8; }
-.track-row.active .track-duration { color: #a8c9f4; }
+.track-row.active .track-duration,
+.track-btn.active .track-duration {
+    color: #a8c9f4 !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
 .track-row.playing .track-name { color: #a8c9f4; font-weight: 600; }
 
 .track-edit-btn {
