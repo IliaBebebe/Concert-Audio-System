@@ -1353,10 +1353,11 @@ kbd { padding: 0 4px; border: 1px solid var(--border-secondary); border-radius: 
     margin-bottom: 16px;
 }
 .about-dialog .about-logo {
-    width: 140px;
+    width: 185px;
     height: auto;
-    margin: 0 auto 12px;
+    margin: 0 auto 14px;
     display: block;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35));
 }
 .about-dialog h2 {
     font-size: 16px;
