@@ -118,7 +118,7 @@ class CASWorkspaceController {
         });
         this.layout = new CASWorkspaceLayout([...this.blocks.keys()], saved);
         this.settingsPanel = document.getElementById('workspace-panel-settings');
-        this.settingsBtn = document.getElementById('workspaceSettingsBtn');
+        this.settingsBtn = document.getElementById('openSettings');
         this.isSettingsOpen = false;
 
         this.settingsBtn?.addEventListener('click', () => {
@@ -127,10 +127,6 @@ class CASWorkspaceController {
             } else {
                 this.activateSettings();
             }
-        });
-
-        document.getElementById('openSettings')?.addEventListener('click', () => {
-            this.activateSettings();
         });
 
         document.getElementById('closeSettingsBtn')?.addEventListener('click', () => {

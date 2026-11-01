@@ -12,18 +12,166 @@
     <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
 </head>
 <body>
-    <header class="workspace-toolbar">
-        <div class="window-controls macos-window-controls" id="windowControls" role="group" aria-label="Управление окном" hidden>
-            <button type="button" class="traffic-light traffic-light-close" id="winCloseBtn" aria-label="Закрыть приложение" title="Закрыть"><span class="traffic-light-icon" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M3.5 3.5l5 5M8.5 3.5l-5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span></button>
-            <button type="button" class="traffic-light traffic-light-minimize" id="winMinBtn" aria-label="Свернуть окно" title="Свернуть"><span class="traffic-light-icon" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M2.5 6h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span></button>
-            <button type="button" class="traffic-light traffic-light-maximize" id="winMaxBtn" aria-label="Развернуть окно" title="Развернуть"><span class="traffic-light-icon" aria-hidden="true"><svg viewBox="0 0 12 12" id="winMaxIcon"><path d="M3.5 8.5l5-5M4 3.5h4.5V8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+    <header class="workspace-toolbar" id="mainHeader">
+        <!-- macOS Traffic Lights (shown on macOS darwin only) -->
+        <div class="window-controls macos-window-controls" id="macWindowControls" role="group" aria-label="Управление окном macOS" hidden>
+            <button type="button" class="traffic-light traffic-light-close" id="macCloseBtn" aria-label="Закрыть приложение" title="Закрыть"></button>
+            <button type="button" class="traffic-light traffic-light-minimize" id="macMinBtn" aria-label="Свернуть окно" title="Свернуть"></button>
+            <button type="button" class="traffic-light traffic-light-maximize" id="macMaxBtn" aria-label="Развернуть окно" title="Развернуть"></button>
         </div>
-        <div class="workspace-title"><span class="workspace-mark" aria-hidden="true"><i class="fas fa-sliders-h"></i></span><div><strong>Рабочее пространство</strong><span>Concert Audio System</span></div></div>
+
+        <!-- macOS-Style Application Menu Bar -->
+        <nav class="cas-menu-bar" id="casMenuBar" role="menubar" aria-label="Главное меню">
+            <div class="cas-menu-item" role="none">
+                <button type="button" class="cas-menu-trigger" id="menuTriggerFile" role="menuitem" aria-haspopup="true" aria-expanded="false">Файл</button>
+                <div class="cas-menu-dropdown" id="menuDropdownFile" role="menu" aria-labelledby="menuTriggerFile" hidden>
+                    <button type="button" class="cas-menu-action" data-action="open-folder" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-folder-open" aria-hidden="true"></i> Загрузить плейлист...</span>
+                        <kbd>Ctrl+O</kbd>
+                    </button>
+                    <button type="button" class="cas-menu-action" data-action="load-track-a" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-music" aria-hidden="true"></i> Загрузить трек в деку A...</span>
+                        <kbd>Shift+A</kbd>
+                    </button>
+                    <button type="button" class="cas-menu-action" data-action="load-track-b" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-music" aria-hidden="true"></i> Загрузить трек в деку B...</span>
+                        <kbd>Shift+B</kbd>
+                    </button>
+                    <button type="button" class="cas-menu-action" data-action="assign-pad" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-th-large" aria-hidden="true"></i> Загрузить звук на пэд...</span>
+                    </button>
+                    <div class="cas-menu-divider" role="separator"></div>
+                    <button type="button" class="cas-menu-action" data-action="online-search" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-search" aria-hidden="true"></i> Поиск музыки (YouTube)...</span>
+                    </button>
+                    <div class="cas-menu-divider" role="separator"></div>
+                    <button type="button" class="cas-menu-action" data-action="quit" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-power-off" aria-hidden="true"></i> Выход</span>
+                        <kbd>Ctrl+Q</kbd>
+                    </button>
+                </div>
+            </div>
+
+            <div class="cas-menu-item" role="none">
+                <button type="button" class="cas-menu-trigger" id="menuTriggerDecks" role="menuitem" aria-haspopup="true" aria-expanded="false">Деки</button>
+                <div class="cas-menu-dropdown" id="menuDropdownDecks" role="menu" aria-labelledby="menuTriggerDecks" hidden>
+                    <button type="button" class="cas-menu-action" data-action="deck-split" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-columns" aria-hidden="true"></i> Обе деки (Split)</span>
+                    </button>
+                    <button type="button" class="cas-menu-action" data-action="deck-a-only" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-square" aria-hidden="true"></i> Только дека A</span>
+                    </button>
+                    <button type="button" class="cas-menu-action" data-action="deck-b-only" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-square" aria-hidden="true"></i> Только дека B</span>
+                    </button>
+                    <div class="cas-menu-divider" role="separator"></div>
+                    <button type="button" class="cas-menu-action" data-action="refresh-playlists" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-sync-alt" aria-hidden="true"></i> Обновить списки</span>
+                        <kbd>F5</kbd>
+                    </button>
+                </div>
+            </div>
+
+            <div class="cas-menu-item" role="none">
+                <button type="button" class="cas-menu-trigger" id="menuTriggerPlayback" role="menuitem" aria-haspopup="true" aria-expanded="false">Воспроизведение</button>
+                <div class="cas-menu-dropdown" id="menuDropdownPlayback" role="menu" aria-labelledby="menuTriggerPlayback" hidden>
+                    <button type="button" class="cas-menu-action" data-action="play-pause" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-play" aria-hidden="true"></i> Воспроизведение / Пауза</span>
+                        <kbd>Пробел</kbd>
+                    </button>
+                    <button type="button" class="cas-menu-action" data-action="stop" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-stop" aria-hidden="true"></i> Остановить</span>
+                        <kbd>Esc</kbd>
+                    </button>
+                    <button type="button" class="cas-menu-action" data-action="next-track" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-step-forward" aria-hidden="true"></i> Следующий трек</span>
+                        <kbd>→</kbd>
+                    </button>
+                    <button type="button" class="cas-menu-action" data-action="prev-track" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-step-backward" aria-hidden="true"></i> Предыдущий трек</span>
+                        <kbd>←</kbd>
+                    </button>
+                    <div class="cas-menu-divider" role="separator"></div>
+                    <button type="button" class="cas-menu-action" data-action="mute" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-volume-mute" aria-hidden="true"></i> Mute (паника)</span>
+                        <kbd>M</kbd>
+                    </button>
+                    <button type="button" class="cas-menu-action" data-action="stop-pads" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-ban" aria-hidden="true"></i> Стоп все пэды</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="cas-menu-item" role="none">
+                <button type="button" class="cas-menu-trigger" id="menuTriggerWorkspaces" role="menuitem" aria-haspopup="true" aria-expanded="false">Вкладки</button>
+                <div class="cas-menu-dropdown" id="menuDropdownWorkspaces" role="menu" aria-labelledby="menuTriggerWorkspaces" hidden>
+                    <button type="button" class="cas-menu-action" data-action="tab-add" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-plus" aria-hidden="true"></i> Новая вкладка</span>
+                    </button>
+                    <button type="button" class="cas-menu-action" data-action="tab-rename" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-pen" aria-hidden="true"></i> Переименовать вкладку...</span>
+                    </button>
+                    <button type="button" class="cas-menu-action" data-action="tab-delete" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-trash" aria-hidden="true"></i> Удалить вкладку</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="cas-menu-item" role="none">
+                <button type="button" class="cas-menu-trigger" id="menuTriggerSettings" role="menuitem" aria-haspopup="true" aria-expanded="false">Настройки</button>
+                <div class="cas-menu-dropdown" id="menuDropdownSettings" role="menu" aria-labelledby="menuTriggerSettings" hidden>
+                    <button type="button" class="cas-menu-action" data-action="open-settings" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-sliders-h" aria-hidden="true"></i> Параметры звука и системы...</span>
+                        <kbd>Ctrl+,</kbd>
+                    </button>
+                    <button type="button" class="cas-menu-action" data-action="change-folder" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-folder" aria-hidden="true"></i> Сменить папку музыки...</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="cas-menu-item" role="none">
+                <button type="button" class="cas-menu-trigger" id="menuTriggerHelp" role="menuitem" aria-haspopup="true" aria-expanded="false">Справка</button>
+                <div class="cas-menu-dropdown" id="menuDropdownHelp" role="menu" aria-labelledby="menuTriggerHelp" hidden>
+                    <button type="button" class="cas-menu-action" data-action="open-help" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-keyboard" aria-hidden="true"></i> Горячие клавиши</span>
+                    </button>
+                    <div class="cas-menu-divider" role="separator"></div>
+                    <button type="button" class="cas-menu-action" data-action="about-app" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-info-circle" aria-hidden="true"></i> О программе Concert Audio System</span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Center Drag Region -->
+        <div class="workspace-drag-region" aria-hidden="true"></div>
+
+        <!-- Right Side Actions -->
         <div class="workspace-actions">
-            <button type="button" class="toolbar-button" id="openOnlineSearch"><i class="fas fa-search" aria-hidden="true"></i> Поиск музыки</button>
+            <!-- Modern Header Status Pill (integrated status indicator) -->
+            <div class="header-status-pill" id="status" role="status" aria-live="polite" title="Статус приложения">
+                <span class="status-indicator-dot" aria-hidden="true"></span>
+                <span class="status-indicator-text">Готов к работе</span>
+            </div>
+
+            <button type="button" class="toolbar-button" id="openOnlineSearch" title="Поиск музыки в YouTube"><i class="fas fa-search" aria-hidden="true"></i> Поиск</button>
             <button type="button" class="toolbar-button icon-button" id="openKeyboardHelp" aria-label="Горячие клавиши" aria-controls="keyboardHelp" aria-expanded="false" title="Горячие клавиши"><i class="fas fa-keyboard" aria-hidden="true"></i></button>
-            <button type="button" class="toolbar-button icon-button" id="openSettings" aria-label="Настройки" title="Настройки системы (тишина, стабилизация, звук)"><i class="fas fa-gear" aria-hidden="true"></i></button>
+            <button type="button" class="toolbar-button icon-button" id="openSettings" aria-label="Настройки" title="Настройки системы (обрезка тишины, стабилизация, звук)"><i class="fas fa-gear" aria-hidden="true"></i></button>
             <time class="current-time" id="currentTime" title="Местное время">--:--:--</time>
+        </div>
+
+        <!-- Windows Standard Caption Buttons (Minimize, Maximize/Restore, Close) -->
+        <div class="window-controls windows-window-controls" id="windowsWindowControls" role="group" aria-label="Управление окном Windows" hidden>
+            <button type="button" class="win-btn win-min-btn" id="winMinBtn" title="Свернуть" aria-label="Свернуть окно">
+                <svg viewBox="0 0 10 10" width="10" height="10"><path d="M0 5h10" stroke="currentColor" stroke-width="1"/></svg>
+            </button>
+            <button type="button" class="win-btn win-max-btn" id="winMaxBtn" title="Развернуть" aria-label="Развернуть окно">
+                <svg viewBox="0 0 10 10" width="10" height="10" id="winMaxIcon"><path d="M1 1h8v8H1z" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+            </button>
+            <button type="button" class="win-btn win-close-btn" id="winCloseBtn" title="Закрыть" aria-label="Закрыть приложение">
+                <svg viewBox="0 0 10 10" width="10" height="10"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.1"/></svg>
+            </button>
         </div>
     </header>
     <nav class="workspace-navigation" aria-label="Рабочие пространства">
@@ -32,8 +180,6 @@
             <button type="button" id="workspaceAdd" class="toolbar-button icon-button" aria-label="Новая вкладка" title="Новая вкладка; сюда можно перетащить блок"><i class="fas fa-plus" aria-hidden="true"></i></button>
             <button type="button" id="workspaceRename" class="toolbar-button icon-button" aria-label="Переименовать вкладку" title="Переименовать вкладку"><i class="fas fa-pen" aria-hidden="true"></i></button>
             <button type="button" id="workspaceDelete" class="toolbar-button icon-button" aria-label="Удалить вкладку и вернуть её блоки на Основную" title="Удалить вкладку и вернуть её блоки на Основную"><i class="fas fa-xmark" aria-hidden="true"></i></button>
-            <span class="workspace-nav-divider" aria-hidden="true"></span>
-            <button type="button" id="workspaceSettingsBtn" class="toolbar-button workspace-settings-tab" aria-label="Настройки звука и системы" title="Настройки: обрезка тишины, стабилизация звука, система"><i class="fas fa-gear" aria-hidden="true"></i> <span>Настройки</span></button>
         </div>
     </nav>
     <main id="workspacePanels">
@@ -587,7 +733,25 @@
         </form>
     </dialog>
 
-    <footer class="workspace-footer"><div class="status" id="status" role="status" aria-live="polite">Готов к работе</div><span class="footer-hint"><kbd>Пробел</kbd> пауза <kbd>Esc</kbd> стоп</span><span class="version">1.6.0</span></footer>
+    <!-- Диалог «О программе» -->
+    <dialog id="aboutDialog" class="workspace-dialog about-dialog" aria-labelledby="aboutDialogTitle">
+        <form method="dialog" class="about-dialog-form">
+            <div class="about-dialog-header">
+                <img src="assets/cas-logo-transparent.png" alt="CAS" class="about-logo" draggable="false">
+                <h2 id="aboutDialogTitle">Concert Audio System</h2>
+                <span class="about-version">Версия 1.6.0</span>
+            </div>
+            <p class="about-desc">Профессиональный звуковой микшер для театральных постановок и концертов.</p>
+            <div class="about-meta">
+                <div><span>Две деки:</span> <strong>A / B с кроссфейдом</strong></div>
+                <div><span>Эффекты:</span> <strong>12 звуковых пэдов</strong></div>
+                <div><span>Платформа:</span> <strong>Windows • macOS • Linux</strong></div>
+            </div>
+            <div class="workspace-dialog-actions">
+                <button type="submit" class="toolbar-button" id="closeAboutDialogBtn">Закрыть</button>
+            </div>
+        </form>
+    </dialog>
 
     <script src="assets/lucide.min.js"></script>
     <script src="online-ui.js"></script>

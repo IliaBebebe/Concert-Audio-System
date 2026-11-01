@@ -1234,6 +1234,7 @@ class TheatreSoundMixer {
         this.initSettingsUI();
         await this.refreshPlaylists();
         this.initWindowControls();
+        this.setupAppMenuBar();
         this.updateDeckUI();
         this.displayTracks();
         if (window.CASOnlinePanel) this.onlinePanel = new window.CASOnlinePanel(this);
@@ -1251,50 +1252,261 @@ class TheatreSoundMixer {
             else body.classList.add('platform-linux');
         }
 
-        const controls = typeof document !== 'undefined' ? document.getElementById('windowControls') : null;
-        if (!controls) return;
+        const winControls = typeof document !== 'undefined' ? document.getElementById('windowsWindowControls') : null;
+        const macControls = typeof document !== 'undefined' ? document.getElementById('macWindowControls') : null;
 
-        if (!isWindows || !window.electronAPI?.windowControl) {
-            controls.hidden = true;
-            return;
+        if (isWindows && winControls && window.electronAPI?.windowControl) {
+            winControls.hidden = false;
+            if (macControls) macControls.hidden = true;
+
+            const closeBtn = document.getElementById('winCloseBtn');
+            const minBtn = document.getElementById('winMinBtn');
+            const maxBtn = document.getElementById('winMaxBtn');
+
+            closeBtn?.addEventListener('click', () => {
+                window.electronAPI.windowControl('close').catch(console.error);
+            });
+
+            minBtn?.addEventListener('click', () => {
+                window.electronAPI.windowControl('minimize').catch(console.error);
+            });
+
+            const updateMaxIcon = (isMaximized) => {
+                if (!maxBtn) return;
+                maxBtn.setAttribute('aria-label', isMaximized ? 'Восстановить окно' : 'Развернуть окно');
+                maxBtn.title = isMaximized ? 'Восстановить' : 'Развернуть';
+                const maxIcon = document.getElementById('winMaxIcon');
+                if (maxIcon) {
+                    maxIcon.innerHTML = isMaximized
+                        ? '<path d="M2.5 1h6.5v6.5H2.5z" fill="none" stroke="currentColor" stroke-width="1"/><path d="M1 3.5v5.5h5.5" fill="none" stroke="currentColor" stroke-width="1"/>'
+                        : '<path d="M1 1h8v8H1z" fill="none" stroke="currentColor" stroke-width="1"/>';
+                }
+            };
+
+            maxBtn?.addEventListener('click', () => {
+                window.electronAPI.windowControl('maximize').catch(console.error);
+            });
+
+            if (window.electronAPI.isMaximized) {
+                window.electronAPI.isMaximized().then(updateMaxIcon).catch(() => {});
+            }
+
+            if (window.electronAPI.onWindowStateChange) {
+                window.electronAPI.onWindowStateChange((state) => {
+                    updateMaxIcon(Boolean(state?.isMaximized));
+                });
+            }
+        } else if (isMac && macControls && window.electronAPI?.windowControl) {
+            macControls.hidden = false;
+            if (winControls) winControls.hidden = true;
+
+            const macClose = document.getElementById('macCloseBtn');
+            const macMin = document.getElementById('macMinBtn');
+            const macMax = document.getElementById('macMaxBtn');
+
+            macClose?.addEventListener('click', () => {
+                window.electronAPI.windowControl('close').catch(console.error);
+            });
+            macMin?.addEventListener('click', () => {
+                window.electronAPI.windowControl('minimize').catch(console.error);
+            });
+            macMax?.addEventListener('click', () => {
+                window.electronAPI.windowControl('maximize').catch(console.error);
+            });
         }
+    }
 
-        controls.hidden = false;
-        const closeBtn = document.getElementById('winCloseBtn');
-        const minBtn = document.getElementById('winMinBtn');
-        const maxBtn = document.getElementById('winMaxBtn');
+    setupAppMenuBar() {
+        const menuBar = document.getElementById('casMenuBar');
+        if (!menuBar) return;
 
-        closeBtn?.addEventListener('click', () => {
-            window.electronAPI.windowControl('close').catch(console.error);
-        });
+        let activeDropdown = null;
+        let activeTrigger = null;
 
-        minBtn?.addEventListener('click', () => {
-            window.electronAPI.windowControl('minimize').catch(console.error);
-        });
-
-        const updateMaxIcon = (isMaximized) => {
-            if (!maxBtn) return;
-            maxBtn.setAttribute('aria-label', isMaximized ? 'Восстановить окно' : 'Развернуть окно');
-            maxBtn.title = isMaximized ? 'Восстановить' : 'Развернуть';
-            const iconSvg = isMaximized
-                ? '<svg viewBox="0 0 12 12"><path d="M4.5 7.5L1.5 10.5M4 10.5h-2.5V8M7.5 4.5L10.5 1.5M8 1.5h2.5V4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-                : '<svg viewBox="0 0 12 12"><path d="M3.5 8.5l5-5M4 3.5h4.5V8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-            const iconSpan = maxBtn.querySelector('.traffic-light-icon');
-            if (iconSpan) iconSpan.innerHTML = iconSvg;
+        const closeAllMenus = () => {
+            menuBar.querySelectorAll('.cas-menu-trigger').forEach(btn => {
+                btn.setAttribute('aria-expanded', 'false');
+                btn.classList.remove('is-active');
+            });
+            menuBar.querySelectorAll('.cas-menu-dropdown').forEach(dropdown => {
+                dropdown.hidden = true;
+            });
+            activeDropdown = null;
+            activeTrigger = null;
         };
 
-        maxBtn?.addEventListener('click', () => {
-            window.electronAPI.windowControl('maximize').catch(console.error);
+        const openMenu = (trigger, dropdown) => {
+            closeAllMenus();
+            trigger.setAttribute('aria-expanded', 'true');
+            trigger.classList.add('is-active');
+            dropdown.hidden = false;
+            activeDropdown = dropdown;
+            activeTrigger = trigger;
+        };
+
+        const triggers = menuBar.querySelectorAll('.cas-menu-trigger');
+        triggers.forEach(trigger => {
+            const dropdown = trigger.nextElementSibling;
+            if (!dropdown) return;
+
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (activeDropdown === dropdown) {
+                    closeAllMenus();
+                } else {
+                    openMenu(trigger, dropdown);
+                }
+            });
+
+            trigger.addEventListener('mouseenter', () => {
+                if (activeDropdown && activeDropdown !== dropdown) {
+                    openMenu(trigger, dropdown);
+                }
+            });
         });
 
-        if (window.electronAPI.isMaximized) {
-            window.electronAPI.isMaximized().then(updateMaxIcon).catch(() => {});
-        }
+        document.addEventListener('click', (e) => {
+            if (activeDropdown && !e.target.closest('#casMenuBar')) {
+                closeAllMenus();
+            }
+        });
 
-        if (window.electronAPI.onWindowStateChange) {
-            window.electronAPI.onWindowStateChange((state) => {
-                updateMaxIcon(Boolean(state?.isMaximized));
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && activeDropdown) {
+                closeAllMenus();
+            }
+        });
+
+        menuBar.addEventListener('click', (e) => {
+            const actionBtn = e.target.closest('.cas-menu-action');
+            if (!actionBtn) return;
+            const action = actionBtn.dataset.action;
+            closeAllMenus();
+
+            switch (action) {
+                case 'open-folder':
+                    this.changeMusicFolder();
+                    break;
+                case 'load-track-a':
+                    this.openTrackForDeck('A');
+                    break;
+                case 'load-track-b':
+                    this.openTrackForDeck('B');
+                    break;
+                case 'assign-pad':
+                    document.getElementById('assignSound')?.click();
+                    break;
+                case 'online-search':
+                    document.getElementById('openOnlineSearch')?.click();
+                    break;
+                case 'quit':
+                    window.electronAPI?.windowControl?.('close').catch(console.error);
+                    break;
+                case 'deck-split':
+                    document.getElementById('viewModeSplit')?.click();
+                    break;
+                case 'deck-a-only':
+                    document.getElementById('viewModeA')?.click();
+                    break;
+                case 'deck-b-only':
+                    document.getElementById('viewModeB')?.click();
+                    break;
+                case 'refresh-playlists':
+                    document.getElementById('refreshPlaylists')?.click();
+                    break;
+                case 'play-pause':
+                    if (this.isPlaying) {
+                        document.getElementById('pauseBtn')?.click();
+                    } else {
+                        document.getElementById('playBtn')?.click();
+                    }
+                    break;
+                case 'stop':
+                    document.getElementById('stopBtn')?.click();
+                    break;
+                case 'next-track':
+                    document.getElementById('nextTrack')?.click();
+                    break;
+                case 'prev-track':
+                    document.getElementById('prevTrack')?.click();
+                    break;
+                case 'mute':
+                    document.getElementById('panicMuteBtn')?.click();
+                    break;
+                case 'stop-pads':
+                    document.getElementById('stopAllEffects')?.click();
+                    break;
+                case 'tab-add':
+                    document.getElementById('workspaceAdd')?.click();
+                    break;
+                case 'tab-rename':
+                    document.getElementById('workspaceRename')?.click();
+                    break;
+                case 'tab-delete':
+                    document.getElementById('workspaceDelete')?.click();
+                    break;
+                case 'open-settings':
+                    this.workspaces?.activateSettings();
+                    break;
+                case 'change-folder':
+                    this.changeMusicFolder();
+                    break;
+                case 'open-help':
+                    document.getElementById('openKeyboardHelp')?.click();
+                    break;
+                case 'about-app':
+                    this.showAboutDialog();
+                    break;
+            }
+        });
+    }
+
+    async openTrackForDeck(deckId) {
+        this.setActiveDeck(deckId);
+        if (!window.electronAPI?.openFileDialog) return;
+        try {
+            const result = await window.electronAPI.openFileDialog({
+                title: `Выберите треки для деки ${deckId}`,
+                properties: ['openFile', 'multiSelections'],
+                filters: [{ name: 'Аудиофайлы', extensions: ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'opus', 'webm'] }]
             });
+            if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+                const newTracks = result.filePaths.map(filePath => {
+                    const filename = filePath.split(/[/\\]/).pop();
+                    const dotIndex = filename.lastIndexOf('.');
+                    const name = dotIndex > 0 ? filename.slice(0, dotIndex) : filename;
+                    const ext = dotIndex > 0 ? filename.slice(dotIndex).toLowerCase() : '';
+                    return {
+                        name,
+                        filename,
+                        path: filePath,
+                        ext
+                    };
+                });
+                const deck = this.decks[deckId];
+                if (deck) {
+                    deck.tracks = [...(deck.tracks || []), ...newTracks];
+                    deck.name = deck.name && deck.name !== 'Выберите плейлист' ? deck.name : 'Выбранные треки';
+                    this.renderDeckTracks(deckId);
+                    this.updateDeckUI();
+                    this.updateStatus(`Добавлено треков в деку ${deckId}: ${newTracks.length}`, 'success');
+                }
+            }
+        } catch (error) {
+            CAS_LOGGER.error('Ошибка выбора треков для деки:', error);
+            this.updateStatus('Ошибка выбора файлов', 'error');
+        }
+    }
+
+    showAboutDialog() {
+        const dialog = document.getElementById('aboutDialog');
+        const platformEl = document.getElementById('aboutPlatform');
+        if (platformEl && window.electronAPI?.platform) {
+            const plat = window.electronAPI.platform;
+            platformEl.textContent = plat === 'darwin' ? 'macOS' : (plat === 'win32' ? 'Windows' : 'Linux');
+        }
+        if (dialog && typeof dialog.showModal === 'function') {
+            dialog.showModal();
         }
     }
 
@@ -5156,16 +5368,23 @@ class TheatreSoundMixer {
             clearTimeout(this.statusUpdateTimeout);
         }
         
-        statusElement.textContent = message;
+        const textSpan = statusElement.querySelector('.status-indicator-text');
+        if (textSpan) {
+            textSpan.textContent = message;
+        } else {
+            statusElement.textContent = message;
+        }
         statusElement.classList.add('pulse');
         
-        statusElement.classList.remove('status-error', 'status-success', 'status-warning');
+        statusElement.classList.remove('status-error', 'status-success', 'status-warning', 'status-info');
         if (type === 'error') {
             statusElement.classList.add('status-error');
         } else if (type === 'success') {
             statusElement.classList.add('status-success');
         } else if (type === 'warning') {
             statusElement.classList.add('status-warning');
+        } else {
+            statusElement.classList.add('status-info');
         }
         
         this.statusUpdateTimeout = setTimeout(() => {
