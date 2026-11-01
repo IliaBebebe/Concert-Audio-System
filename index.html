@@ -159,20 +159,20 @@
                 <span class="status-indicator-text">Готов к работе</span>
             </div>
 
-            <button type="button" class="toolbar-button" id="openOnlineSearch" title="Поиск музыки в YouTube"><i class="fas fa-search" aria-hidden="true"></i> Поиск</button>
-            <button type="button" class="toolbar-button icon-button" id="openRemoteControl" aria-label="Мобильный пульт" title="Подключить телефон оператора"><i class="fas fa-mobile-alt" aria-hidden="true"></i></button>
-            <button type="button" class="toolbar-button icon-button" id="openKeyboardHelp" aria-label="Горячие клавиши" aria-controls="keyboardHelp" aria-expanded="false" title="Горячие клавиши"><i class="fas fa-keyboard" aria-hidden="true"></i></button>
-            <button type="button" class="toolbar-button icon-button" id="openSettings" aria-label="Настройки" title="Настройки системы (обрезка тишины, стабилизация, звук)"><i class="fas fa-gear" aria-hidden="true"></i></button>
+            <button type="button" class="toolbar-button" id="openOnlineSearch" title="Поиск музыки в YouTube"><svg class="lucide lucide-search" data-lucide="search" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.34-4.34"/></svg> Поиск</button>
+            <button type="button" class="toolbar-button icon-button" id="openRemoteControl" aria-label="Мобильный пульт" title="Подключить телефон оператора"><svg class="lucide lucide-smartphone" data-lucide="smartphone" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg></button>
+            <button type="button" class="toolbar-button icon-button" id="openKeyboardHelp" aria-label="Горячие клавиши" aria-controls="keyboardHelp" aria-expanded="false" title="Горячие клавиши"><svg class="lucide lucide-keyboard" data-lucide="keyboard" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M7 16h10"/></svg></button>
+            <button type="button" class="toolbar-button icon-button" id="openSettings" aria-label="Настройки" title="Настройки системы (обрезка тишины, стабилизация, звук)"><svg class="lucide lucide-settings" data-lucide="settings" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg></button>
             <time class="current-time" id="currentTime" title="Местное время">--:--:--</time>
         </div>
 
         <!-- Windows Standard Caption Buttons (Minimize, Maximize/Restore, Close) -->
         <div class="window-controls windows-window-controls" id="windowsWindowControls" role="group" aria-label="Управление окном Windows">
             <button type="button" class="win-btn win-min-btn" id="winMinBtn" title="Свернуть" aria-label="Свернуть окно">
-                <svg viewBox="0 0 10 10" width="10" height="10"><path d="M0 5h10" stroke="currentColor" stroke-width="1"/></svg>
+                <svg viewBox="0 0 10 10" width="10" height="10" shape-rendering="crispEdges"><path d="M0 5h10" stroke="currentColor" stroke-width="1"/></svg>
             </button>
             <button type="button" class="win-btn win-max-btn" id="winMaxBtn" title="Развернуть" aria-label="Развернуть окно">
-                <svg viewBox="0 0 10 10" width="10" height="10" id="winMaxIcon"><path d="M1 1h8v8H1z" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+                <svg viewBox="0 0 10 10" width="10" height="10" id="winMaxIcon" shape-rendering="crispEdges"><path d="M1 1h8v8H1z" fill="none" stroke="currentColor" stroke-width="1"/></svg>
             </button>
             <button type="button" class="win-btn win-close-btn" id="winCloseBtn" title="Закрыть" aria-label="Закрыть приложение">
                 <svg viewBox="0 0 10 10" width="10" height="10"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.1"/></svg>
@@ -182,7 +182,7 @@
     <nav class="workspace-navigation" aria-label="Рабочие пространства">
         <div id="workspaceTabs" class="workspace-tabs" role="tablist" aria-label="Вкладки рабочих пространств"></div>
         <div class="workspace-tab-actions">
-            <button type="button" id="workspaceAdd" class="toolbar-button icon-button" aria-label="Новая вкладка" title="Новая вкладка; сюда можно перетащить блок"><i class="fas fa-plus" aria-hidden="true"></i></button>
+            <button type="button" id="workspaceAdd" class="toolbar-button icon-button" aria-label="Новая вкладка" title="Новая вкладка; сюда можно перетащить блок"><svg class="lucide lucide-plus" data-lucide="plus" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
             <button type="button" id="workspaceRename" class="toolbar-button icon-button" aria-label="Переименовать вкладку" title="Переименовать вкладку"><i class="fas fa-pen" aria-hidden="true"></i></button>
             <button type="button" id="workspaceDelete" class="toolbar-button icon-button" aria-label="Удалить вкладку и вернуть её блоки на Основную" title="Удалить вкладку и вернуть её блоки на Основную"><i class="fas fa-xmark" aria-hidden="true"></i></button>
         </div>
