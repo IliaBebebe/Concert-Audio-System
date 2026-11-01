@@ -1236,6 +1236,7 @@ class TheatreSoundMixer {
         this.initWindowControls();
         this.setupAppMenuBar();
         this.initRemoteControl();
+        this.setupAboutDialog();
         this.updateDeckUI();
         this.displayTracks();
         if (window.CASOnlinePanel) this.onlinePanel = new window.CASOnlinePanel(this);
@@ -1564,13 +1565,71 @@ class TheatreSoundMixer {
         }
     }
 
-    showAboutDialog() {
-        const dialog = document.getElementById('aboutDialog');
-        const platformEl = document.getElementById('aboutPlatform');
-        if (platformEl && window.electronAPI?.platform) {
-            const plat = window.electronAPI.platform;
-            platformEl.textContent = plat === 'darwin' ? 'macOS' : (plat === 'win32' ? 'Windows' : 'Linux');
+    formatPlatformInfo() {
+        const plat = window.electronAPI?.platform || (typeof navigator !== 'undefined' && navigator.userAgent?.includes('Mac') ? 'darwin' : 'win32');
+        const arch = window.electronAPI?.arch || 'x64';
+        if (plat === 'win32') {
+            return arch === 'x64' ? 'Windows x64' : (arch === 'arm64' ? 'Windows ARM64' : `Windows ${arch}`);
         }
+        if (plat === 'darwin') {
+            const archName = arch === 'arm64' ? 'Apple Silicon' : (arch === 'x64' ? 'Intel' : arch);
+            return archName ? `macOS (${archName})` : 'macOS';
+        }
+        if (plat === 'linux') {
+            return arch ? `Linux ${arch}` : 'Linux';
+        }
+        return plat;
+    }
+
+    setupAboutDialog() {
+        if (typeof document === 'undefined') return;
+        const dialog = document.getElementById('aboutDialog');
+        const githubLink = document.getElementById('aboutGithubLink');
+
+        if (githubLink) {
+            githubLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                const url = githubLink.getAttribute('href') || 'https://github.com/IliaBebebe/Concert-Audio-System';
+                if (window.electronAPI?.openExternal) {
+                    window.electronAPI.openExternal(url).catch((err) => {
+                        CAS_LOGGER?.error?.('Ошибка открытия внешней ссылки:', err);
+                    });
+                } else if (typeof window !== 'undefined') {
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                }
+            });
+        }
+
+        if (dialog) {
+            dialog.addEventListener('click', (e) => {
+                if (e.target === dialog) dialog.close();
+            });
+        }
+    }
+
+    showAboutDialog() {
+        if (typeof document === 'undefined') return;
+        const dialog = document.getElementById('aboutDialog');
+        const platformValueEl = document.getElementById('aboutPlatformValue');
+        const electronValueEl = document.getElementById('aboutElectronValue');
+        const chromeValueEl = document.getElementById('aboutChromeValue');
+        const nodeValueEl = document.getElementById('aboutNodeValue');
+
+        if (platformValueEl) {
+            platformValueEl.textContent = this.formatPlatformInfo();
+        }
+
+        const versions = window.electronAPI?.versions || (typeof process !== 'undefined' ? process.versions : null);
+        if (electronValueEl) {
+            electronValueEl.textContent = versions?.electron ? `v${versions.electron}` : 'v34.3.0';
+        }
+        if (chromeValueEl) {
+            chromeValueEl.textContent = versions?.chrome ? `v${versions.chrome}` : 'v132.0';
+        }
+        if (nodeValueEl) {
+            nodeValueEl.textContent = versions?.node ? `v${versions.node}` : 'v20.18.3';
+        }
+
         if (dialog && typeof dialog.showModal === 'function') {
             dialog.showModal();
         }

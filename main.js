@@ -1121,6 +1121,23 @@ if (typeof ipcMain.on === 'function') {
   });
 }
 
+ipcMain.handle('open-external', async (event, url) => {
+  if (!isTrustedSender(event, mainWindow)) {
+    return unauthorizedResponse();
+  }
+  if (typeof url !== 'string' || (!url.startsWith('https://') && !url.startsWith('http://'))) {
+    return { success: false, error: 'Недопустимый URL' };
+  }
+  try {
+    if (shell?.openExternal) {
+      await shell.openExternal(url);
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 async function startApplication() {
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.concertaudiosystem.cas');

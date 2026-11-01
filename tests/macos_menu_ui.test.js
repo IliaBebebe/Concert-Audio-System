@@ -60,6 +60,22 @@ test('header cleanup: bulky title and bottom footer removed, modern status pill 
     // About dialog present
     assert.ok(html.includes('id="aboutDialog"'), 'About dialog #aboutDialog must exist');
     assert.ok(html.includes('Версия 1.6.0'), 'About dialog must show current version 1.6.0');
+
+    // Technical stack elements exist
+    assert.ok(html.includes('id="aboutPlatformValue"'), 'About dialog must have #aboutPlatformValue for current platform');
+    assert.ok(html.includes('id="aboutElectronValue"'), 'About dialog must have #aboutElectronValue for Electron version');
+    assert.ok(html.includes('id="aboutChromeValue"'), 'About dialog must have #aboutChromeValue for Chromium version');
+    assert.ok(html.includes('id="aboutNodeValue"'), 'About dialog must have #aboutNodeValue for Node.js version');
+
+    // Old marketing items must be removed
+    assert.ok(!html.includes('Две деки:'), 'Old marketing item "Две деки" must be removed');
+    assert.ok(!html.includes('12 звуковых пэдов'), 'Old marketing item "12 звуковых пэдов" must be removed');
+    assert.ok(!html.includes('Windows • macOS • Linux'), 'Old generic "Windows • macOS • Linux" must be removed');
+
+    // Ready-made GitHub icon and repository link
+    assert.ok(html.includes('id="aboutGithubLink"'), 'About dialog must contain GitHub repository link #aboutGithubLink');
+    assert.ok(html.includes('https://github.com/IliaBebebe/Concert-Audio-System'), 'GitHub link must point to CAS repository');
+    assert.ok(html.includes('fa-brands fa-github'), 'GitHub link must use ready-made Font Awesome fa-brands fa-github icon');
 });
 
 test('CSS: toolbar and workspace panels adjust height properly without footer', () => {
@@ -70,6 +86,7 @@ test('CSS: toolbar and workspace panels adjust height properly without footer', 
     assert.ok(css.includes('.windows-window-controls'), 'CSS must define .windows-window-controls');
     assert.ok(css.includes('.win-close-btn:hover'), 'CSS must define Windows close red hover style');
     assert.ok(css.includes('#workspacePanels { position: relative; height: calc(100vh - 74px);'), 'workspacePanels height must be 100vh - 74px without footer');
+    assert.ok(css.includes('.about-github-link'), 'CSS must define .about-github-link styles');
 });
 
 test('renderer & workspaces: keyboard accessibility and settings status handling', () => {
@@ -87,4 +104,8 @@ test('renderer & workspaces: keyboard accessibility and settings status handling
 
     // Settings status restoration
     assert.ok(workspacesJs.includes("this.mixer.updateStatus('Готов к работе')"), 'workspaces.js must restore status on deactivating settings');
+
+    // Platform formatting logic
+    assert.ok(rendererJs.includes('formatPlatformInfo'), 'renderer.js must implement formatPlatformInfo()');
+    assert.ok(rendererJs.includes('Apple Silicon'), 'renderer.js formatPlatformInfo must identify Apple Silicon');
 });

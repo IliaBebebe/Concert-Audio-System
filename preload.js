@@ -6,6 +6,18 @@ const { contextBridge, ipcRenderer } = require('electron');
  */
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
+  arch: process.arch,
+  versions: {
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    node: process.versions.node
+  },
+  openExternal: (url) => {
+    if (typeof url !== 'string' || (!url.startsWith('https://') && !url.startsWith('http://'))) {
+      throw new Error('Недопустимый URL');
+    }
+    return ipcRenderer.invoke('open-external', url);
+  },
   windowControl: (action) => {
     if (typeof action !== 'string' || !['minimize', 'maximize', 'close'].includes(action)) {
       throw new Error('action must be one of: minimize, maximize, close');

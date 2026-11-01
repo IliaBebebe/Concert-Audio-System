@@ -1378,23 +1378,73 @@ kbd { padding: 0 4px; border: 1px solid var(--border-secondary); border-radius: 
     margin: 0 0 16px;
 }
 .about-meta {
-    background: rgba(0, 0, 0, 0.25);
+    background: rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     padding: 10px 14px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 7px;
     font-size: 11.5px;
-    margin-bottom: 20px;
+    margin-bottom: 14px;
 }
 .about-meta div {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     color: var(--text-muted);
 }
 .about-meta strong {
     color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Mono", "Segoe UI Mono", "Courier New", monospace;
+    font-size: 11px;
+    font-weight: 500;
+}
+.about-github-wrap {
+    margin-bottom: 18px;
+}
+.about-github-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 14px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease, color 0.15s ease;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+.about-github-link .fa-github {
+    font-size: 16px;
+    color: #f0f6fc;
+}
+.about-github-link .about-ext-icon {
+    font-size: 10px;
+    opacity: 0.6;
+    margin-left: auto;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.about-github-link:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.24);
+    color: #fff;
+    transform: translateY(-1px);
+}
+.about-github-link:hover .about-ext-icon {
+    opacity: 1;
+    transform: translate(1px, -1px);
+}
+.about-github-link:active {
+    transform: translateY(0);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 /* Remote Control Dialog */
