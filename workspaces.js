@@ -243,6 +243,7 @@ class CASWorkspaceController {
             this.settingsBtn.setAttribute('aria-selected', 'false');
         }
         this.activate(this.layout.activeTab || 'main', true);
+        if (this.mixer) this.mixer.updateStatus('Готов к работе');
     }
     reveal(key) {
         const owner = this.layout.owner(key);

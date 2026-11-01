@@ -71,3 +71,20 @@ test('CSS: toolbar and workspace panels adjust height properly without footer', 
     assert.ok(css.includes('.win-close-btn:hover'), 'CSS must define Windows close red hover style');
     assert.ok(css.includes('#workspacePanels { position: relative; height: calc(100vh - 74px);'), 'workspacePanels height must be 100vh - 74px without footer');
 });
+
+test('renderer & workspaces: keyboard accessibility and settings status handling', () => {
+    const rendererJs = fs.readFileSync(path.join(__dirname, '..', 'renderer.js'), 'utf8');
+    const workspacesJs = fs.readFileSync(path.join(__dirname, '..', 'workspaces.js'), 'utf8');
+
+    // Menu keyboard navigation
+    assert.ok(rendererJs.includes("e.key === 'ArrowRight'"), 'renderer.js must handle ArrowRight navigation for menu bar');
+    assert.ok(rendererJs.includes("e.key === 'ArrowLeft'"), 'renderer.js must handle ArrowLeft navigation for menu bar');
+    assert.ok(rendererJs.includes("e.key === 'ArrowDown'"), 'renderer.js must handle ArrowDown navigation for menu dropdowns');
+    assert.ok(rendererJs.includes("e.key === 'ArrowUp'"), 'renderer.js must handle ArrowUp navigation for menu dropdowns');
+
+    // Hotkeys guard for #casMenuBar
+    assert.ok(rendererJs.includes('#casMenuBar'), 'renderer.js handleHotkeys must guard #casMenuBar from hotkey interference');
+
+    // Settings status restoration
+    assert.ok(workspacesJs.includes("this.mixer.updateStatus('Готов к работе')"), 'workspaces.js must restore status on deactivating settings');
+});

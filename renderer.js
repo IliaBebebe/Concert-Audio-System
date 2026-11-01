@@ -1344,8 +1344,8 @@ class TheatreSoundMixer {
             activeTrigger = trigger;
         };
 
-        const triggers = menuBar.querySelectorAll('.cas-menu-trigger');
-        triggers.forEach(trigger => {
+        const triggerArray = Array.from(triggers);
+        triggers.forEach((trigger, index) => {
             const dropdown = trigger.nextElementSibling;
             if (!dropdown) return;
 
@@ -1361,6 +1361,68 @@ class TheatreSoundMixer {
             trigger.addEventListener('mouseenter', () => {
                 if (activeDropdown && activeDropdown !== dropdown) {
                     openMenu(trigger, dropdown);
+                }
+            });
+
+            trigger.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    const next = (index + 1) % triggerArray.length;
+                    triggerArray[next].focus();
+                    if (activeDropdown) {
+                        openMenu(triggerArray[next], triggerArray[next].nextElementSibling);
+                    }
+                } else if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    const prev = (index - 1 + triggerArray.length) % triggerArray.length;
+                    triggerArray[prev].focus();
+                    if (activeDropdown) {
+                        openMenu(triggerArray[prev], triggerArray[prev].nextElementSibling);
+                    }
+                } else if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openMenu(trigger, dropdown);
+                    dropdown.querySelector('.cas-menu-action')?.focus();
+                }
+            });
+        });
+
+        menuBar.querySelectorAll('.cas-menu-dropdown').forEach(dropdown => {
+            dropdown.addEventListener('keydown', (e) => {
+                const actions = Array.from(dropdown.querySelectorAll('.cas-menu-action'));
+                const currentIndex = actions.indexOf(document.activeElement);
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    const nextIndex = (currentIndex + 1) % actions.length;
+                    actions[nextIndex]?.focus();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    const prevIndex = (currentIndex - 1 + actions.length) % actions.length;
+                    actions[prevIndex]?.focus();
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    const currentTriggerIndex = triggerArray.indexOf(activeTrigger);
+                    if (currentTriggerIndex !== -1) {
+                        const next = (currentTriggerIndex + 1) % triggerArray.length;
+                        triggerArray[next].focus();
+                        openMenu(triggerArray[next], triggerArray[next].nextElementSibling);
+                        triggerArray[next].nextElementSibling?.querySelector('.cas-menu-action')?.focus();
+                    }
+                } else if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    const currentTriggerIndex = triggerArray.indexOf(activeTrigger);
+                    if (currentTriggerIndex !== -1) {
+                        const prev = (currentTriggerIndex - 1 + triggerArray.length) % triggerArray.length;
+                        triggerArray[prev].focus();
+                        openMenu(triggerArray[prev], triggerArray[prev].nextElementSibling);
+                        triggerArray[prev].nextElementSibling?.querySelector('.cas-menu-action')?.focus();
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    const trg = activeTrigger;
+                    closeAllMenus();
+                    trg?.focus();
                 }
             });
         });
@@ -4807,7 +4869,7 @@ class TheatreSoundMixer {
 
     handleHotkeys(event) {
         const metadataModal = document.querySelector('.metadata-modal-overlay');
-        if (metadataModal || document.querySelector('dialog[open]') || event.target?.closest?.('#workspaceTabs, .workspace-transfer-popover')) {
+        if (metadataModal || document.querySelector('dialog[open]') || event.target?.closest?.('#casMenuBar, #workspaceTabs, .workspace-transfer-popover')) {
             return;
         }
 
