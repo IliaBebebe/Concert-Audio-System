@@ -939,7 +939,23 @@ button:active:not(:disabled) { filter: brightness(0.92); }
 .online-toolbar, .online-note { font-size: 12px; line-height: 16px; }
 .online-note { color: var(--text-muted); }
 .player-controls { position: sticky; bottom: 8px; z-index: 3; flex-shrink: 0; width: min(100%, 280px); padding: 8px; gap: 4px; background: #1f1f1f; border-color: var(--border-secondary); border-radius: 8px; margin-bottom: 16px; }
-.control-btn, .play-btn, .stop-btn { height: 40px; background: #313131; border: 1px solid var(--border-secondary); border-radius: 6px; box-shadow: none; transform: none; }
+.control-btn, .play-btn, .stop-btn {
+    height: 40px;
+    background: #313131;
+    border: 1px solid var(--border-secondary);
+    border-radius: 6px;
+    box-shadow: none;
+    transform: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+.control-btn svg, .play-btn svg, .stop-btn svg {
+    display: block;
+    pointer-events: none;
+    margin: 0 auto;
+}
 .control-btn:hover, .stop-btn:hover { background: #414141; box-shadow: none; transform: none; }
 .play-btn { background: #356953; border-color: #72bfab60; color: #e2f4ec; }
 .play-btn:hover { background: #427c63; box-shadow: none; transform: none; }
@@ -1319,7 +1335,20 @@ button:active:not(:disabled) { filter: brightness(0.92); }
 .countdown-display::before { display: none; }
 .countdown-controls { gap: 4px; }
 .countdown-input { width: 40px; height: 28px; font: inherit; background: #181818; border-radius: 4px; box-shadow: none; }
-.countdown-btn { width: 28px; height: 28px; min-width: 28px; padding: 4px; }
+.countdown-btn {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+.countdown-btn svg {
+    display: block;
+    pointer-events: none;
+    margin: 0 auto;
+}
 .hotkeys-info { min-height: 0; flex-shrink: 0; padding: 12px; }
 .hotkeys-info:not([open]) { height: auto !important; resize: none; }
 .hotkeys-info summary { cursor: pointer; font-weight: 400; color: var(--text-secondary); padding-right: 24px; }

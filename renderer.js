@@ -1432,6 +1432,7 @@ class TheatreSoundMixer {
             activeTrigger = trigger;
         };
 
+        const triggers = menuBar.querySelectorAll('.cas-menu-trigger');
         const triggerArray = Array.from(triggers);
         triggers.forEach((trigger, index) => {
             const dropdown = trigger.nextElementSibling;
@@ -2538,7 +2539,7 @@ class TheatreSoundMixer {
         document.getElementById('retryBtn').addEventListener('click', () => this.refreshPlaylists());
         document.getElementById('openMusicFolderBtn').addEventListener('click', () => this.openMusicFolder());
         document.getElementById('changeFolderBtn2').addEventListener('click', () => this.changeMusicFolder());
-        this.updateStatus(`Ошибка: ${error}`);
+        this.updateStatus(error ? `Ошибка: ${error}` : 'Ошибка загрузки плейлистов');
     }
 
     displayPlaylists(playlists) {
@@ -2817,7 +2818,7 @@ class TheatreSoundMixer {
                 // Drag handle
                 const dragHandle = document.createElement('div');
                 dragHandle.className = 'track-drag-handle';
-                dragHandle.innerHTML = '<i class="fas fa-grip-vertical"></i>';
+                dragHandle.innerHTML = '<svg class="lucide lucide-grip-vertical" data-lucide="grip-vertical" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>';
                 dragHandle.setAttribute('aria-hidden', 'true');
 
                 if (isDragEnabled) {
@@ -2865,11 +2866,11 @@ class TheatreSoundMixer {
                 const trackPlayHint = document.createElement('span');
                 trackPlayHint.className = 'track-play-hint';
                 trackPlayHint.setAttribute('aria-hidden', 'true');
-                trackPlayHint.innerHTML = '<i class="fas fa-play"></i>';
+                trackPlayHint.innerHTML = '<svg class="lucide lucide-play" data-lucide="play" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>';
                 const trackPlayingIcon = document.createElement('span');
                 trackPlayingIcon.className = 'track-playing-icon';
                 trackPlayingIcon.setAttribute('aria-hidden', 'true');
-                trackPlayingIcon.innerHTML = '<i class="fas fa-volume-high"></i>';
+                trackPlayingIcon.innerHTML = '<svg class="lucide lucide-volume-2" data-lucide="volume-2" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
                 trackNum.append(trackNumText, trackPlayHint, trackPlayingIcon);
 
                 const trackTitle = this.getTrackTitle(track);
@@ -2901,7 +2902,7 @@ class TheatreSoundMixer {
                 editBtn.type = 'button';
                 editBtn.title = 'Параметры трека (метаданные, смещение)';
                 editBtn.setAttribute('aria-label', `Параметры трека «${displayName}»`);
-                editBtn.innerHTML = '<i class="fas fa-ellipsis"></i>';
+                editBtn.innerHTML = '<svg class="lucide lucide-ellipsis" data-lucide="ellipsis" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>';
                 editBtn.addEventListener('click', (event) => {
                     event.stopPropagation();
                     this.openTrackMetadataEditor(deckId, index);
