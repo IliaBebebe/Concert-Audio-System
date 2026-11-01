@@ -4,6 +4,7 @@ const { fileURLToPath, pathToFileURL } = require('node:url');
 const fs = require('node:fs/promises');
 const { Worker } = require('node:worker_threads');
 const { OnlineMusic } = require(path.join(__dirname, 'online-music.js'));
+const { CASRemoteServer } = require(path.join(__dirname, 'remote-server.js'));
 const requestedProfile = app.commandLine?.getSwitchValue('user-data-dir');
 if (requestedProfile) app.setPath('userData', path.resolve(requestedProfile));
 
@@ -33,7 +34,29 @@ function getOnlineMusic() {
   });
   return onlineMusic;
 }
-app.on('before-quit', () => onlineMusic?.dispose());
+let remoteServer;
+function getRemoteServer() {
+  if (!remoteServer) {
+    remoteServer = new CASRemoteServer({
+      clientDir: path.join(__dirname, 'remote-client')
+    });
+    remoteServer.onCommand((cmd) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('remote-command', cmd);
+      }
+    });
+    remoteServer.onClientCountChange((count) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('remote-client-count', count);
+      }
+    });
+  }
+  return remoteServer;
+}
+app.on('before-quit', () => {
+  onlineMusic?.dispose();
+  remoteServer?.stop().catch(() => {});
+});
 const configPath = path.join(app.getPath('userData'), 'config.json');
 const windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
 const metadataWorkerPath = path.join(__dirname, 'metadata-worker.js');
@@ -1063,6 +1086,40 @@ ipcMain.handle('window-is-maximized', async (event) => {
   }
   return { success: true, isMaximized: mainWindow.isMaximized() };
 });
+
+ipcMain.handle('remote-server-toggle', async (event, enable) => {
+  if (!isTrustedSender(event, mainWindow)) {
+    return unauthorizedResponse();
+  }
+  const s = getRemoteServer();
+  try {
+    if (enable) {
+      await s.start();
+    } else {
+      await s.stop();
+    }
+    return { success: true, status: s.getStatus() };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('remote-server-status', async (event) => {
+  if (!isTrustedSender(event, mainWindow)) {
+    return unauthorizedResponse();
+  }
+  return { success: true, status: getRemoteServer().getStatus() };
+});
+
+if (typeof ipcMain.on === 'function') {
+  ipcMain.on('remote-state-push', (event, state) => {
+    if (!isTrustedSender(event, mainWindow)) return;
+    const s = getRemoteServer();
+    if (s.isRunning) {
+      s.broadcastState(state);
+    }
+  });
+}
 
 async function startApplication() {
   if (process.platform === 'win32') {

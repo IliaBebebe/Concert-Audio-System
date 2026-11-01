@@ -127,6 +127,10 @@
                     <button type="button" class="cas-menu-action" data-action="change-folder" role="menuitem">
                         <span class="menu-action-label"><i class="fas fa-folder" aria-hidden="true"></i> Сменить папку музыки...</span>
                     </button>
+                    <div class="cas-menu-divider" role="separator"></div>
+                    <button type="button" class="cas-menu-action" data-action="open-remote" role="menuitem">
+                        <span class="menu-action-label"><i class="fas fa-mobile-alt" aria-hidden="true"></i> Мобильный пульт (телефон)...</span>
+                    </button>
                 </div>
             </div>
 
@@ -156,6 +160,7 @@
             </div>
 
             <button type="button" class="toolbar-button" id="openOnlineSearch" title="Поиск музыки в YouTube"><i class="fas fa-search" aria-hidden="true"></i> Поиск</button>
+            <button type="button" class="toolbar-button icon-button" id="openRemoteControl" aria-label="Мобильный пульт" title="Подключить телефон оператора"><i class="fas fa-mobile-alt" aria-hidden="true"></i></button>
             <button type="button" class="toolbar-button icon-button" id="openKeyboardHelp" aria-label="Горячие клавиши" aria-controls="keyboardHelp" aria-expanded="false" title="Горячие клавиши"><i class="fas fa-keyboard" aria-hidden="true"></i></button>
             <button type="button" class="toolbar-button icon-button" id="openSettings" aria-label="Настройки" title="Настройки системы (обрезка тишины, стабилизация, звук)"><i class="fas fa-gear" aria-hidden="true"></i></button>
             <time class="current-time" id="currentTime" title="Местное время">--:--:--</time>
@@ -751,6 +756,79 @@
                 <button type="submit" class="toolbar-button" id="closeAboutDialogBtn">Закрыть</button>
             </div>
         </form>
+    </dialog>
+
+    <!-- Диалог «Мобильный пульт управления» -->
+    <dialog id="remoteConnectDialog" class="workspace-dialog remote-dialog" aria-labelledby="remoteConnectDialogTitle">
+        <div class="remote-dialog-form">
+            <div class="remote-dialog-header">
+                <div class="remote-title-wrap">
+                    <i class="fas fa-mobile-alt remote-header-icon" aria-hidden="true"></i>
+                    <div>
+                        <h2 id="remoteConnectDialogTitle">Мобильный пульт управления</h2>
+                        <p class="remote-dialog-sub">Управление воспроизведением и пэдами с телефона через Wi-Fi</p>
+                    </div>
+                </div>
+                <div class="remote-toggle-container">
+                    <label class="remote-toggle-switch" title="Включить или выключить локальный сервер">
+                        <input type="checkbox" id="remoteServerToggle">
+                        <span class="remote-toggle-track"></span>
+                    </label>
+                    <span id="remoteServerToggleStatus" class="remote-toggle-text">ВЫКЛ</span>
+                </div>
+            </div>
+
+            <div id="remoteServerActiveSection" class="remote-server-active-section">
+                <div class="remote-connect-columns">
+                    <div class="remote-qr-column">
+                        <div id="remoteQrBox" class="remote-qr-box" title="Наведите камеру смартфона для мгновенного входа">
+                            <!-- SVG QR code rendered here -->
+                        </div>
+                        <span class="remote-qr-hint">Наведите камеру смартфона</span>
+                    </div>
+
+                    <div class="remote-info-column">
+                        <div class="remote-field-group">
+                            <label class="remote-field-label" for="remoteUrlInput">Адрес в локальной сети:</label>
+                            <div class="remote-url-input-wrap">
+                                <input type="text" id="remoteUrlInput" class="remote-url-input" readonly spellcheck="false" value="http://...">
+                                <button type="button" id="copyRemoteUrlBtn" class="toolbar-button icon-button" title="Скопировать ссылку">
+                                    <i class="fas fa-copy" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="remote-field-group">
+                            <span class="remote-field-label">PIN-код доступа:</span>
+                            <div class="remote-pin-display">
+                                <span id="remotePinValue" class="remote-pin-value">----</span>
+                                <span class="remote-pin-note">Защита от случайных подключений</span>
+                            </div>
+                        </div>
+
+                        <div class="remote-clients-indicator">
+                            <span class="remote-clients-dot" aria-hidden="true"></span>
+                            <span id="remoteClientsText">Подключено устройств: 0</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="remote-tips-banner">
+                    <i class="fas fa-info-circle" aria-hidden="true"></i>
+                    <span>Телефон и компьютер должны быть в одной сети Wi-Fi (или мобильной точке доступа ноутбука).</span>
+                </div>
+            </div>
+
+            <div id="remoteServerDisabledSection" class="remote-server-disabled-section" hidden>
+                <div class="remote-disabled-placeholder">
+                    <i class="fas fa-power-off" aria-hidden="true"></i>
+                    <p>Сервер пульта выключен. Переведите переключатель вверху во включенное положение для подключения.</p>
+                </div>
+            </div>
+
+            <div class="workspace-dialog-actions">
+                <button type="button" class="toolbar-button" id="closeRemoteDialogBtn">Закрыть</button>
+            </div>
+        </div>
     </dialog>
 
     <script src="assets/lucide.min.js"></script>

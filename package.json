@@ -63,7 +63,10 @@
       "THIRD_PARTY_NOTICES.md",
       "licenses/**/*",
       "console.css",
-      "assets/fonts/**/*"
+      "assets/fonts/**/*",
+      "remote-server.js",
+      "qr-generator.js",
+      "remote-client/**/*"
     ],
     "win": {
       "target": [

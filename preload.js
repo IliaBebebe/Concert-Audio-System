@@ -42,6 +42,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('online-progress', listener);
     return () => ipcRenderer.removeListener('online-progress', listener);
   },
+  toggleRemoteServer: (enable) => ipcRenderer.invoke('remote-server-toggle', Boolean(enable)),
+  getRemoteServerStatus: () => ipcRenderer.invoke('remote-server-status'),
+  pushRemoteState: (state) => ipcRenderer.send('remote-state-push', state),
+  onRemoteCommand: (callback) => {
+    if (typeof callback !== 'function') throw new Error('Ожидался обработчик команд пульта');
+    const listener = (_event, cmd) => callback(cmd);
+    ipcRenderer.on('remote-command', listener);
+    return () => ipcRenderer.removeListener('remote-command', listener);
+  },
+  onRemoteClientCount: (callback) => {
+    if (typeof callback !== 'function') throw new Error('Ожидался обработчик количества клиентов');
+    const listener = (_event, count) => callback(count);
+    ipcRenderer.on('remote-client-count', listener);
+    return () => ipcRenderer.removeListener('remote-client-count', listener);
+  },
   /**
    * Читает директории из папки с музыкой
    * @param {string} [customPath] - Опциональный путь (должен быть внутри musicFolder)
