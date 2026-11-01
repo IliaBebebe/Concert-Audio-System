@@ -190,6 +190,92 @@ class CASDeckManager {
 
         return { tracks, newCurrentIndex, insertAt };
     }
+
+    moveTrackBetweenDecks(sourceDeckId, sourceIndex, targetDeckId, targetIndex = null, insertAfter = false) {
+        if (!this.decks[sourceDeckId] || !this.decks[targetDeckId]) return null;
+
+        if (sourceDeckId === targetDeckId) {
+            if (targetIndex === null || targetIndex === undefined) {
+                const tracks = this.decks[sourceDeckId].tracks || [];
+                if (tracks.length === 0) return null;
+                targetIndex = tracks.length - 1;
+                insertAfter = true;
+            }
+            const res = this.reorderTrack(sourceDeckId, sourceIndex, targetIndex, insertAfter);
+            if (!res) return null;
+            return {
+                sourceDeckId,
+                targetDeckId,
+                movedTrack: res.tracks[res.insertAt],
+                sourceTracks: res.tracks,
+                targetTracks: res.tracks,
+                sourceNewCurrentIndex: res.newCurrentIndex,
+                targetNewCurrentIndex: res.newCurrentIndex,
+                insertAt: res.insertAt,
+                isSameDeck: true
+            };
+        }
+
+        const sourceDeck = this.decks[sourceDeckId];
+        const targetDeck = this.decks[targetDeckId];
+        if (!Array.isArray(sourceDeck.tracks) || !Array.isArray(targetDeck.tracks)) return null;
+        if (sourceIndex < 0 || sourceIndex >= sourceDeck.tracks.length) return null;
+
+        const [movedTrack] = sourceDeck.tracks.splice(sourceIndex, 1);
+        if (!movedTrack) return null;
+
+        if (!targetDeck.playlist && sourceDeck.playlist) {
+            targetDeck.playlist = { ...sourceDeck.playlist, name: `Очередь ${targetDeckId}` };
+        } else if (!targetDeck.playlist) {
+            targetDeck.playlist = { name: `Очередь ${targetDeckId}`, path: null };
+        }
+
+        let insertAt;
+        if (targetIndex === null || targetIndex === undefined || targetIndex < 0 || targetIndex >= targetDeck.tracks.length) {
+            insertAt = targetDeck.tracks.length;
+        } else {
+            insertAt = insertAfter ? targetIndex + 1 : targetIndex;
+        }
+
+        if (insertAt < 0) insertAt = 0;
+        if (insertAt > targetDeck.tracks.length) insertAt = targetDeck.tracks.length;
+
+        targetDeck.tracks.splice(insertAt, 0, movedTrack);
+
+        // Update source deck currentTrackIndex
+        let sourceNewCurrentIndex = sourceDeck.currentTrackIndex;
+        if (sourceDeck.tracks.length === 0) {
+            sourceNewCurrentIndex = 0;
+        } else if (sourceDeck.currentTrackIndex === sourceIndex) {
+            if (sourceNewCurrentIndex >= sourceDeck.tracks.length) {
+                sourceNewCurrentIndex = sourceDeck.tracks.length - 1;
+            }
+        } else if (sourceDeck.currentTrackIndex > sourceIndex) {
+            sourceNewCurrentIndex--;
+        }
+        sourceDeck.currentTrackIndex = sourceNewCurrentIndex;
+
+        // Update target deck currentTrackIndex
+        let targetNewCurrentIndex = targetDeck.currentTrackIndex;
+        if (targetDeck.tracks.length === 1) {
+            targetNewCurrentIndex = 0;
+        } else if (insertAt <= targetNewCurrentIndex) {
+            targetNewCurrentIndex++;
+        }
+        targetDeck.currentTrackIndex = targetNewCurrentIndex;
+
+        return {
+            sourceDeckId,
+            targetDeckId,
+            movedTrack,
+            sourceTracks: sourceDeck.tracks,
+            targetTracks: targetDeck.tracks,
+            sourceNewCurrentIndex,
+            targetNewCurrentIndex,
+            insertAt,
+            isSameDeck: false
+        };
+    }
 }
 
 class TheatreSoundMixer {
@@ -2063,6 +2149,17 @@ class TheatreSoundMixer {
         // Клик по шапке дека делает его активным
         this.onClick('deckHeaderA', () => this.setActiveDeck('A'));
         this.onClick('deckHeaderB', () => this.setActiveDeck('B'));
+
+        // Drag-and-drop треков между деками на уровне контейнеров
+        ['A', 'B'].forEach((deckId) => {
+            const containerId = deckId === 'A' ? 'tracksContainerA' : 'tracksContainerB';
+            const container = document.getElementById(containerId);
+            if (container) {
+                container.addEventListener('dragover', (e) => this.handleContainerDragOver(e, deckId));
+                container.addEventListener('dragleave', (e) => this.handleContainerDragLeave(e, deckId));
+                container.addEventListener('drop', (e) => this.handleContainerDrop(e, deckId));
+            }
+        });
     }
 
     onClick(id, handler) {
@@ -2700,16 +2797,21 @@ class TheatreSoundMixer {
                 row.dataset.index = String(index);
                 row.dataset.deck = deckId;
                 row.addEventListener('keydown', (event) => {
-                    if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.code) || !isDragEnabled) return;
+                    if (!event.altKey || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code) || !isDragEnabled) return;
                     event.preventDefault();
                     event.stopPropagation();
-                    const targetIndex = index + (event.code === 'ArrowUp' ? -1 : 1);
-                    const result = this.deckManager.reorderTrack(deckId, index, targetIndex, event.code === 'ArrowDown');
-                    if (!result) return;
-                    this.displayTracks(deckId);
-                    this.highlightCurrentTrack();
-                    this.saveStoredData();
-                    document.querySelector(`#${containerId} .track-btn[data-index="${result.insertAt}"]`)?.focus();
+                    if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
+                        const targetIndex = index + (event.code === 'ArrowUp' ? -1 : 1);
+                        const result = this.moveTrackBetweenDecks(deckId, index, deckId, targetIndex, event.code === 'ArrowDown');
+                        if (!result) return;
+                        document.querySelector(`#${containerId} .track-btn[data-index="${result.insertAt}"]`)?.focus();
+                    } else if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
+                        const otherDeckId = deckId === 'A' ? 'B' : 'A';
+                        const result = this.moveTrackBetweenDecks(deckId, index, otherDeckId, null, true);
+                        if (!result) return;
+                        const otherContainerId = otherDeckId === 'A' ? 'tracksContainerA' : 'tracksContainerB';
+                        document.querySelector(`#${otherContainerId} .track-btn[data-index="${result.insertAt}"]`)?.focus();
+                    }
                 });
 
                 // Drag handle
@@ -2724,7 +2826,10 @@ class TheatreSoundMixer {
                     row.addEventListener('dragover', (e) => this.handleTrackDragOver(e, deckId));
                     row.addEventListener('dragenter', (e) => this.handleTrackDragEnter(e, row));
                     row.addEventListener('dragleave', (e) => this.handleTrackDragLeave(e, row));
-                    row.addEventListener('drop', (e) => this.handleTrackDrop(e, deckId, index));
+                    row.addEventListener('drop', (e) => {
+                        e.stopPropagation();
+                        this.handleTrackDrop(e, deckId, index);
+                    });
                     row.addEventListener('dragend', (e) => this.handleTrackDragEnd(e));
                 } else {
                     dragHandle.style.opacity = '0.15';
@@ -2736,7 +2841,7 @@ class TheatreSoundMixer {
                 btn.className = 'track-btn';
                 btn.dataset.index = String(index);
                 btn.dataset.deck = deckId;
-                btn.title = `${displayName}. Alt+↑/↓: изменить порядок`;
+                btn.title = `${displayName}. Alt+↑/↓: порядок, Alt+←/→: в деку ${deckId === 'A' ? 'B' : 'A'}`;
                 const isCurrentDeck = this.playingDeck ? (this.playingDeck === deckId) : (this.activeDeck === deckId);
                 const isPlayingThisDeck = this.playingDeck === deckId;
                 const isCurrentIndex = index === deck.currentTrackIndex;
@@ -2840,10 +2945,17 @@ class TheatreSoundMixer {
         }
     }
 
-    // ===== Drag & Drop Track Reordering =====
+    // ===== Drag & Drop Track Reordering & Cross-Deck Transfer =====
 
     handleTrackDragStart(e, deckId, index) {
-        this.dragState = { deckId, sourceIndex: index, insertAfter: false };
+        this.dragState = {
+            sourceDeckId: deckId,
+            deckId,
+            sourceIndex: index,
+            targetDeckId: deckId,
+            targetIndex: index,
+            insertAfter: false
+        };
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', `${deckId}:${index}`);
         const row = e.target.closest('.track-row');
@@ -2853,20 +2965,20 @@ class TheatreSoundMixer {
     }
 
     handleTrackDragOver(e, deckId) {
-        if (!this.dragState || this.dragState.deckId !== deckId) return;
+        if (!this.dragState) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
 
         const row = e.target.closest('.track-row');
         if (!row) return;
 
-        const containerId = deckId === 'A' ? 'tracksContainerA' : 'tracksContainerB';
-        const container = document.getElementById(containerId);
-        if (container) {
-            container.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach((r) => {
-                if (r !== row) r.classList.remove('drag-over-top', 'drag-over-bottom');
-            });
-        }
+        // Clear top/bottom lines on all other rows across both decks
+        document.querySelectorAll('.track-row.drag-over-top, .track-row.drag-over-bottom').forEach((r) => {
+            if (r !== row) r.classList.remove('drag-over-top', 'drag-over-bottom');
+        });
+        document.querySelectorAll('.tracks-container.deck-drag-over').forEach((c) => {
+            c.classList.remove('deck-drag-over');
+        });
 
         const rect = row.getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
@@ -2874,6 +2986,9 @@ class TheatreSoundMixer {
 
         row.classList.toggle('drag-over-top', isTop);
         row.classList.toggle('drag-over-bottom', !isTop);
+
+        this.dragState.targetDeckId = deckId;
+        this.dragState.targetIndex = parseInt(row.dataset.index, 10);
         this.dragState.insertAfter = !isTop;
     }
 
@@ -2887,43 +3002,152 @@ class TheatreSoundMixer {
         }
     }
 
-    handleTrackDrop(e, deckId, targetIndex) {
-        if (!this.dragState || this.dragState.deckId !== deckId) return;
+    handleContainerDragOver(e, deckId) {
+        if (!this.dragState) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+
+        if (e.target.closest('.track-row')) return;
+
+        // Hovering container empty area or empty state
+        document.querySelectorAll('.track-row.drag-over-top, .track-row.drag-over-bottom').forEach((r) => {
+            r.classList.remove('drag-over-top', 'drag-over-bottom');
+        });
+
+        const targetContainerId = deckId === 'A' ? 'tracksContainerA' : 'tracksContainerB';
+        const otherContainerId = deckId === 'A' ? 'tracksContainerB' : 'tracksContainerA';
+        document.getElementById(otherContainerId)?.classList.remove('deck-drag-over');
+        document.getElementById(targetContainerId)?.classList.add('deck-drag-over');
+
+        this.dragState.targetDeckId = deckId;
+        this.dragState.targetIndex = null;
+        this.dragState.insertAfter = true;
+    }
+
+    handleContainerDragLeave(e, deckId) {
+        const containerId = deckId === 'A' ? 'tracksContainerA' : 'tracksContainerB';
+        const container = document.getElementById(containerId);
+        if (container && (!e.relatedTarget || !container.contains(e.relatedTarget))) {
+            container.classList.remove('deck-drag-over');
+        }
+    }
+
+    handleContainerDrop(e, deckId) {
+        if (!this.dragState) return;
+        if (e.target.closest('.track-row')) return;
+        e.preventDefault();
+        this.handleTrackDrop(e, deckId, null);
+    }
+
+    handleTrackDrop(e, targetDeckId, targetIndex) {
+        if (!this.dragState) return;
         e.preventDefault();
 
+        const sourceDeckId = this.dragState.sourceDeckId || this.dragState.deckId;
         const sourceIndex = this.dragState.sourceIndex;
-        const insertAfterTarget = this.dragState.insertAfter;
+        const insertAfter = this.dragState.insertAfter;
 
-        if (sourceIndex === targetIndex) {
+        if (sourceDeckId === targetDeckId && targetIndex !== null && targetIndex !== undefined && sourceIndex === targetIndex) {
             this.handleTrackDragEnd(e);
             return;
         }
 
-        const reorderResult = this.deckManager.reorderTrack(deckId, sourceIndex, targetIndex, insertAfterTarget);
-        if (!reorderResult) {
-            this.handleTrackDragEnd(e);
-            return;
-        }
-
-        const { tracks, newCurrentIndex, insertAt } = reorderResult;
-        if (deckId === (this.playingDeck || this.activeDeck)) {
-            this.playlistTracks = tracks;
-            this.currentTrackIndex = newCurrentIndex;
-        }
-
-        this.dragState = null;
-        this.displayTracks(deckId);
-        this.highlightCurrentTrack();
-        this.updateTrackCounter();
-        this.updateStatus(`Дека ${deckId}: трек перемещён на позицию ${insertAt + 1}`);
-        this.saveStoredData();
+        this.moveTrackBetweenDecks(sourceDeckId, sourceIndex, targetDeckId, targetIndex, insertAfter);
+        this.handleTrackDragEnd(e);
     }
 
     handleTrackDragEnd(e) {
         this.dragState = null;
-        document.querySelectorAll('.track-row.dragging, .track-row.drag-over-top, .track-row.drag-over-bottom').forEach((r) => {
-            r.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom');
+        document.querySelectorAll('.track-row.dragging, .track-row.drag-over-top, .track-row.drag-over-bottom, .tracks-container.deck-drag-over').forEach((r) => {
+            r.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom', 'deck-drag-over');
         });
+    }
+
+    moveTrackBetweenDecks(sourceDeckId, sourceIndex, targetDeckId, targetIndex = null, insertAfter = false) {
+        const isSameDeck = sourceDeckId === targetDeckId;
+        const sourceDeck = this.decks[sourceDeckId];
+        const targetDeck = this.decks[targetDeckId];
+        if (!sourceDeck || !targetDeck) return null;
+
+        const movedTrack = sourceDeck.tracks?.[sourceIndex];
+        if (!movedTrack) return null;
+
+        const isPlayingThisTrack = (this.playingDeck === sourceDeckId &&
+            this.currentTrackIndex === sourceIndex &&
+            (this.isPlaying || this.isPaused || this.musicPlayerTrack === movedTrack));
+
+        const result = this.deckManager.moveTrackBetweenDecks(sourceDeckId, sourceIndex, targetDeckId, targetIndex, insertAfter);
+        if (!result) return null;
+
+        if (isSameDeck) {
+            if (sourceDeckId === (this.playingDeck || this.activeDeck)) {
+                this.playlistTracks = result.sourceTracks;
+                this.currentTrackIndex = result.sourceNewCurrentIndex;
+            }
+            this.displayTracks(sourceDeckId);
+            this.highlightCurrentTrack();
+            this.updateTrackCounter();
+            this.updateStatus(`Дека ${sourceDeckId}: трек перемещён на позицию ${result.insertAt + 1}`);
+            this.saveStoredData();
+            this.pushRemoteState?.();
+            return result;
+        }
+
+        // Cross-deck transfer
+        if (isPlayingThisTrack) {
+            this.playingDeck = targetDeckId;
+            this.musicPlayerDeck = targetDeckId;
+            this.activeDeck = targetDeckId;
+            targetDeck.currentTrackIndex = result.insertAt;
+            this.currentTrackIndex = result.insertAt;
+            this.playlistTracks = targetDeck.tracks;
+            this.currentPlaylist = targetDeck.playlist;
+        } else {
+            if (this.playingDeck === sourceDeckId) {
+                this.currentTrackIndex = result.sourceNewCurrentIndex;
+                this.playlistTracks = result.sourceTracks;
+            } else if (this.playingDeck === targetDeckId) {
+                this.currentTrackIndex = result.targetNewCurrentIndex;
+                this.playlistTracks = result.targetTracks;
+            } else {
+                const currentDeck = this.decks[this.activeDeck];
+                if (currentDeck) {
+                    this.currentTrackIndex = currentDeck.currentTrackIndex;
+                    this.playlistTracks = currentDeck.tracks;
+                    this.currentPlaylist = currentDeck.playlist;
+                }
+            }
+        }
+
+        if (!this.isPlaying && !this.isPaused && !this.pendingMusicStart) {
+            const activeDeckObj = this.decks[this.activeDeck];
+            if (activeDeckObj && activeDeckObj.tracks && activeDeckObj.tracks.length > 0) {
+                const track = activeDeckObj.tracks[activeDeckObj.currentTrackIndex || 0];
+                if (track) {
+                    this.updateCurrentTrackDisplay(track);
+                    this.loadWaveformForTrack?.(track);
+                }
+            } else if (activeDeckObj && activeDeckObj.tracks.length === 0) {
+                const currentTrackEl = document.getElementById('currentTrack');
+                if (currentTrackEl) {
+                    currentTrackEl.textContent = 'Трек не выбран';
+                    currentTrackEl.title = '';
+                }
+                this.clearWaveform?.('Осциллограмма появится после выбора трека');
+            }
+        }
+
+        this.displayTracks('A');
+        this.displayTracks('B');
+        this.highlightCurrentTrack();
+        this.updateDeckUI();
+        this.updateTrackCounter();
+        const movedTitle = typeof this.getTrackTitle === 'function' ? this.getTrackTitle(movedTrack) : (movedTrack.title || movedTrack.name || 'трек');
+        this.updateStatus(`Дека ${sourceDeckId} → Дека ${targetDeckId}: трек «${movedTitle}» перемещён (поз. ${result.insertAt + 1})`);
+        this.saveStoredData();
+        this.pushRemoteState?.();
+
+        return result;
     }
 
     // ===== Dual Playlist Deck Management =====

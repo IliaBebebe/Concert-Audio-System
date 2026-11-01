@@ -258,3 +258,75 @@ test('applyTrackMetadata handles artist arrays and string formats correctly', ()
     assert.strictEqual(track.trackNumber, 5);
 });
 
+test('TheatreSoundMixer: moveTrackBetweenDecks transfers playing track to other deck seamlessly', () => {
+    const mixer = createMockMixer();
+    mixer.playingDeck = 'A';
+    mixer.activeDeck = 'A';
+    mixer.currentTrackIndex = 0;
+    mixer.playlistTracks = mixer.decks.A.tracks;
+    mixer.musicPlayerDeck = 'A';
+    mixer.musicPlayerTrack = mixer.decks.A.tracks[0];
+    mixer.isPlaying = true;
+
+    let displayCalls = [];
+    mixer.displayTracks = (deck) => { displayCalls.push(deck); };
+    mixer.highlightCurrentTrack = () => {};
+    mixer.updateDeckUI = () => {};
+    mixer.updateTrackCounter = () => {};
+    mixer.saveStoredData = () => {};
+    mixer.updateStatus = (msg) => { mixer.lastStatus = msg; };
+
+    // Move currently playing track (a1) from Deck A to Deck B at index 1
+    const res = mixer.moveTrackBetweenDecks('A', 0, 'B', 0, true);
+    assert.ok(res);
+    assert.strictEqual(res.movedTrack.id, 'a1');
+    assert.strictEqual(res.insertAt, 1);
+
+    // Audio / deck state seamlessly transitions to Deck B
+    assert.strictEqual(mixer.playingDeck, 'B');
+    assert.strictEqual(mixer.musicPlayerDeck, 'B');
+    assert.strictEqual(mixer.activeDeck, 'B');
+    assert.strictEqual(mixer.currentTrackIndex, 1);
+    assert.strictEqual(mixer.decks.B.currentTrackIndex, 1);
+    assert.strictEqual(mixer.playlistTracks, mixer.decks.B.tracks);
+    assert.strictEqual(mixer.decks.B.tracks[1].id, 'a1');
+
+    // UI updated for both decks
+    assert.ok(displayCalls.includes('A'));
+    assert.ok(displayCalls.includes('B'));
+    assert.ok(mixer.lastStatus.includes('Дека A → Дека B'));
+});
+
+test('TheatreSoundMixer: moveTrackBetweenDecks transfers idle track without disrupting playing deck', () => {
+    const mixer = createMockMixer();
+    mixer.playingDeck = 'A';
+    mixer.activeDeck = 'A';
+    mixer.currentTrackIndex = 0; // playing a1
+    mixer.playlistTracks = mixer.decks.A.tracks;
+    mixer.musicPlayerDeck = 'A';
+    mixer.musicPlayerTrack = mixer.decks.A.tracks[0];
+    mixer.isPlaying = true;
+
+    mixer.displayTracks = () => {};
+    mixer.highlightCurrentTrack = () => {};
+    mixer.updateDeckUI = () => {};
+    mixer.updateTrackCounter = () => {};
+    mixer.saveStoredData = () => {};
+    mixer.updateStatus = (msg) => { mixer.lastStatus = msg; };
+
+    // Move idle track a3 (index 2) from Deck A to Deck B (end)
+    const res = mixer.moveTrackBetweenDecks('A', 2, 'B', null, true);
+    assert.ok(res);
+    assert.strictEqual(res.movedTrack.id, 'a3');
+
+    // Deck A is still the playing deck on track 0 (a1)
+    assert.strictEqual(mixer.playingDeck, 'A');
+    assert.strictEqual(mixer.musicPlayerDeck, 'A');
+    assert.strictEqual(mixer.currentTrackIndex, 0);
+    assert.strictEqual(mixer.playlistTracks, mixer.decks.A.tracks);
+    assert.strictEqual(mixer.decks.A.tracks[0].id, 'a1');
+
+    // Deck B received a3 as its last track
+    assert.strictEqual(mixer.decks.B.tracks[mixer.decks.B.tracks.length - 1].id, 'a3');
+});
+
