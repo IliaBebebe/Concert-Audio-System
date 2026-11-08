@@ -24,6 +24,10 @@
     user-select: none;
 }
 
+[hidden] {
+    display: none !important;
+}
+
 body {
     background-color: var(--bg-primary);
     color: var(--text-primary);

@@ -60,6 +60,26 @@ test('playing a cued track reuses its player and preserves seek position', t => 
   assert.equal(mixer.musicPlayer.seek(), 12);
 });
 
+test('remote track selection rejects unknown decks and out-of-range indices', t => {
+  const { mixer } = mixerFixture(t);
+  let receiveCommand;
+  const selected = [];
+  global.window.electronAPI.onRemoteCommand = callback => { receiveCommand = callback; };
+  mixer.setupRemoteControlDialog = () => {};
+  mixer.refreshRemoteControlStatus = () => {};
+  mixer.broadcastRemoteState = () => {};
+  mixer.setActiveDeck = id => selected.push(id);
+  mixer.playTrackInDeck = () => {};
+  mixer.initRemoteControl();
+  for (const command of [
+    { deck: 'invalid', index: 0 }, { deck: 'A', index: -1 },
+    { deck: 'B', index: 100 }, { deck: 'A', index: 0.5 }
+  ]) receiveCommand({ action: 'selectTrack', autoplay: true, ...command });
+  assert.deepEqual(selected, []);
+  receiveCommand({ action: 'selectTrack', deck: 'B', index: 1, autoplay: true });
+  assert.deepEqual(selected, ['B']);
+});
+
 test('searching the target deck does not change the playing deck filter', t => {
   const { mixer } = mixerFixture(t);
   mixer.playingDeck = 'A';
@@ -297,6 +317,39 @@ test('deck order and selected tracks restore without starting playback', async t
   assert.equal(mixer.activeDeck, 'B');
   assert.equal(mixer.isPlaying, false);
   assert.equal(mixer.musicPlayerDeck, 'B');
+});
+
+test('transferred queues restore exact contents across folders, including an emptied source deck', async t => {
+  const { mixer } = mixerFixture(t);
+  const previousStorage = global.localStorage;
+  let stored;
+  global.localStorage = { setItem: (_key, value) => { stored = value; }, getItem: () => stored };
+  t.after(() => { global.localStorage = previousStorage; });
+  mixer.config = { musicFolder: '/music' };
+  mixer.updateCrossfadeControls = () => {};
+  const folderA = [{ path: '/music/A/0.wav' }, { path: '/music/A/1.wav' }];
+  const folderB = [{ path: '/music/B/0.wav' }];
+  mixer.decks.A.playlist = { path: '/music/A', name: 'A' };
+  mixer.decks.A.tracks = [...folderA];
+  mixer.decks.B.playlist = { path: '/music/B', name: 'B' };
+  mixer.decks.B.tracks = [...folderB];
+  mixer.moveTrackBetweenDecks('A', 1, 'B');
+  mixer.moveTrackBetweenDecks('A', 0, 'B');
+  // Keep a repeated cue too; restoration must not deduplicate deliberate repeats.
+  mixer.decks.B.tracks.push(folderA[1]);
+  mixer._writeStoredData();
+  assert.equal(JSON.parse(stored).decks.A.customQueue, true);
+  mixer.deckManager.reset();
+  window.electronAPI.getPlaylistTracks = async folder => ({ success: true, data:
+    folder === '/music/A/' ? [...folderA, { path: '/music/A/new.wav' }] : folderB });
+  await mixer.loadStoredData();
+  assert.deepEqual(mixer.decks.A.tracks, []);
+  assert.deepEqual(mixer.decks.B.tracks.map(track => track.path),
+    ['/music/B/0.wav', '/music/A/1.wav', '/music/A/0.wav', '/music/A/1.wav']);
+  assert.equal(mixer.isPlaying, false);
+  await mixer.loadPlaylist({ path: '/music/A/', name: 'A' }, 'A');
+  assert.equal(mixer.decks.A.customQueue, false);
+  assert.equal(mixer.decks.A.tracks.length, 3);
 });
 
 test('panel widths shrink and grow with the window while preserving preferred proportions', t => {

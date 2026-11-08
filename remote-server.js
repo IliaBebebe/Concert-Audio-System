@@ -13,7 +13,7 @@ const { QRCode } = require('./qr-generator.js');
 
 class CASRemoteServer {
     constructor(options = {}) {
-        this.port = options.port || 8765;
+        this.port = options.port ?? 8765;
         this.clientDir = options.clientDir || path.join(__dirname, 'remote-client');
         this.server = null;
         this.isRunning = false;
@@ -24,14 +24,15 @@ class CASRemoteServer {
         this.onCommandCallback = null;
         this.onClientCountChangeCallback = null;
         this.heartbeatTimer = null;
+        this.failedAttempts = new Map();
     }
 
     _generateToken() {
-        return crypto.randomBytes(4).toString('hex');
+        return crypto.randomBytes(16).toString('hex');
     }
 
     _generatePin() {
-        return String(Math.floor(1000 + Math.random() * 9000));
+        return String(crypto.randomInt(1000, 10000));
     }
 
     getLocalIpAddresses() {
@@ -97,10 +98,14 @@ class CASRemoteServer {
             }
 
             this.port = desiredPort;
+            this.token = this._generateToken();
+            this.pin = this._generatePin();
+            this.failedAttempts.clear();
             this.server = http.createServer((req, res) => this._handleRequest(req, res));
 
+            let retries = 0;
             this.server.on('error', (err) => {
-                if (err.code === 'EADDRINUSE') {
+                if (err.code === 'EADDRINUSE' && retries++ < 10 && this.port < 65535) {
                     // Try next port
                     this.port++;
                     this.server.listen(this.port, '0.0.0.0');
@@ -110,6 +115,7 @@ class CASRemoteServer {
             });
 
             this.server.listen(this.port, '0.0.0.0', () => {
+                this.port = this.server.address().port;
                 this.isRunning = true;
                 this._startHeartbeat();
                 resolve(this.getStatus());
@@ -173,19 +179,48 @@ class CASRemoteServer {
     }
 
     _handleRequest(req, res) {
-        // Enable CORS for local network flexibility
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Referrer-Policy', 'no-referrer');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        // The phone client is served by this server. Other websites cannot send commands.
+        if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) {
+            res.writeHead(403);
+            return res.end('Access denied');
+        }
 
         if (req.method === 'OPTIONS') {
             res.writeHead(204);
             return res.end();
         }
 
-        const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+        let parsedUrl;
+        try {
+            parsedUrl = new URL(req.url, 'http://localhost');
+        } catch {
+            res.writeHead(400);
+            return res.end('Invalid URL');
+        }
         const pathname = parsedUrl.pathname;
         const queryToken = parsedUrl.searchParams.get('token') || parsedUrl.searchParams.get('t');
+
+        if (pathname.startsWith('/api/')) {
+            const key = req.socket.remoteAddress;
+            const attempt = this.failedAttempts.get(key);
+            const blocked = attempt && attempt.expires > Date.now() && attempt.count >= 10;
+            // QR tokens remain usable even after failed PIN guesses from the same address.
+            if (blocked && queryToken !== this.token) {
+                res.writeHead(429, { 'Retry-After': '60' });
+                return res.end('Too many attempts');
+            }
+            if (!this._validateToken(queryToken)) {
+                if (!attempt || attempt.expires <= Date.now()) {
+                    if (this.failedAttempts.size >= 512) this.failedAttempts.delete(this.failedAttempts.keys().next().value);
+                    this.failedAttempts.set(key, { count: 1, expires: Date.now() + 60000 });
+                } else {
+                    attempt.count++;
+                }
+            }
+        }
 
         // 1. API: Server-Sent Events (SSE) Stream
         if (pathname === '/api/stream') {
@@ -251,6 +286,9 @@ class CASRemoteServer {
             req.on('end', () => {
                 try {
                     const data = JSON.parse(body || '{}');
+                    if (!data || typeof data !== 'object' || Array.isArray(data) || typeof data.action !== 'string') {
+                        throw new Error('Invalid command');
+                    }
                     if (this.onCommandCallback) {
                         this.onCommandCallback(data);
                     }
@@ -286,7 +324,8 @@ class CASRemoteServer {
 
         // Security check: keep inside clientDir
         const resolved = path.resolve(filePath);
-        if (!resolved.startsWith(path.resolve(this.clientDir))) {
+        const relative = path.relative(path.resolve(this.clientDir), resolved);
+        if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
             res.writeHead(403);
             return res.end('Access denied');
         }

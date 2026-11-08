@@ -186,12 +186,12 @@
         const isPlaying = Boolean(state.isPlaying && !state.isPaused);
         if (isPlaying) {
             btnPlayPause.classList.add('is-playing');
-            iconPlay.hidden = true;
-            iconPause.hidden = false;
+            iconPlay.toggleAttribute('hidden', true);
+            iconPause.toggleAttribute('hidden', false);
         } else {
             btnPlayPause.classList.remove('is-playing');
-            iconPlay.hidden = false;
-            iconPause.hidden = true;
+            iconPlay.toggleAttribute('hidden', false);
+            iconPause.toggleAttribute('hidden', true);
         }
 
         // Mute button

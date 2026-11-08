@@ -128,3 +128,76 @@ test('CASRemoteServer: lifecycle start, command dispatch, sse streaming, and sto
     await server.stop();
     assert.equal(server.isRunning, false);
 });
+
+async function request(server, pathname, options = {}) {
+    return new Promise((resolve, reject) => {
+        const req = http.request({ hostname: '127.0.0.1', port: server.port, path: pathname, ...options }, res => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => resolve({ status: res.statusCode, body, headers: res.headers }));
+        });
+        req.on('error', reject);
+        req.end(options.body);
+    });
+}
+
+test('remote access rejects other websites and limits PIN guesses without blocking QR access', async t => {
+    const server = new CASRemoteServer({ port: 0 });
+    await server.start();
+    t.after(() => server.stop());
+    const command = `/api/command?token=${server.token}`;
+    let dispatched = 0;
+    server.onCommand(() => dispatched++);
+    const foreign = await request(server, command, {
+        method: 'POST', headers: { Origin: 'https://example.com' }, body: '{"action":"stop"}'
+    });
+    assert.equal(foreign.status, 403);
+    assert.equal(dispatched, 0);
+    assert.equal(foreign.headers['access-control-allow-origin'], undefined);
+    const local = await request(server, command, {
+        method: 'POST', headers: { Origin: `http://127.0.0.1:${server.port}` }, body: '{"action":"stop"}'
+    });
+    assert.equal(local.status, 200);
+    assert.equal(dispatched, 1);
+    assert.equal((await request(server, '/api/status?token=' + server.pin)).status, 200);
+    for (let i = 0; i < 10; i++) {
+        assert.equal((await request(server, '/api/status?token=wrong')).status, 401);
+    }
+    assert.equal((await request(server, '/api/status?token=wrong')).status, 429);
+    assert.equal((await request(server, '/api/status?token=' + server.pin)).status, 429);
+    assert.equal((await request(server, '/api/status?token=' + server.token)).status, 200);
+});
+
+test('remote server rejects malformed URLs and command objects and survives them', async t => {
+    const server = new CASRemoteServer({ port: 0 });
+    await server.start();
+    t.after(() => server.stop());
+    assert.equal((await request(server, 'http://[')).status, 400);
+    for (const body of ['null', '[]', '{}', '{']) {
+        const response = await request(server, '/api/command?token=' + server.token, { method: 'POST', body });
+        assert.equal(response.status, 400);
+    }
+    assert.equal((await request(server, '/api/status?token=' + server.token)).status, 200);
+});
+
+test('remote credentials rotate when the server is restarted', async t => {
+    const server = new CASRemoteServer({ port: 0 });
+    await server.start();
+    t.after(() => server.stop());
+    const previousToken = server.token;
+    await server.stop();
+    await server.start(0);
+    assert.notEqual(server.token, previousToken);
+    assert.equal((await request(server, '/api/status?token=' + previousToken)).status, 401);
+});
+
+test('remote static files cannot escape into a sibling directory with the same prefix', () => {
+    const server = new CASRemoteServer({ clientDir: path.resolve('remote-client') });
+    let status;
+    let body;
+    server._serveStatic('../remote-client-private/secret.txt', {
+        writeHead(value) { status = value; }, end(value) { body = value; }
+    });
+    assert.equal(status, 403);
+    assert.equal(body, 'Access denied');
+});

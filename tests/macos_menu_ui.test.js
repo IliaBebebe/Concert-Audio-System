@@ -59,7 +59,7 @@ test('header cleanup: bulky title and bottom footer removed, modern status pill 
 
     // About dialog present
     assert.ok(html.includes('id="aboutDialog"'), 'About dialog #aboutDialog must exist');
-    assert.ok(html.includes('Версия 1.6.0'), 'About dialog must show current version 1.6.0');
+    assert.ok(html.includes(`Версия ${require('../package.json').version}`), 'About dialog must show the package version');
 
     // Technical stack elements exist
     assert.ok(html.includes('id="aboutPlatformValue"'), 'About dialog must have #aboutPlatformValue for current platform');

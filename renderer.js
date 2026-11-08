@@ -241,6 +241,8 @@ class CASDeckManager {
         if (insertAt > targetDeck.tracks.length) insertAt = targetDeck.tracks.length;
 
         targetDeck.tracks.splice(insertAt, 0, movedTrack);
+        sourceDeck.customQueue = true;
+        targetDeck.customQueue = true;
 
         // Update source deck currentTrackIndex
         let sourceNewCurrentIndex = sourceDeck.currentTrackIndex;
@@ -1885,7 +1887,8 @@ class TheatreSoundMixer {
                     case 'selectTrack': {
                         const targetDeck = cmd.deck || this.activeDeck || 'A';
                         const targetIndex = Number(cmd.index);
-                        if (Number.isInteger(targetIndex)) {
+                        if (['A', 'B'].includes(targetDeck) && Number.isInteger(targetIndex)
+                            && targetIndex >= 0 && targetIndex < (this.decks?.[targetDeck]?.tracks?.length || 0)) {
                             this.setActiveDeck(targetDeck);
                             if (cmd.autoplay) {
                                 this.playTrackInDeck(targetDeck, targetIndex);
@@ -2612,6 +2615,7 @@ class TheatreSoundMixer {
                 const deck = this.decks[targetDeck];
                 deck.playlist = playlist;
                 deck.tracks = result.data;
+                deck.customQueue = false;
                 deck.currentTrackIndex = 0;
                 deck.filterQuery = '';
 
@@ -5668,6 +5672,7 @@ class TheatreSoundMixer {
                 const deck = this.decks[deckId];
                 return [deckId, {
                     playlist: deck.playlist,
+                    customQueue: Boolean(deck.customQueue),
                     trackOrder: deck.tracks.map(track => track.path),
                     onlineTrackIds: deck.tracks.filter(track => track.onlineId).map(track => track.onlineId),
                     currentTrackPath: deck.tracks[deck.currentTrackIndex]?.path,
@@ -5772,9 +5777,21 @@ class TheatreSoundMixer {
                     if (!saved?.playlist || (typeof saved.playlist.path !== 'string' && !Array.isArray(saved.onlineTrackIds))) return;
                     const requestId = ++this.playlistRequestId[deckId];
                     try {
-                        const result = typeof saved.playlist.path === 'string'
-                            ? await window.electronAPI.getPlaylistTracks(saved.playlist.path)
-                            : { success: true, data: [] };
+                        let result;
+                        if (saved.customQueue && Array.isArray(saved.trackOrder)) {
+                            // Transferred tracks may come from several folders. Read them through
+                            // the existing filesystem boundary, then restore only the saved queue.
+                            const folders = new Set(saved.trackOrder.filter(file => typeof file === 'string')
+                                .map(file => file.slice(0, Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\')) + 1))
+                                .filter(Boolean));
+                            const sources = await Promise.all([...folders].map(folder =>
+                                window.electronAPI.getPlaylistTracks(folder).catch(() => ({ success: false }))));
+                            result = { success: true, data: sources.flatMap(source => source.success ? source.data || [] : []) };
+                        } else {
+                            result = typeof saved.playlist.path === 'string'
+                                ? await window.electronAPI.getPlaylistTracks(saved.playlist.path)
+                                : { success: true, data: [] };
+                        }
                         if (Array.isArray(saved.onlineTrackIds) && window.electronAPI.getOnlineLibrary) {
                             const library = await window.electronAPI.getOnlineLibrary();
                             if (library.success) {
@@ -5786,8 +5803,12 @@ class TheatreSoundMixer {
                         if (requestId !== this.playlistRequestId[deckId] || !result.success || !Array.isArray(result.data)) return;
                         const deck = this.decks[deckId];
                         deck.playlist = saved.playlist;
+                        deck.customQueue = Boolean(saved.customQueue);
                         const ranks = new Map((Array.isArray(saved.trackOrder) ? saved.trackOrder : []).map((path, index) => [path, index]));
-                        deck.tracks = result.data.sort((a, b) => (ranks.get(a.path) ?? Infinity) - (ranks.get(b.path) ?? Infinity));
+                        const tracksByPath = new Map(result.data.map(track => [track.path, track]));
+                        deck.tracks = deck.customQueue && Array.isArray(saved.trackOrder)
+                            ? saved.trackOrder.map(file => tracksByPath.get(file)).filter(Boolean)
+                            : result.data.sort((a, b) => (ranks.get(a.path) ?? Infinity) - (ranks.get(b.path) ?? Infinity));
                         deck.currentTrackIndex = Math.max(0, deck.tracks.findIndex(track => track.path === saved.currentTrackPath));
                         deck.filterQuery = typeof saved.filterQuery === 'string' ? saved.filterQuery : '';
                         if (typeof document !== 'undefined') {
