@@ -499,6 +499,8 @@ async function createWindow() {
     webPreferences: getWindowWebPreferences()
   });
   mainWindow = window;
+  // The renderer supplies accessible macOS controls; native traffic lights would overlap them.
+  if (isMac) window.setWindowButtonVisibility(false);
   configureWebContents(window, htmlPath);
   Menu.setApplicationMenu(null);
   const sendVisibility = () => {

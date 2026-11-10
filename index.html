@@ -11,7 +11,14 @@
     <script src="assets/howler.min.js"></script>
     <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
 </head>
-<body>
+<body class="app-starting">
+    <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
+        <img class="startup-logo" src="assets/cas-logo-transparent.png" alt="CAS — Concert Audio System" width="320" height="160">
+        <p id="startupMessage">Подготовка рабочего пространства…</p>
+        <div class="startup-progress" aria-hidden="true"><span></span></div>
+        <button type="button" id="startupRetry" class="toolbar-button" hidden>Повторить запуск</button>
+    </div>
+    <div id="appShell" inert aria-busy="true">
     <header class="workspace-toolbar" id="mainHeader">
         <!-- Window controls (shown on darwin only) -->
         <div class="window-controls macos-window-controls" id="macWindowControls" role="group" aria-label="Управление окном">
@@ -839,6 +846,7 @@
         </div>
     </dialog>
 
+    </div>
     <script src="assets/lucide.min.js"></script>
     <script src="online-ui.js"></script>
     <script src="workspaces.js"></script>

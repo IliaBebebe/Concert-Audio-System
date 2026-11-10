@@ -6,13 +6,32 @@ const os = require('node:os');
 const vm = require('node:vm');
 const { pathToFileURL } = require('node:url');
 
-async function mainFixture(t) {
+async function mainFixture(t, platform = process.platform) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'cas-main-test-'));
   const library = path.join(root, 'music');
   await fs.mkdir(library);
   await fs.writeFile(path.join(root, 'config.json'), JSON.stringify({ musicFolder: library, firstRun: false }));
   const handlers = new Map();
+  const windows = [];
+  const workArea = { x: 0, y: 0, width: 1920, height: 1080 };
+  class MockWindow {
+    constructor(options) {
+      this.options = options;
+      this.events = new Map();
+      this.webContents = { on() {}, send() {}, setWindowOpenHandler() {} };
+      windows.push(this);
+    }
+    on(name, callback) { this.events.set(name, callback); }
+    once(name, callback) { this.events.set(name, callback); }
+    loadFile() { return Promise.resolve(); }
+    isDestroyed() { return false; }
+    isVisible() { return true; }
+    setWindowButtonVisibility(visible) { this.nativeButtonsVisible = visible; }
+  }
   const electron = {
+    BrowserWindow: MockWindow,
+    screen: { getAllDisplays: () => [{ workArea }], getPrimaryDisplay: () => ({ workArea }) },
+    Menu: { setApplicationMenu() {} },
     app: { getPath: () => root, requestSingleInstanceLock: () => false, quit() {}, on() {} },
     ipcMain: { handle: (name, fn) => handlers.set(name, fn) }
   };
@@ -21,15 +40,29 @@ async function mainFixture(t) {
   const source = await fs.readFile(path.join(project, 'main.js'), 'utf8');
   vm.runInNewContext(source + `\nmodule.exports = { isPathInside, normalizeTrackMetadata,
     resolveMusicPath, readAudioFiles, getSafeFileDialogOptions, updateMusicFolder,
-    loadConfig, isTrustedSender, parseMetadataInWorker };`, {
+    loadConfig, isTrustedSender, parseMetadataInWorker, createWindow };`, {
     require: name => name === 'electron' ? electron : require(name), __dirname: project,
-    module, process: { platform: process.platform, argv: [], on() {} }, console, setTimeout, clearTimeout
+    module, process: { platform, argv: [], on() {} }, console, setTimeout, clearTimeout
   }, { filename: 'main.js' });
   t.after(async () => {
     assert.ok(root.startsWith(path.join(os.tmpdir(), 'cas-main-test-')));
     await fs.rm(root, { recursive: true, force: true });
   });
-  return { api: module.exports, root, library, handlers, project };
+  return { api: module.exports, root, library, handlers, project, windows };
+}
+
+for (const platform of ['win32', 'darwin', 'linux']) {
+  test(`native window configuration keeps ${platform} controls and security consistent`, async t => {
+    const { api } = await mainFixture(t, platform);
+    const window = await api.createWindow();
+    assert.equal(window.options.show, false);
+    assert.equal(window.options.titleBarStyle, platform === 'win32' ? 'hidden' : platform === 'darwin' ? 'hiddenInset' : 'default');
+    assert.equal(window.nativeButtonsVisible, platform === 'darwin' ? false : undefined);
+    assert.equal(window.options.webPreferences.contextIsolation, true);
+    assert.equal(window.options.webPreferences.sandbox, true);
+    assert.equal(window.options.webPreferences.nodeIntegration, false);
+    assert.equal(window.options.webPreferences.backgroundThrottling, false);
+  });
 }
 
 test('filesystem boundary rejects sibling directories with the same prefix', async t => {

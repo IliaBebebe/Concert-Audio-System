@@ -392,7 +392,7 @@ class TheatreSoundMixer {
         // Обработчик видимости страницы для оптимизации
         this.setupVisibilityHandlers();
         
-        this.initializeApp();
+        this.ready = this.startApp();
     }
 
     get activeDeck() {
@@ -1306,6 +1306,34 @@ class TheatreSoundMixer {
         });
     }
 
+    async startApp() {
+        try {
+            await this.initializeApp();
+            // Font metrics and the restored layout must settle behind the logo.
+            if (document.fonts?.ready) await document.fonts.ready;
+            if (typeof requestAnimationFrame === 'function') {
+                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            }
+            document.body.classList.remove('app-starting');
+            const shell = document.getElementById('appShell');
+            if (shell) { shell.inert = false; shell.setAttribute('aria-busy', 'false'); }
+            const screen = document.getElementById('startupScreen');
+            if (screen) screen.hidden = true;
+            this.startupState = 'ready';
+            return true;
+        } catch (error) {
+            CAS_LOGGER.error('Ошибка подготовки приложения:', error);
+            this.startupState = 'error';
+            const screen = document.getElementById('startupScreen');
+            if (screen) screen.dataset.state = 'error';
+            const message = document.getElementById('startupMessage');
+            if (message) message.textContent = 'Не удалось подготовить рабочее пространство. Повторите запуск.';
+            const retry = document.getElementById('startupRetry');
+            if (retry) { retry.hidden = false; retry.onclick = () => window.location.reload(); }
+            return false;
+        }
+    }
+
     async initializeApp() {
         await this.loadConfig();
         this.setupEventListeners();
@@ -1328,6 +1356,11 @@ class TheatreSoundMixer {
         this.updateDeckUI();
         this.displayTracks();
         if (window.CASOnlinePanel) this.onlinePanel = new window.CASOnlinePanel(this);
+        const initialTracks = [...new Set(['A', 'B'].flatMap(id => this.decks[id].tracks))];
+        await Promise.all(initialTracks.flatMap(track => [
+            this.loadTrackMetadata(track), this.loadTrackDuration(track)
+        ]));
+        if (this.waveformLoadTask) await this.waveformLoadTask;
     }
 
     initWindowControls() {
