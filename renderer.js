@@ -2882,6 +2882,10 @@ class TheatreSoundMixer {
                 trackName.className = 'track-name';
                 trackName.textContent = trackTitle;
                 trackName.title = trackTitle;
+                const trackTitleCell = document.createElement('span');
+                trackTitleCell.className = 'track-title-cell';
+                trackTitleCell.appendChild(trackName);
+                this.renderTrackStartBadge(trackTitleCell, track);
 
                 const trackArtist = document.createElement('span');
                 trackArtist.className = 'track-artist';
@@ -2896,7 +2900,7 @@ class TheatreSoundMixer {
                     ? this.formatTime(track.duration)
                     : (track.durationUnavailable ? 'N/A' : '--:--');
 
-                trackCols.append(trackNum, trackName, trackArtist, trackDuration);
+                trackCols.append(trackNum, trackTitleCell, trackArtist, trackDuration);
                 btn.appendChild(trackCols);
 
                 btn.addEventListener('click', () => this.playTrackInDeck(deckId, index));
@@ -2941,11 +2945,17 @@ class TheatreSoundMixer {
             editedBadge.textContent = 'ручн.';
             element.appendChild(editedBadge);
         }
+    }
+
+    renderTrackStartBadge(element, track) {
+        if (!element) return;
+        element.querySelector('.track-start-badge')?.remove();
         const startOffset = this.getTrackStartOffset(track);
         if (startOffset > 0) {
             const startBadge = document.createElement('span');
             startBadge.className = 'track-start-badge';
             startBadge.textContent = `старт ${this.formatTrackStartOffset(startOffset)}`;
+            startBadge.title = `Воспроизведение с ${this.formatTrackStartOffset(startOffset)}`;
             element.appendChild(startBadge);
         }
     }
@@ -3377,48 +3387,48 @@ class TheatreSoundMixer {
         ['A', 'B'].forEach((deckId) => {
             const deck = this.decks[deckId];
             if (!deck || !Array.isArray(deck.tracks)) return;
-            const index = deck.tracks.findIndex((t) => t === track || (t?.path && t.path === track?.path));
-            if (index < 0) return;
+            deck.tracks.forEach((matchedTrack, index) => {
+                if (matchedTrack !== track && (!matchedTrack?.path || matchedTrack.path !== track?.path)) return;
+                if (matchedTrack !== track) {
+                    matchedTrack.title = track.title;
+                    matchedTrack.artist = track.artist;
+                    matchedTrack.trackNumber = track.trackNumber;
+                    matchedTrack.startOffset = track.startOffset;
+                    matchedTrack.metadataOverride = track.metadataOverride;
+                    matchedTrack.duration = track.duration;
+                    matchedTrack.durationUnavailable = track.durationUnavailable;
+                }
 
-            const matchedTrack = deck.tracks[index];
-            if (matchedTrack !== track) {
-                matchedTrack.title = track.title;
-                matchedTrack.artist = track.artist;
-                matchedTrack.trackNumber = track.trackNumber;
-                matchedTrack.startOffset = track.startOffset;
-                matchedTrack.metadataOverride = track.metadataOverride;
-                matchedTrack.duration = track.duration;
-                matchedTrack.durationUnavailable = track.durationUnavailable;
-            }
+                const containerId = deckId === 'A' ? 'tracksContainerA' : 'tracksContainerB';
+                const row = document.querySelector(`#${containerId} .track-row[data-index="${index}"]`);
+                if (!row) return;
 
-            const containerId = deckId === 'A' ? 'tracksContainerA' : 'tracksContainerB';
-            const row = document.querySelector(`#${containerId} .track-row[data-index="${index}"]`);
-            if (!row) return;
-
-            const nameElement = row.querySelector('.track-name');
-            const artistElement = row.querySelector('.track-artist');
-            const durationElement = row.querySelector('.track-duration');
-            const numText = row.querySelector('.track-num-text');
-            if (numText && matchedTrack.trackNumber) {
-                numText.textContent = String(matchedTrack.trackNumber);
-            }
-            if (nameElement) {
-                const updatedTitle = this.getTrackTitle(matchedTrack);
-                nameElement.textContent = updatedTitle;
-                nameElement.title = updatedTitle;
-            }
-            this.renderTrackArtist(artistElement, matchedTrack);
-            if (artistElement && artistElement.textContent) {
-                artistElement.title = artistElement.textContent;
-            }
-            if (durationElement) {
-                durationElement.textContent = matchedTrack.duration
-                    ? this.formatTime(matchedTrack.duration)
-                    : (matchedTrack.durationUnavailable ? 'N/A' : '--:--');
-            }
-            if (this.playingDeck === deckId && deck.currentTrackIndex === index) {
-                this.updateCurrentTrackDisplay(matchedTrack);
-            }
+                const nameElement = row.querySelector('.track-name');
+                const artistElement = row.querySelector('.track-artist');
+                const durationElement = row.querySelector('.track-duration');
+                const numText = row.querySelector('.track-num-text');
+                if (numText) {
+                    numText.textContent = String(matchedTrack.trackNumber || (index + 1));
+                }
+                if (nameElement) {
+                    const updatedTitle = this.getTrackTitle(matchedTrack);
+                    nameElement.textContent = updatedTitle;
+                    nameElement.title = updatedTitle;
+                }
+                this.renderTrackStartBadge(row.querySelector('.track-title-cell'), matchedTrack);
+                this.renderTrackArtist(artistElement, matchedTrack);
+                if (artistElement && artistElement.textContent) {
+                    artistElement.title = artistElement.textContent;
+                }
+                if (durationElement) {
+                    durationElement.textContent = matchedTrack.duration
+                        ? this.formatTime(matchedTrack.duration)
+                        : (matchedTrack.durationUnavailable ? 'N/A' : '--:--');
+                }
+                if (this.playingDeck === deckId && deck.currentTrackIndex === index) {
+                    this.updateCurrentTrackDisplay(matchedTrack);
+                }
+            });
         });
     }
 

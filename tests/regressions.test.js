@@ -236,6 +236,49 @@ test('editing an invalid deck never writes metadata for another deck', async t =
   assert.equal(await mixer.clearTrackMetadata('C', 0), false);
 });
 
+test('metadata refresh updates every duplicate in both decks, including filtered-out tracks', t => {
+  const { mixer } = mixerFixture(t);
+  const source = { path: 'shared.wav', title: 'Edited', artist: 'Artist', trackNumber: 7,
+    startOffset: 5.5, metadataOverride: { title: 'Edited', startOffset: 5.5 } };
+  const duplicates = Array.from({ length: 3 }, () => ({ path: source.path, title: 'Old', startOffset: 1 }));
+  mixer.decks.A.tracks = [source, duplicates[0], duplicates[1]];
+  mixer.decks.B.tracks = [duplicates[2]];
+  mixer.updateTrackRowDetails(source);
+  for (const track of duplicates) {
+    assert.equal(track.title, 'Edited');
+    assert.equal(track.startOffset, 5.5);
+    assert.equal(track.trackNumber, 7);
+    assert.deepEqual(track.metadataOverride, source.metadataOverride);
+  }
+  source.startOffset = 0;
+  source.trackNumber = null;
+  source.metadataOverride = {};
+  mixer.updateTrackRowDetails(source);
+  for (const track of duplicates) {
+    assert.equal(track.startOffset, 0);
+    assert.equal(track.trackNumber, null);
+    assert.deepEqual(track.metadataOverride, {});
+  }
+});
+
+test('clearing a manual track number restores queue numbering in every visible row', t => {
+  const { mixer } = mixerFixture(t);
+  const source = { path: 'shared.wav', title: 'Title', trackNumber: null };
+  mixer.decks.A.tracks = [source, { ...source }];
+  mixer.decks.B.tracks = [{ path: 'other.wav' }, { ...source }];
+  const numbers = new Map();
+  document.querySelector = selector => ({ querySelector: field => {
+    if (field !== '.track-num-text') return null;
+    const number = { textContent: '99' };
+    numbers.set(selector, number);
+    return number;
+  } });
+  mixer.updateTrackRowDetails(source);
+  assert.equal(numbers.get('#tracksContainerA .track-row[data-index="0"]').textContent, '1');
+  assert.equal(numbers.get('#tracksContainerA .track-row[data-index="1"]').textContent, '2');
+  assert.equal(numbers.get('#tracksContainerB .track-row[data-index="1"]').textContent, '2');
+});
+
 test('space on a focused button is left for native activation', t => {
   const { mixer } = mixerFixture(t);
   mixer.playMusic = () => assert.fail('global play shortcut must not run');

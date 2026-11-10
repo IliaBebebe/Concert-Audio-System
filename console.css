@@ -828,6 +828,24 @@ button:active:not(:disabled) { filter: brightness(0.92); }
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+.track-title-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+}
+.track-title-cell .track-name { min-width: 0; }
+.track-title-cell .track-start-badge {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0 4px;
+    border-radius: 4px;
+    font-size: 10px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
 .track-artist {
     font-size: 11.5px;
     line-height: 24px;
@@ -928,7 +946,7 @@ button:active:not(:disabled) { filter: brightness(0.92); }
 .track-search { margin: 0 0 8px; }
 .track-search input, .online-search-form input, .online-music select { background: #181818; border: 1px solid var(--border-secondary); border-radius: 6px; color: var(--text-primary); min-height: 32px; font: inherit; box-shadow: none; }
 .track-search input { padding: 8px 12px 8px 32px; }
-.track-search .fa-search { color: var(--text-muted); }
+.track-search > :is(.fa-search, .lucide-search) { color: var(--text-muted); }
 .deck-empty-state { font-size: 12px; color: var(--text-muted); }
 .online-music { margin: 0 0 12px; background: #1f1f1f; padding: 8px 12px; border-radius: 6px; border-color: var(--border-secondary); }
 .online-music summary { font-weight: 400; color: var(--text-secondary); cursor: pointer; }

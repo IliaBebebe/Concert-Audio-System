@@ -874,7 +874,7 @@ body {
         var(--shadow-sm);
 }
 
-.track-search .fa-search {
+.track-search > :is(.fa-search, .lucide-search) {
     position: absolute;
     left: 12px;
     top: 50%;
@@ -883,6 +883,7 @@ body {
     color: var(--text-muted);
     z-index: 1;
     opacity: 0.7;
+    pointer-events: none;
 }
 
 /* Элементы управления воспроизведением */
