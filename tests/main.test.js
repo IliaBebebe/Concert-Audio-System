@@ -26,6 +26,9 @@ async function mainFixture(t, platform = process.platform) {
     loadFile() { return Promise.resolve(); }
     isDestroyed() { return false; }
     isVisible() { return true; }
+    isMaximized() { return false; }
+    getBounds() { return { x: 0, y: 0, width: 1400, height: 900 }; }
+    close() { this.closeCalled = true; this.events.get('close')({ preventDefault: () => assert.fail('second close must allow beforeunload') }); }
     setWindowButtonVisibility(visible) { this.nativeButtonsVisible = visible; }
   }
   const electron = {
@@ -50,6 +53,18 @@ async function mainFixture(t, platform = process.platform) {
   });
   return { api: module.exports, root, library, handlers, project, windows };
 }
+
+test('closing saves window bounds and allows renderer beforeunload to flush pending settings', async t => {
+  const { api, root } = await mainFixture(t);
+  const window = await api.createWindow();
+  let prevented = false;
+  window.events.get('close')({ preventDefault: () => { prevented = true; } });
+  assert.equal(prevented, true);
+  for (let i = 0; i < 100 && !window.closeCalled; i++) await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(window.closeCalled, true);
+  const state = JSON.parse(await fs.readFile(path.join(root, 'window-state.json'), 'utf8'));
+  assert.equal(state.width, 1400);
+});
 
 for (const platform of ['win32', 'darwin', 'linux']) {
   test(`native window configuration keeps ${platform} controls and security consistent`, async t => {

@@ -48,7 +48,7 @@ async function main() {
   args.push(`--user-data-dir=${profile}`, `--remote-debugging-port=${port}`, '--mute-audio');
   if (process.platform === 'linux' && process.env.CI) args.push('--no-sandbox');
   const child = spawn(executable, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-  let logs = '', socket, nextId = 0;
+  let logs = '', socket, nextId = 0, closeState;
   const pending = new Map();
   child.stdout.on('data', bytes => { logs = (logs + bytes).slice(-5000); });
   child.stderr.on('data', bytes => { logs = (logs + bytes).slice(-5000); });
@@ -59,6 +59,9 @@ async function main() {
     await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); });
     socket.addEventListener('message', event => {
       const message = JSON.parse(event.data);
+      if (message.method === 'Runtime.bindingCalled' && message.params.name === 'casSmokeClosing') {
+        closeState = JSON.parse(message.params.payload);
+      }
       const entry = pending.get(message.id);
       if (!entry) return;
       pending.delete(message.id); clearTimeout(entry.timer);
@@ -116,8 +119,12 @@ async function main() {
     await waitFor(() => evaluate(`window.__smokeNavigation !== ${previousNavigation} && window.soundMixer?.startupState === 'ready'`), 'second startup');
     assert.equal(await evaluate(`window.soundMixer.isPlaying`), false);
     assert.deepEqual(await evaluate(`window.__smokeErrors`), []);
-    await evaluate(`window.electronAPI.windowControl('close')`);
-    console.log(`Native packaged smoke passed: ${process.platform}/${process.arch}; startup, both decks, cues, Unicode paths, audio, pads, restart`);
+    await call('Runtime.addBinding', { name: 'casSmokeClosing' });
+    await evaluate(`addEventListener('beforeunload', () => window.casSmokeClosing(localStorage.getItem('theatreSoundMixer')));
+      window.soundMixer.setMusicVolume(.53);window.electronAPI.windowControl('close')`);
+    await waitFor(async () => closeState, 'settings flushed on native close', 10000);
+    assert.equal(closeState.musicVolume, .53);
+    console.log(`Native packaged smoke passed: ${process.platform}/${process.arch}; startup, both decks, cues, Unicode paths, audio, pads, restart, save on close`);
   } catch (error) {
     console.error(logs);
     throw error;

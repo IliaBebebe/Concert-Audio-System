@@ -55,7 +55,7 @@ jobs:
         run: node scripts/check-packaged-ui.js
       - name: Verify universal macOS executable
         if: runner.os == 'macOS'
-        run: lipo -verify_arch x86_64 arm64 "release/mac-universal/Concert Audio System.app/Contents/MacOS/Concert Audio System"
+        run: lipo "release/mac-universal/Concert Audio System.app/Contents/MacOS/Concert Audio System" -verify_arch x86_64 arm64
       - name: Verify Linux Debian architecture
         if: runner.os == 'Linux'
         run: test "$(dpkg-deb --field release/Concert-Audio-System-linux.deb Architecture)" = amd64

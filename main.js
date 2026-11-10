@@ -575,7 +575,8 @@ async function createWindow() {
       .catch((error) => console.warn('Failed to save window state:', error.message))
       .finally(() => {
         if (!window.isDestroyed()) {
-          window.destroy();
+          // Allow the renderer's beforeunload handler to flush its pending settings.
+          window.close();
         }
       });
   });
