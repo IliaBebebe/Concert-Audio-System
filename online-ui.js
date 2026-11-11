@@ -34,18 +34,29 @@ class CASOnlinePanel {
       this.status.textContent = result.data.length ? `Найдено: ${result.data.length}. «Запустить» подготовит трек и начнёт воспроизведение.` : 'Ничего не найдено. Уточните запрос или вставьте ссылку.';
     } catch (error) { if (generation === this.searchGeneration) this.status.textContent = error.message; }
     finally {
-      button.disabled = false;
-      this.results.removeAttribute('aria-busy');
+      if (generation === this.searchGeneration) {
+        button.disabled = false;
+        this.results.removeAttribute('aria-busy');
+      }
     }
   }
 
   async showLibrary() {
-    ++this.searchGeneration;
-    const result = await this.api.getOnlineLibrary();
-    if (!result.success) { this.status.textContent = result.error; return; }
-    this.render(result.data);
-    const megabytes = Math.round(result.data.reduce((sum, track) => sum + (track.size || 0), 0) / 1024 / 1024);
-    this.status.textContent = result.data.length ? `Сохранено: ${result.data.length} · ${megabytes} МБ. Доступны без интернета.` : 'Библиотека пуста. Найдите и подготовьте первый трек.';
+    const generation = ++this.searchGeneration;
+    document.getElementById('onlineSearchButton').disabled = false;
+    this.results.setAttribute('aria-busy', 'true');
+    try {
+      const result = await this.api.getOnlineLibrary();
+      if (generation !== this.searchGeneration) return;
+      if (!result.success) throw new Error(result.error);
+      this.render(result.data);
+      const megabytes = Math.round(result.data.reduce((sum, track) => sum + (track.size || 0), 0) / 1024 / 1024);
+      this.status.textContent = result.data.length ? `Сохранено: ${result.data.length} · ${megabytes} МБ. Доступны без интернета.` : 'Библиотека пуста. Найдите и подготовьте первый трек.';
+    } catch (error) {
+      if (generation === this.searchGeneration) this.status.textContent = error.message;
+    } finally {
+      if (generation === this.searchGeneration) this.results.removeAttribute('aria-busy');
+    }
   }
 
   button(label, action) {

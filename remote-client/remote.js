@@ -12,6 +12,7 @@
     let latestState = null;
     let selectedDeck = 'A';
     let isConnected = false;
+    let tracklistMarkup = '';
 
     // DOM Elements
     const connectionStatus = document.getElementById('connectionStatus');
@@ -123,7 +124,9 @@
             // Reconnect is handled automatically by EventSource, but if 401:
             fetch(`/api/status?token=${encodeURIComponent(token)}`).then(res => {
                 if (res.status === 401) {
-                    showPinPrompt();
+                    showPinPrompt('Неверный PIN-код. Проверьте код на компьютере.');
+                } else if (res.status === 429) {
+                    showPinPrompt('Слишком много попыток. Повторите через минуту.');
                 }
             }).catch(() => {});
         };
@@ -226,7 +229,7 @@
     function renderTracklist(state) {
         const deckData = selectedDeck === 'A' ? state.deckA : state.deckB;
         if (!deckData || !Array.isArray(deckData.tracks) || deckData.tracks.length === 0) {
-            tracklistContainer.innerHTML = '<div class="tracklist-empty">В этой деке нет загруженных треков</div>';
+            updateTracklist('<div class="tracklist-empty">В этой деке нет загруженных треков</div>');
             return;
         }
 
@@ -234,7 +237,7 @@
         const filtered = deckData.tracks.filter(t => !filter || (t.name || '').toLowerCase().includes(filter));
 
         if (filtered.length === 0) {
-            tracklistContainer.innerHTML = '<div class="tracklist-empty">Треки не найдены</div>';
+            updateTracklist('<div class="tracklist-empty">Треки не найдены</div>');
             return;
         }
 
@@ -242,32 +245,42 @@
         for (const t of filtered) {
             const isPlaying = Boolean(t.isPlaying);
             html += `
-                <div class="track-item ${isPlaying ? 'is-playing' : ''}" data-index="${t.index}">
+                <button type="button" class="track-item ${isPlaying ? 'is-playing' : ''}" data-index="${t.index}">
                     <div class="track-item-left">
                         <span class="track-item-num">${t.index + 1}</span>
                         <span class="track-item-name">${escapeHtml(t.name)}</span>
                     </div>
                     <span class="track-item-time">${t.durationStr || '--:--'}</span>
-                </div>
+                </button>
             `;
         }
+        updateTracklist(html);
+    }
+
+    function updateTracklist(html) {
+        if (tracklistMarkup === html) return;
+        const focusedIndex = tracklistContainer.contains(document.activeElement) ? document.activeElement.dataset.index : null;
+        tracklistMarkup = html;
         tracklistContainer.innerHTML = html;
+        if (focusedIndex !== null) tracklistContainer.querySelector(`[data-index="${focusedIndex}"]`)?.focus();
     }
 
     function renderPads(pads) {
         if (!Array.isArray(pads) || pads.length === 0) return;
-        let html = '';
         for (let i = 0; i < 12; i++) {
             const pad = pads[i] || { index: i, name: '', isPlaying: false };
-            const isPlaying = Boolean(pad.isPlaying);
-            html += `
-                <button type="button" class="pad-cell ${isPlaying ? 'is-playing' : ''}" data-pad="${i}">
-                    <span class="pad-number">${i + 1}</span>
-                    <span class="pad-name">${escapeHtml(pad.name || `Пэд ${i + 1}`)}</span>
-                </button>
-            `;
+            let button = padsGrid.querySelector(`[data-pad="${i}"]`);
+            if (!button) {
+                button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'pad-cell';
+                button.dataset.pad = i;
+                button.innerHTML = `<span class="pad-number">${i + 1}</span><span class="pad-name"></span>`;
+                padsGrid.appendChild(button);
+            }
+            button.classList.toggle('is-playing', Boolean(pad.isPlaying));
+            button.querySelector('.pad-name').textContent = pad.name || `Пэд ${i + 1}`;
         }
-        padsGrid.innerHTML = html;
     }
 
     function escapeHtml(str) {
@@ -280,11 +293,18 @@
     }
 
     // PIN prompt
-    function showPinPrompt() {
+    function showPinPrompt(message = '') {
+        eventSource?.close();
+        eventSource = null;
+        isConnected = false;
+        const wasHidden = pinOverlay.hidden;
         pinOverlay.hidden = false;
-        pinError.hidden = true;
-        pinInput.value = '';
-        pinInput.focus();
+        pinError.hidden = !message;
+        if (message) pinError.textContent = message;
+        if (wasHidden) {
+            pinInput.value = '';
+            pinInput.focus();
+        }
     }
 
     function hidePinPrompt() {

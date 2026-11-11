@@ -444,6 +444,9 @@ body {
 }
 
 .track-item {
+    font: inherit;
+    color: inherit;
+    text-align: left;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -453,6 +456,11 @@ body {
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: background-color 0.15s;
+}
+
+button:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
 }
 
 .track-item:active {

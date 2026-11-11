@@ -5,6 +5,37 @@ const path = require('node:path');
 const os = require('node:os');
 const { OnlineMusic, youtubeTarget, normalizeResult, runProcess } = require('../online-music');
 const { TheatreSoundMixer, CASDeckManager } = require('../renderer');
+const { CASOnlinePanel } = require('../online-ui');
+
+test('a delayed saved library response cannot overwrite a newer search or clear its busy state', async t => {
+  const oldDocument = global.document;
+  const button = { disabled: false }, query = { value: 'new' };
+  global.document = { getElementById: id => id === 'onlineSearchButton' ? button : query };
+  t.after(() => { global.document = oldDocument; });
+  let libraryReply, searchReply;
+  const panel = Object.create(CASOnlinePanel.prototype);
+  panel.searchGeneration = 0;
+  panel.api = {
+    getOnlineLibrary: () => new Promise(resolve => { libraryReply = resolve; }),
+    searchOnline: () => new Promise(resolve => { searchReply = resolve; })
+  };
+  let busy = false;
+  panel.results = { setAttribute: () => { busy = true; }, removeAttribute: () => { busy = false; } };
+  panel.status = {};
+  const rendered = [];
+  panel.render = tracks => rendered.push(tracks);
+  const library = panel.showLibrary();
+  const search = panel.search();
+  libraryReply({ success: true, data: [{ title: 'stale' }] });
+  await library;
+  assert.equal(rendered.length, 0);
+  assert.equal(busy, true);
+  assert.equal(button.disabled, true);
+  searchReply({ success: true, data: [{ title: 'new' }] });
+  await search;
+  assert.equal(rendered[0][0].title, 'new');
+  assert.equal(busy, false);
+});
 
 test('online query accepts only names or canonical single YouTube links', () => {
   assert.equal(youtubeTarget(' artist song '), 'ytsearch10:artist song');

@@ -23,6 +23,7 @@ const MAX_METADATA_CACHE_ENTRIES = 256;
 const MAX_METADATA_TEXT_LENGTH = 200;
 const MAX_TRACK_START_OFFSET_SECONDS = 12 * 60 * 60;
 const MAX_WAVEFORM_FILE_SIZE = 350 * 1024 * 1024;
+const MAX_SELECTED_AUDIO_FILES = 10000;
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.ogg', '.flac', '.m4a', '.aac', '.opus', '.webm']);
 
 const appRootPath = path.resolve(__dirname);
@@ -167,6 +168,9 @@ function normalizeConfig(config) {
   return {
     musicFolder,
     firstRun: typeof source.firstRun === 'boolean' ? source.firstRun : !musicFolder,
+    selectedAudioFiles: Array.isArray(source.selectedAudioFiles)
+      ? [...new Set(source.selectedAudioFiles.filter(file => typeof file === 'string' && path.isAbsolute(file)))].slice(-MAX_SELECTED_AUDIO_FILES)
+      : [],
     trackMetadataOverrides: normalizeTrackMetadataOverrides(source.trackMetadataOverrides)
   };
 }
@@ -608,7 +612,8 @@ async function resolveMusicPath(candidatePath, expectedType) {
   const musicFolder = await validateMusicFolder(config.musicFolder);
   const resolvedPath = await fs.realpath(candidatePath);
 
-  if (!isPathInside(resolvedPath, musicFolder)) {
+  if (!isPathInside(resolvedPath, musicFolder)
+      && !(expectedType === 'file' && config.selectedAudioFiles.includes(resolvedPath) && isSupportedAudioFile(resolvedPath))) {
     throw new Error('Доступ запрещён: путь вне разрешённой директории');
   }
 
@@ -830,11 +835,44 @@ ipcMain.handle('open-file-dialog', async (event, options) => {
 
   try {
     const parentWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
-    return await dialog.showOpenDialog(parentWindow, getSafeFileDialogOptions(options));
+    const result = await dialog.showOpenDialog(parentWindow, getSafeFileDialogOptions(options));
+    if (!result.canceled && result.filePaths?.length) {
+      const selected = [];
+      for (const file of result.filePaths.slice(0, MAX_SELECTED_AUDIO_FILES)) {
+        const resolved = await fs.realpath(file).catch(() => null);
+        if (resolved && isSupportedAudioFile(resolved) && (await fs.stat(resolved)).isFile()) selected.push(resolved);
+      }
+      await updateConfig(config => { config.selectedAudioFiles = [...config.selectedAudioFiles, ...selected]; });
+      return { ...result, filePaths: selected };
+    }
+    return result;
   } catch (error) {
     console.warn('Failed to open file dialog:', error.message);
     return { canceled: true, filePaths: [] };
   }
+});
+
+ipcMain.handle('get-audio-tracks', async (event, files) => {
+  if (!isTrustedSender(event, mainWindow)) return unauthorizedResponse();
+  if (!Array.isArray(files) || files.length > MAX_SELECTED_AUDIO_FILES || files.some(file => typeof file !== 'string')) {
+    return { success: false, error: 'Некорректный список аудиофайлов' };
+  }
+  const tracks = [];
+  for (const file of files) {
+    try {
+      const { config, musicFolder, resolvedPath } = await resolveMusicPath(file, 'file');
+      if (!isSupportedAudioFile(resolvedPath)) continue;
+      const filename = path.basename(resolvedPath);
+      const metadataKey = getTrackMetadataKey(resolvedPath, musicFolder);
+      tracks.push({ ...applyTrackMetadataOverride({
+        name: path.basename(filename, path.extname(filename)), filename, path: resolvedPath,
+        ext: path.extname(filename).toLowerCase()
+      }, config.trackMetadataOverrides[metadataKey]), metadataKey });
+    } catch {
+      // Missing or no longer authorized files must not prevent restoring the rest.
+    }
+  }
+  return { success: true, data: tracks };
 });
 
 ipcMain.handle('select-music-folder', async (event) => {

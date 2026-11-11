@@ -448,3 +448,145 @@ test('oversized saved panel preferences cannot hide the center panel', t => {
   assert.ok(sizes.leftWidth >= 260 && sizes.rightWidth >= 260);
   assert.ok(sizes.leftWidth + sizes.rightWidth + 360 + 12 <= 1000.001);
 });
+
+test('select controls keep their arrow keys without changing playback or volume', t => {
+  const { mixer } = mixerFixture(t);
+  mixer.nextTrack = mixer.previousTrack = mixer.setMusicVolume = () => assert.fail('native select key reached transport');
+  for (const code of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyM', 'Digit1']) {
+    mixer.handleHotkeys({ code, target: { tagName: 'SELECT' }, preventDefault: () => assert.fail('native key was consumed') });
+  }
+});
+
+test('a transferred player resumes in its new deck and advances that queue', t => {
+  const { mixer } = mixerFixture(t);
+  mixer.loadTrack(0, { deckId: 'A' });
+  const player = mixer.musicPlayer;
+  player.started = true;
+  player.options.onplay();
+  mixer.moveTrackBetweenDecks('A', 0, 'B', 0);
+  assert.equal(mixer.playingDeck, 'B');
+  player.options.onpause();
+  player.options.onplay();
+  assert.equal(mixer.playingDeck, 'B');
+  assert.equal(mixer.musicPlayerDeck, 'B');
+  mixer.nextTrack = () => { assert.equal(mixer.playingDeck, 'B'); };
+  mixer.handleTrackEnd(player, mixer.musicPlayerToken);
+});
+
+test('looping restarts at the cue after the trimmed end and keeps progress tracking', t => {
+  const { mixer } = mixerFixture(t);
+  mixer.playbackMode = 'loop';
+  mixer.audioSettings = { trimSilenceEnabled: true, trimSilenceEnd: true };
+  mixer.decks.A.tracks[0].startOffset = 4;
+  mixer.decks.A.tracks[0].silenceBounds = { endSec: 50 };
+  mixer.loadTrack(0, { deckId: 'A' });
+  const player = mixer.musicPlayer;
+  player.started = true;
+  player.options.onplay();
+  player.seek(51);
+  let progressStarts = 0;
+  mixer.startProgressTracking = () => progressStarts++;
+  mixer.handleTrackEnd(player, mixer.musicPlayerToken);
+  assert.equal(player.seek(), 4);
+  assert.equal(player.playing(), true);
+  assert.equal(progressStarts, 1);
+});
+
+test('native loop reentry applies the cue without starting another sound during its pending play', t => {
+  const { mixer } = mixerFixture(t);
+  mixer.playbackMode = 'loop';
+  mixer.decks.A.tracks[0].startOffset = 4;
+  mixer.loadTrack(0, { deckId: 'A' });
+  const player = mixer.musicPlayer;
+  player.play = () => assert.fail('Howler is already restarting the native loop');
+  player.started = false;
+  mixer.handleTrackEnd(player, mixer.musicPlayerToken);
+  assert.equal(player.seek(), 0);
+  player.started = true;
+  player.options.onplay();
+  assert.equal(player.seek(), 4);
+});
+
+test('pause during an asynchronous resume still pauses the transferred player', t => {
+  const { mixer } = mixerFixture(t);
+  mixer.loadTrack(0, { deckId: 'A' });
+  const player = mixer.musicPlayer;
+  mixer.isPlaying = true;
+  mixer.isPaused = true;
+  mixer.pendingMusicStart = true;
+  let pauses = 0;
+  player.pause = () => { pauses++; player.options.onpause(); };
+  mixer.pauseMusic();
+  assert.equal(pauses, 1);
+  assert.equal(mixer.pendingMusicStart, false);
+  assert.equal(mixer.isPaused, true);
+});
+
+test('file import renders and persists an exact custom queue without starting audio', async t => {
+  const { mixer } = mixerFixture(t);
+  window.electronAPI.openFileDialog = async () => ({ canceled: false, filePaths: ['selected.wav'] });
+  window.electronAPI.getAudioTracks = async files => ({ success: true, data: files.map(path => ({ path, name: 'selected' })) });
+  let renders = 0, saves = 0;
+  mixer.displayTracks = id => { assert.equal(id, 'B'); renders++; };
+  mixer.saveStoredData = () => saves++;
+  await mixer.openTrackForDeck('B');
+  assert.equal(mixer.decks.B.tracks.at(-1).path, 'selected.wav');
+  assert.equal(mixer.decks.B.customQueue, true);
+  assert.equal(renders, 1);
+  assert.ok(saves > 0);
+  assert.equal(mixer.isPlaying, false);
+  assert.equal(mixer.status, 'Добавлено треков в деку B: 1');
+});
+
+test('changed silence settings discard per-track analysis as well as caches before rebuilding', async t => {
+  const { mixer } = mixerFixture(t);
+  const track = mixer.decks.A.tracks[0];
+  track.silenceBounds = { startSec: 1, endSec: 50 };
+  track.peakLevel = .2;
+  mixer.silenceBoundsCache = new Map([[track.path, track.silenceBounds]]);
+  mixer.waveformCache = new Map([[track.path, [1, 2]]]);
+  mixer.currentWaveformTrack = track;
+  mixer.waveformRequestId = 2;
+  mixer.loadWaveformForTrack = async selected => {
+    assert.equal(selected, track);
+    assert.equal(selected.silenceBounds, undefined);
+    assert.equal(selected.peakLevel, undefined);
+    assert.equal(mixer.silenceBoundsCache.size, 0);
+    assert.equal(mixer.waveformCache.size, 0);
+    assert.ok(mixer.waveformRequestId > 2);
+    selected.silenceBounds = { startSec: .75, endSec: 50.25 };
+  };
+  await mixer.refreshAudioAnalysis();
+  assert.equal(track.silenceBounds.startSec, .75);
+});
+
+test('an invalid timer restart preserves the running countdown instead of making it negative', t => {
+  const { mixer } = mixerFixture(t);
+  const minutes = { value: '0' }, seconds = { value: '5' };
+  document.getElementById = id => id === 'countdownMinutes' ? minutes : id === 'countdownSeconds' ? seconds : null;
+  let tick;
+  t.mock.method(global, 'setInterval', callback => { tick = callback; return 1; });
+  t.mock.method(global, 'clearInterval', () => {});
+  mixer.startCountdown();
+  seconds.value = '0';
+  mixer.startCountdown();
+  assert.equal(mixer.countdownTime, 5);
+  tick();
+  assert.equal(mixer.countdownTime, 4);
+  assert.equal(mixer.isCountdownRunning, true);
+});
+
+test('advertised menu shortcuts run their actions without reloading or firing transport hotkeys', t => {
+  const { mixer } = mixerFixture(t);
+  const actions = [];
+  mixer.refreshPlaylists = () => actions.push('refresh');
+  mixer.changeMusicFolder = () => actions.push('folder');
+  mixer.workspaces = { activateSettings: () => actions.push('settings') };
+  window.electronAPI.windowControl = async action => actions.push(action);
+  for (const keys of [{ code: 'F5' }, { code: 'KeyO', ctrlKey: true }, { code: 'Comma', metaKey: true }, { code: 'KeyQ', ctrlKey: true }]) {
+    let prevented = false;
+    mixer.handleHotkeys({ ...keys, target: { tagName: 'INPUT' }, preventDefault: () => { prevented = true; } });
+    assert.equal(prevented, true);
+  }
+  assert.deepEqual(actions, ['refresh', 'folder', 'settings', 'close']);
+});

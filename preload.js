@@ -92,6 +92,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
     return ipcRenderer.invoke('get-playlist-tracks', playlistPath);
   },
+  getAudioTracks: files => {
+    if (!Array.isArray(files) || files.some(file => typeof file !== 'string')) throw new Error('Ожидался список путей');
+    return ipcRenderer.invoke('get-audio-tracks', files);
+  },
 
   /**
    * Открывает диалог выбора файла

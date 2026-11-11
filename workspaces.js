@@ -247,7 +247,7 @@ class CASWorkspaceController {
     }
     reveal(key) {
         const owner = this.layout.owner(key);
-        const changed = Boolean(owner && owner !== this.layout.activeTab);
+        const changed = Boolean(owner && (this.isSettingsOpen || owner !== this.layout.activeTab));
         if (changed) this.activate(owner);
         return changed;
     }

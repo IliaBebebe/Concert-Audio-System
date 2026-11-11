@@ -35,6 +35,7 @@ async function mainFixture(t, platform = process.platform) {
     BrowserWindow: MockWindow,
     screen: { getAllDisplays: () => [{ workArea }], getPrimaryDisplay: () => ({ workArea }) },
     Menu: { setApplicationMenu() {} },
+    dialog: {},
     app: { getPath: () => root, requestSingleInstanceLock: () => false, quit() {}, on() {} },
     ipcMain: { handle: (name, fn) => handlers.set(name, fn) }
   };
@@ -51,8 +52,34 @@ async function mainFixture(t, platform = process.platform) {
     assert.ok(root.startsWith(path.join(os.tmpdir(), 'cas-main-test-')));
     await fs.rm(root, { recursive: true, force: true });
   });
-  return { api: module.exports, root, library, handlers, project, windows };
+  return { api: module.exports, root, library, handlers, project, windows, electron };
 }
+
+test('native file selection authorizes only selected audio and restores exact file order', async t => {
+  const { api, root, library, handlers, project, electron } = await mainFixture(t);
+  const outside = path.join(root, 'outside');
+  await fs.mkdir(outside);
+  const selected = path.join(outside, 'selected.wav');
+  const secret = path.join(outside, 'other.wav');
+  const local = path.join(library, 'local.wav');
+  await Promise.all([selected, secret, local].map(file => fs.writeFile(file, 'audio')));
+  const window = await api.createWindow();
+  window.webContents.getURL = () => pathToFileURL(path.join(project, 'index.html')).href;
+  const event = { sender: window.webContents };
+  assert.equal((await handlers.get('get-audio-tracks')(event, [selected])).data.length, 0);
+  electron.dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [selected] });
+  const picked = await handlers.get('open-file-dialog')(event, {});
+  assert.equal(picked.filePaths[0], await fs.realpath(selected));
+  const restored = await handlers.get('get-audio-tracks')(event, [local, selected, secret, selected, path.join(outside, 'missing.wav')]);
+  assert.equal(restored.success, true);
+  assert.deepEqual(Array.from(restored.data, track => track.filename), ['local.wav', 'selected.wav', 'selected.wav']);
+  const config = JSON.parse(await fs.readFile(path.join(root, 'config.json'), 'utf8'));
+  assert.deepEqual(config.selectedAudioFiles, [await fs.realpath(selected)]);
+  await assert.rejects(api.resolveMusicPath(outside, 'directory'), /Доступ запрещён/);
+  await assert.rejects(api.resolveMusicPath(secret, 'file'), /Доступ запрещён/);
+  assert.equal((await handlers.get('get-audio-tracks')(event, ['x', 2])).success, false);
+  assert.equal((await handlers.get('get-audio-tracks')({ sender: {} }, [selected])).success, false);
+});
 
 test('closing saves window bounds and allows renderer beforeunload to flush pending settings', async t => {
   const { api, root } = await mainFixture(t);

@@ -638,7 +638,7 @@ class TheatreSoundMixer {
             return;
         }
 
-        const peak = track?.peakLevel;
+        const peak = track?.peakLevel ?? this.silenceBoundsCache?.get(track?.path)?.peakLevel;
         if (typeof peak === 'number' && peak > 0.01 && peak <= 1.0) {
             const targetDb = Number(this.audioSettings.volumeTargetLevel) || -14;
             const targetAmp = Math.pow(10, targetDb / 20);
@@ -1601,7 +1601,7 @@ class TheatreSoundMixer {
                     document.getElementById('refreshPlaylists')?.click();
                     break;
                 case 'play-pause':
-                    if (this.isPlaying) {
+                    if (this.isPlaying && !this.isPaused) {
                         document.getElementById('pauseBtn')?.click();
                     } else {
                         document.getElementById('playBtn')?.click();
@@ -1660,24 +1660,18 @@ class TheatreSoundMixer {
                 filters: [{ name: 'Аудиофайлы', extensions: ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'opus', 'webm'] }]
             });
             if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
-                const newTracks = result.filePaths.map(filePath => {
-                    const filename = filePath.split(/[/\\]/).pop();
-                    const dotIndex = filename.lastIndexOf('.');
-                    const name = dotIndex > 0 ? filename.slice(0, dotIndex) : filename;
-                    const ext = dotIndex > 0 ? filename.slice(dotIndex).toLowerCase() : '';
-                    return {
-                        name,
-                        filename,
-                        path: filePath,
-                        ext
-                    };
-                });
+                const imported = await window.electronAPI.getAudioTracks(result.filePaths);
+                if (!imported.success) throw new Error(imported.error);
+                const newTracks = imported.data;
                 const deck = this.decks[deckId];
                 if (deck) {
                     deck.tracks = [...(deck.tracks || []), ...newTracks];
-                    deck.name = deck.name && deck.name !== 'Выберите плейлист' ? deck.name : 'Выбранные треки';
-                    this.renderDeckTracks(deckId);
+                    if (!deck.playlist) deck.playlist = { name: 'Выбранные треки', path: null };
+                    deck.customQueue = true;
+                    this.displayTracks(deckId);
                     this.updateDeckUI();
+                    this.updateTrackCounter();
+                    this.saveStoredData();
                     this.updateStatus(`Добавлено треков в деку ${deckId}: ${newTracks.length}`, 'success');
                 }
             }
@@ -3984,7 +3978,10 @@ class TheatreSoundMixer {
                 this.pendingMusicStart = false;
                 this.isPlaying = true;
                 this.isPaused = false;
-                this.playingDeck = deckId;
+                this.playingDeck = this.musicPlayerDeck;
+                // Native HTML5 looping rewinds before this callback, including its async play lock.
+                const start = this.getTrackEffectiveStart(track);
+                if (start > 0 && start < player.duration() && player.seek() < .05) player.seek(start);
                 if (!fadeInApplied) onPlaybackStart?.();
                 if (fadeInMs > 0 && !fadeInApplied) {
                     fadeInApplied = true;
@@ -4053,7 +4050,7 @@ class TheatreSoundMixer {
                 this.pendingMusicStart = false;
                 this.isPlaying = false;
                 this.isPaused = false;
-                this.playingDeck = deckId;
+                this.playingDeck = this.musicPlayerDeck;
                 this.stopProgressTracking(false);
                 this.updateStatus('Ошибка воспроизведения', 'error');
                 this.updateDeckUI();
@@ -4089,6 +4086,14 @@ class TheatreSoundMixer {
     handleTrackEnd(player = this.musicPlayer, playerToken = this.musicPlayerToken) {
         if (this.musicPlayer !== player || this.musicPlayerToken !== playerToken) return;
         if (this.playbackMode === 'loop') {
+            const duration = player.duration();
+            const start = this.getTrackEffectiveStart(this.musicPlayerTrack);
+            const end = this.getTrackEffectiveEnd(this.musicPlayerTrack, duration);
+            if (start > 0 || end < duration) {
+                if (!player.playing()) return;
+                player.seek(start < duration ? start : 0);
+                this.startProgressTracking();
+            }
             return;
         }
         
@@ -4395,7 +4400,7 @@ class TheatreSoundMixer {
             this.updateStatus('Запуск отменен');
             return;
         }
-        if (this.isPlaying && !this.isPaused) {
+        if ((this.isPlaying && !this.isPaused) || this.pendingMusicStart) {
             this.musicPlayer.pause();
             this.retiringMusicPlayers.forEach((retiringPlayer) => {
                 try {
@@ -4715,6 +4720,7 @@ class TheatreSoundMixer {
         }
 
         this.clearWaveform('Строю waveform...');
+        this.currentWaveformTrack = track;
         this.setWaveformState('Строю waveform...', true);
 
         // Serialize reads and decodes. Only the latest queued selection is read;
@@ -5511,13 +5517,27 @@ class TheatreSoundMixer {
 
     handleHotkeys(event) {
         const metadataModal = document.querySelector('.metadata-modal-overlay');
-        if (metadataModal || document.querySelector('dialog[open]') || event.target?.closest?.('#casMenuBar, #workspaceTabs, .workspace-transfer-popover')) {
+        if (metadataModal || document.querySelector('dialog[open]')) {
             return;
         }
 
+        if (!event.altKey && !event.shiftKey) {
+            let action;
+            if (event.ctrlKey || event.metaKey) {
+                if (event.code === 'KeyO') action = () => this.changeMusicFolder();
+                if (event.code === 'KeyQ') action = () => window.electronAPI?.windowControl?.('close')?.catch(console.error);
+                if (event.code === 'Comma') action = () => this.workspaces?.activateSettings();
+            } else if (event.code === 'F5') action = () => this.refreshPlaylists();
+            if (action) {
+                event.preventDefault();
+                if (!event.repeat) action();
+                return;
+            }
+        }
+        if (event.target?.closest?.('#casMenuBar, #workspaceTabs, .workspace-transfer-popover')) return;
         if (event.ctrlKey || event.metaKey || event.altKey) return;
         const tagName = event.target?.tagName;
-        if (tagName === 'INPUT' || tagName === 'TEXTAREA' || event.target?.isContentEditable) return;
+        if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || event.target?.isContentEditable) return;
 
         if (event.code === 'Tab') return;
         if (event.shiftKey && (event.code === 'KeyA' || event.code === 'KeyB')) {
@@ -5821,7 +5841,9 @@ class TheatreSoundMixer {
                     const requestId = ++this.playlistRequestId[deckId];
                     try {
                         let result;
-                        if (saved.customQueue && Array.isArray(saved.trackOrder)) {
+                        if (saved.customQueue && Array.isArray(saved.trackOrder) && window.electronAPI.getAudioTracks) {
+                            result = await window.electronAPI.getAudioTracks(saved.trackOrder);
+                        } else if (saved.customQueue && Array.isArray(saved.trackOrder)) {
                             // Transferred tracks may come from several folders. Read them through
                             // the existing filesystem boundary, then restore only the saved queue.
                             const folders = new Set(saved.trackOrder.filter(file => typeof file === 'string')
@@ -5874,21 +5896,23 @@ class TheatreSoundMixer {
         }
     }
 
+    async refreshAudioAnalysis() {
+        const track = this.currentWaveformTrack || this.musicPlayerTrack
+            || this.currentDeck?.tracks[this.currentDeck.currentTrackIndex];
+        this.waveformRequestId++;
+        this.silenceBoundsCache.clear();
+        this.waveformCache.clear();
+        const tracks = new Set([...Object.values(this.decks).flatMap(deck => deck.tracks), track, this.musicPlayerTrack]);
+        for (const item of tracks) {
+            if (!item) continue;
+            delete item.silenceBounds;
+            delete item.peakLevel;
+        }
+        if (track) await this.loadWaveformForTrack(track);
+        else this.drawWaveform();
+    }
+
     initSettingsUI() {
-        const openSettingsBtn = document.getElementById('openSettings');
-        if (openSettingsBtn) {
-            openSettingsBtn.addEventListener('click', () => {
-                this.workspaces?.activateSettings();
-            });
-        }
-
-        const closeSettingsBtn = document.getElementById('closeSettingsBtn');
-        if (closeSettingsBtn) {
-            closeSettingsBtn.addEventListener('click', () => {
-                this.workspaces?.deactivateSettings();
-            });
-        }
-
         const trimEnabled = document.getElementById('settingTrimSilenceEnabled');
         if (trimEnabled) {
             trimEnabled.addEventListener('change', (e) => {
@@ -5925,9 +5949,8 @@ class TheatreSoundMixer {
             });
             trimThreshold.addEventListener('change', (e) => {
                 this.audioSettings.trimSilenceThreshold = Number(e.target.value);
-                this.silenceBoundsCache.clear();
+                this.refreshAudioAnalysis();
                 this.saveStoredData();
-                this.drawWaveform();
             });
         }
 
@@ -5939,7 +5962,7 @@ class TheatreSoundMixer {
             });
             trimPadding.addEventListener('change', (e) => {
                 this.audioSettings.trimSilencePadding = Number(e.target.value);
-                this.silenceBoundsCache.clear();
+                this.refreshAudioAnalysis();
                 this.saveStoredData();
             });
         }
@@ -5991,8 +6014,7 @@ class TheatreSoundMixer {
         const clearCacheBtn = document.getElementById('settingsClearCacheBtn');
         if (clearCacheBtn) {
             clearCacheBtn.addEventListener('click', () => {
-                this.silenceBoundsCache.clear();
-                this.waveformCache.clear();
+                this.refreshAudioAnalysis();
                 this.updateStatus('Кэш анализа и осциллограмм очищен', 'success');
             });
         }
@@ -6011,7 +6033,7 @@ class TheatreSoundMixer {
                     volumeNormalizationEnabled: CAS_CONFIG.SETTINGS.STABILIZER.DEFAULT_NORMALIZATION_ENABLED,
                     volumeTargetLevel: CAS_CONFIG.SETTINGS.STABILIZER.DEFAULT_TARGET_LUFS
                 };
-                this.silenceBoundsCache.clear();
+                this.refreshAudioAnalysis();
                 this.syncSettingsUI();
                 this.applyStabilizerSettings();
                 this.saveStoredData();
@@ -6227,12 +6249,13 @@ class TheatreSoundMixer {
         if (minutesInput) minutesInput.value = minutes;
         if (secondsInput) secondsInput.value = seconds;
         
-        this.countdownTime = minutes * 60 + seconds;
+        const countdownTime = minutes * 60 + seconds;
         
-        if (this.countdownTime <= 0) {
+        if (countdownTime <= 0) {
             this.updateStatus('Установите время для таймера', 'warning');
             return;
         }
+        this.countdownTime = countdownTime;
         
         if (this.countdownInterval) {
             clearInterval(this.countdownInterval);

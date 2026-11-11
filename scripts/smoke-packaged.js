@@ -28,7 +28,10 @@ async function main() {
   wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
   wav.writeUInt32LE(16000, 24); wav.writeUInt32LE(32000, 28);
   wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(wav.length - 44, 40);
-  for (let i = 44; i < wav.length; i += 2) wav.writeInt16LE(Math.round(1000 * Math.sin(i / 2 * 2 * Math.PI * 440 / 16000)), i);
+  for (let i = 44; i < wav.length; i += 2) {
+    const seconds = (i - 44) / 32000;
+    if (seconds >= .5 && seconds < 10) wav.writeInt16LE(Math.round(1000 * Math.sin(i / 2 * 2 * Math.PI * 440 / 16000)), i);
+  }
   const files = ['01 Проверка # 100%.wav', '02 Finale.wav'];
   for (const name of files) await fs.writeFile(path.join(playlist, name), wav);
   await fs.writeFile(path.join(profile, 'config.json'), JSON.stringify({ musicFolder: library, firstRun: false,
@@ -109,11 +112,41 @@ async function main() {
     assert.ok(state.badges.length === 2 && state.badges.every(Boolean));
     assert.ok(state.search.every(Boolean)); assert.deepEqual(state.volumes, [.42, .36]);
     assert.equal(state.pads, 12); assert.deepEqual(state.errors, []);
+    assert.deepEqual(await evaluate(`(() => {
+      const button = document.getElementById('openSettings');
+      button.click(); const opened = window.soundMixer.workspaces.isSettingsOpen;
+      button.click(); const closed = !window.soundMixer.workspaces.isSettingsOpen;
+      button.click(); document.getElementById('openOnlineSearch').click();
+      return [opened, closed, document.getElementById('onlineQuery').checkVisibility(), !window.soundMixer.workspaces.isSettingsOpen];
+    })()`), [true, true, true, true]);
     await evaluate(`window.soundMixer.playTrackInDeck('A',0); true`);
     await waitFor(() => evaluate(`window.soundMixer.musicPlayer?.playing() && window.soundMixer.musicPlayer.seek() >= 3.5`), 'native audio playback from cue');
+    await evaluate(`document.querySelector('[data-action="play-pause"]').click();true`);
+    await waitFor(() => evaluate(`window.soundMixer.isPaused`), 'menu pause');
+    await evaluate(`document.querySelector('[data-action="play-pause"]').click();true`);
+    await waitFor(() => evaluate(`window.soundMixer.musicPlayer?.playing() && !window.soundMixer.isPaused`), 'menu resume');
     await evaluate(`window.soundMixer.pauseMusic();window.soundMixer.playSoundEffect(0);true`);
     await waitFor(() => evaluate(`window.soundMixer.soundEffects.get(0)?.sound?.playing()`), 'native pad playback');
-    await evaluate(`window.soundMixer.stopAllEffects();window.soundMixer.stopMusic();window.soundMixer.saveStoredDataImmediate();true`);
+    await evaluate(`window.soundMixer.stopAllEffects();window.soundMixer.playMusic();true`);
+    await waitFor(() => evaluate(`window.soundMixer.musicPlayer?.playing()`), 'resume before transfer');
+    await evaluate(`window.soundMixer.moveTrackBetweenDecks('A',0,'B',0);window.soundMixer.pauseMusic();true`);
+    await waitFor(() => evaluate(`window.soundMixer.isPaused`), 'pause transferred audio');
+    await evaluate(`window.soundMixer.playMusic();true`);
+    await waitFor(() => evaluate(`window.soundMixer.musicPlayer?.playing() && !window.soundMixer.isPaused`), 'resume transferred audio');
+    assert.equal(await evaluate(`window.soundMixer.playingDeck`), 'B');
+    await evaluate(`window.soundMixer.stopMusic();window.soundMixer.audioSettings.trimSilenceEnabled=true;
+      document.querySelector('input[name="playbackMode"][value="loop"]').click();window.soundMixer.playTrackInDeck('B',0);true`);
+    await waitFor(() => evaluate(`window.soundMixer.musicPlayer?.playing() && window.soundMixer.musicPlayerTrack?.silenceBounds`), 'loop analysis');
+    await evaluate(`const m=window.soundMixer;m.musicPlayer.seek(m.getTrackEffectiveEnd(m.musicPlayerTrack,m.musicPlayer.duration())+.05);true`);
+    await waitFor(() => evaluate(`window.soundMixer.musicPlayer.seek()>=3.5 && window.soundMixer.musicPlayer.seek()<5`), 'loop restart at cue before trailing silence');
+    assert.ok(await evaluate(`window.soundMixer.musicPlayer.playing()`));
+    await evaluate(`window.soundMixer.audioSettings.trimSilenceEnabled=false;window.soundMixer.musicPlayer.seek(11.85);true`);
+    await waitFor(() => evaluate(`window.soundMixer.musicPlayer.seek()>=3.5 && window.soundMixer.musicPlayer.seek()<5`), 'native loop restart at cue');
+    const previousStart = await evaluate(`window.soundMixer.musicPlayerTrack.silenceBounds.startSec`);
+    await evaluate(`document.getElementById('settingTrimSilencePadding').value=250;
+      document.getElementById('settingTrimSilencePadding').dispatchEvent(new Event('change'));true`);
+    await waitFor(() => evaluate(`window.soundMixer.musicPlayerTrack?.silenceBounds?.startSec < ${previousStart}-.1`), 'reanalyzed silence padding');
+    await evaluate(`window.soundMixer.stopMusic();window.soundMixer.saveStoredDataImmediate();true`);
     const previousNavigation = await evaluate('window.__smokeNavigation');
     await call('Page.reload');
     await waitFor(() => evaluate(`window.__smokeNavigation !== ${previousNavigation} && window.soundMixer?.startupState === 'ready'`), 'second startup');
@@ -124,7 +157,7 @@ async function main() {
       window.soundMixer.setMusicVolume(.53);window.electronAPI.windowControl('close')`);
     await waitFor(async () => closeState, 'settings flushed on native close', 10000);
     assert.equal(closeState.musicVolume, .53);
-    console.log(`Native packaged smoke passed: ${process.platform}/${process.arch}; startup, both decks, cues, Unicode paths, audio, pads, restart, save on close`);
+    console.log(`Native packaged smoke passed: ${process.platform}/${process.arch}; startup, settings navigation, both decks, transferred audio, trimmed loops, analysis settings, cues, Unicode paths, pads, restart, save on close`);
   } catch (error) {
     console.error(logs);
     throw error;
