@@ -87,3 +87,34 @@
 Проверка не доказывает отсутствие всех возможных ошибок. Прослушивание на
 концертном оборудовании, физические телефоны и ручные GUI/аудио macOS/Linux
 не проверялись. Сведения о финальных пакетах и нативном CI добавляются после сборок.
+
+## Публикация 1.7.3
+
+12 ноября 2026 года опубликован стабильный
+[v1.7.3](https://github.com/IliaBebebe/Concert-Audio-System/releases/tag/v1.7.3):
+Latest, draft=false, prerelease=false, четыре пакета.
+Коммит тега — `1dc9721fd7df3ec5964ffa639d8129a8fec9a404`; тег не изменялся.
+
+[CI 43247779274](https://github.com/IliaBebebe/Concert-Audio-System/actions/runs/43247779274)
+успешно завершён с этим SHA. На Windows x64, Linux x64 и macOS arm64 прошли
+138/138 тестов, сверка ресурсов и расширенный запуск готового приложения.
+Universal macOS содержит x86_64 и arm64 по lipo; Intel отдельно не запускался.
+Debian-пакет проверен как amd64. Локальные build-win, packaged-проверки,
+smoke и NSIS повторены с версией 1.7.3 и прошли.
+
+| Пакет | Размер, байт |
+| --- | ---: |
+| Concert-Audio-System-Setup.exe | 182001660 |
+| Concert-Audio-System-macOS.dmg | 425991046 |
+| Concert-Audio-System-linux.AppImage | 246487272 |
+| Concert-Audio-System-linux.deb | 202827964 |
+
+Windows-установщик скачан из CI-релиза: SHA-256
+`0b43a6967d76f7efa6838a7d9536daf212ac41c94649f5971161665d11333cef`
+совпал с digest GitHub. Get-AuthenticodeSignature — NotSigned.
+Все восемь tagged/latest URL ответили HTTP 200 с редиректами.
+
+Сайт https://cas.rexcorp.space/ ответил HTTP 200. В браузере показаны v1.7.3
+и ссылки всех четырёх пакетов этого тега; динамическое обновление не потребовало
+деплоя сайта. README основной ветки обновлён отдельным коммитом `4a7d95d`
+без переноса кода релизной ветки.
