@@ -80,6 +80,38 @@ test('remote track selection rejects unknown decks and out-of-range indices', t 
   assert.deepEqual(selected, ['B']);
 });
 
+test('remote snapshot includes lazy assigned pads and their full display names', t => {
+  const { mixer } = mixerFixture(t);
+  const name = 'A long effect name that should reach the phone intact';
+  mixer.soundEffects.set(0, { path: 'effect.wav', name, sound: null });
+  const state = mixer.getRemoteStateSnapshot();
+  assert.equal(state.pads[0].isAssigned, true);
+  assert.equal(state.pads[0].isPlaying, false);
+  assert.equal(state.pads[0].name, name);
+  assert.equal(state.pads[1].isAssigned, false);
+});
+
+test('remote idle updates run only while phones are connected', t => {
+  const { mixer } = mixerFixture(t);
+  let receiveCount;
+  let snapshots = 0;
+  global.window.electronAPI.onRemoteClientCount = callback => { receiveCount = callback; };
+  mixer.setupRemoteControlDialog = () => {};
+  mixer.refreshRemoteControlStatus = () => {};
+  mixer.broadcastRemoteState = () => { snapshots++; };
+  mixer.initRemoteControl();
+  t.after(() => clearInterval(mixer.remoteStateInterval));
+  assert.equal(mixer.remoteStateInterval, undefined);
+  receiveCount(1);
+  const timer = mixer.remoteStateInterval;
+  assert.ok(timer);
+  assert.equal(snapshots, 1);
+  receiveCount(2);
+  assert.equal(mixer.remoteStateInterval, timer);
+  receiveCount(0);
+  assert.equal(mixer.remoteStateInterval, null);
+});
+
 test('searching the target deck does not change the playing deck filter', t => {
   const { mixer } = mixerFixture(t);
   mixer.playingDeck = 'A';

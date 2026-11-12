@@ -318,6 +318,22 @@ class CASRemoteServer {
     }
 
     _serveStatic(pathname, res) {
+        // Explicit aliases share packaged fonts without exposing the app's asset directory.
+        const fontFiles = {
+            '/remote-font.ttf': 'manrope-regular.ttf',
+            '/remote-font-bold.ttf': 'manrope-bold.ttf'
+        };
+        if (Object.hasOwn(fontFiles, pathname)) {
+            fs.readFile(path.join(__dirname, 'assets', 'fonts', fontFiles[pathname]), (err, content) => {
+                if (err) {
+                    res.writeHead(404);
+                    return res.end('Not Found');
+                }
+                res.writeHead(200, { 'Content-Type': 'font/ttf' });
+                res.end(content);
+            });
+            return;
+        }
         let filePath = pathname === '/' || pathname === '/index.html'
             ? path.join(this.clientDir, 'index.html')
             : path.join(this.clientDir, pathname);

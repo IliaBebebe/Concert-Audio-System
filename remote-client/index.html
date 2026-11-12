@@ -1,150 +1,88 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0d0e12">
-    <title>CAS Remote • Пульт управления</title>
-    <link rel="stylesheet" href="remote.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#181818">
+  <meta name="description" content="Мобильный пульт Concert Audio System в локальной сети.">
+  <title>CAS Remote — Мобильный пульт</title>
+  <link rel="stylesheet" href="remote.css">
 </head>
 <body>
-    <div class="remote-app" id="remoteApp">
-        <!-- Top App Bar -->
-        <header class="remote-header">
-            <div class="header-brand">
-                <span class="brand-logo">CAS</span>
-                <span class="brand-title">Remote</span>
-            </div>
-            <div class="header-status" id="connectionStatus">
-                <span class="status-dot"></span>
-                <span class="status-text">Подключение...</span>
-            </div>
-            <div class="deck-selector" id="deckSelector">
-                <button type="button" class="deck-btn is-active" id="btnDeckA" data-deck="A">A</button>
-                <button type="button" class="deck-btn" id="btnDeckB" data-deck="B">B</button>
-            </div>
-        </header>
-
-        <!-- Main Content Screens (Tab panels) -->
-        <main class="remote-content">
-            <!-- Screen 1: Transport & Now Playing -->
-            <section class="remote-screen is-active" id="screenTransport">
-                <div class="now-playing-card">
-                    <div class="track-deck-badge" id="nowPlayingDeckBadge">ДЕКА A</div>
-                    <div class="track-title" id="nowPlayingTitle">Трек не выбран</div>
-                    <div class="track-artist" id="nowPlayingArtist">Выберите трек в списке</div>
-
-                    <!-- Progress Bar -->
-                    <div class="progress-wrap">
-                        <div class="progress-bar-bg">
-                            <div class="progress-bar-fill" id="trackProgressFill"></div>
-                        </div>
-                    </div>
-
-                    <!-- Time Row -->
-                    <div class="time-row">
-                        <span class="time-current" id="currentTimeDisplay">0:00</span>
-                        <span class="time-remaining-badge" id="remainingTimeBadge">-0:00</span>
-                        <span class="time-total" id="totalTimeDisplay">0:00</span>
-                    </div>
-                </div>
-
-                <!-- Main Giant Transport Controls -->
-                <div class="transport-controls">
-                    <button type="button" class="btn-ctrl btn-prev" id="btnPrev" aria-label="Предыдущий трек">
-                        <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-                    </button>
-
-                    <button type="button" class="btn-ctrl btn-play-pause" id="btnPlayPause" aria-label="Воспроизведение / Пауза">
-                        <svg class="icon-play" id="iconPlay" viewBox="0 0 24 24" width="40" height="40" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                        <svg class="icon-pause" id="iconPause" viewBox="0 0 24 24" width="40" height="40" fill="currentColor" hidden><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-                    </button>
-
-                    <button type="button" class="btn-ctrl btn-next" id="btnNext" aria-label="Следующий трек">
-                        <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-                    </button>
-                </div>
-
-                <!-- Secondary Actions Row -->
-                <div class="secondary-controls">
-                    <button type="button" class="btn-action btn-stop" id="btnStop">
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>
-                        <span>СТОП</span>
-                    </button>
-                    <button type="button" class="btn-action btn-mute" id="btnMute">
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
-                        <span>MUTE</span>
-                    </button>
-                </div>
-
-                <!-- Volume Slider -->
-                <div class="volume-slider-card">
-                    <div class="volume-header">
-                        <span class="volume-label">Громкость</span>
-                        <span class="volume-value" id="volumeValue">70%</span>
-                    </div>
-                    <div class="volume-row">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7 9v6h4l5 5V4l-5 5H7z"/></svg>
-                        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="70">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Screen 2: Tracklist -->
-            <section class="remote-screen" id="screenTracks">
-                <div class="tracks-header">
-                    <input type="text" class="tracks-search" id="trackSearchInput" placeholder="Поиск трека в текущей деке...">
-                </div>
-                <div class="tracklist-container" id="tracklistContainer">
-                    <div class="tracklist-empty">Загрузка списка треков...</div>
-                </div>
-            </section>
-
-            <!-- Screen 3: Sound Pads -->
-            <section class="remote-screen" id="screenPads">
-                <div class="pads-header">
-                    <span class="pads-title">Звуковые пэды (1–12)</span>
-                    <button type="button" class="btn-stop-pads" id="btnStopPads">Стоп все</button>
-                </div>
-                <div class="pads-grid" id="padsGrid">
-                    <!-- 12 pads generated by JS -->
-                </div>
-            </section>
-        </main>
-
-        <!-- Bottom Navigation Bar -->
-        <nav class="remote-tab-bar">
-            <button type="button" class="tab-item is-active" data-tab="screenTransport">
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
-                <span>Пульт</span>
-            </button>
-            <button type="button" class="tab-item" data-tab="screenTracks">
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
-                <span>Треки</span>
-            </button>
-            <button type="button" class="tab-item" data-tab="screenPads">
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M3 3v8h8V3H3zm6 6H5V5h4v4zm-6 4v8h8v-8H3zm6 6H5v-4h4v4zm4-16v8h8V3h-8zm6 6h-4V5h4v4zm-6 4v8h8v-8h-8zm6 6h-4v-4h4v4z"/></svg>
-                <span>Пэды</span>
-            </button>
-        </nav>
-
-        <!-- PIN Entry Overlay (when token is missing or unauthorized) -->
-        <div class="pin-overlay" id="pinOverlay" hidden>
-            <div class="pin-card">
-                <h2>Concert Audio System</h2>
-                <p>Введите 4-значный PIN-код, показанный на компьютере:</p>
-                <div class="pin-inputs">
-                    <input type="password" inputmode="numeric" maxlength="4" class="pin-field" id="pinInput" placeholder="••••">
-                </div>
-                <button type="button" class="btn-pin-submit" id="btnPinSubmit">Подключиться</button>
-                <div class="pin-error" id="pinError" hidden>Неверный PIN-код</div>
-            </div>
+  <a class="skip-link" href="#main">К управлению</a>
+  <div class="remote-app">
+    <header class="app-header">
+      <div class="brand"><b>CAS<span class="brand-mark">/</span></b><span>Мобильный пульт</span></div>
+      <button class="connection" id="connectionStatus" type="button" aria-label="Проверить подключение"><span class="status-dot"></span><span id="statusText" role="status">Подключение</span></button>
+    </header>
+    <div class="connection-notice" id="connectionNotice" role="status">Подключаемся к CAS…</div>
+    <div class="command-error" id="commandError" role="alert" hidden></div>
+    <main id="main" tabindex="-1">
+      <section id="screenTransport" class="screen" aria-labelledby="transportHeading">
+        <div class="section-heading"><h1 id="transportHeading">В эфире</h1><span class="deck-tag" id="playingDeck">Дека A</span></div>
+        <article class="playback-panel" id="playbackPanel">
+          <div class="playback-top"><span id="playbackStatus">Ожидание</span><span id="trackPosition"></span></div>
+          <h2 id="nowPlayingTitle">Трек не выбран</h2>
+          <p class="track-source" id="nowPlayingArtist">Откройте треки и подготовьте запуск</p>
+          <div class="countdown"><span id="remainingTime">0:00</span><span>до конца</span></div>
+          <div class="progress" id="trackProgress" role="progressbar" aria-label="Ход воспроизведения" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="trackProgressFill"></span></div>
+          <div class="time-row"><span id="currentTime">0:00</span><span id="totalTime">0:00</span></div>
+          <div class="transport">
+            <button type="button" id="btnPrev" class="icon-button" data-command aria-label="Предыдущий трек"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5v14M19 5 8 12l11 7Z"/></svg></button>
+            <button type="button" id="btnPlayPause" class="play-button" data-command><svg id="playIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7Z"/></svg><svg id="pauseIcon" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M8 5v14M16 5v14"/></svg><span id="playLabel">Воспроизвести</span></button>
+            <button type="button" id="btnNext" class="icon-button" data-command aria-label="Следующий трек"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 5v14M5 5l11 7-11 7Z"/></svg></button>
+          </div>
+          <button type="button" id="btnStop" class="stop-button" data-command><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>Остановить трек</button>
+        </article>
+        <section class="volume-panel" aria-labelledby="volumeLabel">
+          <div class="volume-heading"><label id="volumeLabel" for="volumeSlider">Громкость музыки</label><output id="volumeValue" for="volumeSlider">—</output></div>
+          <input type="range" id="volumeSlider" min="0" max="100" value="0" data-command>
+          <div class="volume-scale" aria-hidden="true"><span>0</span><span>50</span><span>100</span></div>
+        </section>
+        <button class="browse-button" type="button" id="browseTracks">Подготовить следующий трек <span aria-hidden="true">↗</span></button>
+      </section>
+      <section id="screenTracks" class="screen" aria-labelledby="tracksHeading" hidden>
+        <div class="section-heading"><h1 id="tracksHeading">Треки</h1><span id="trackCount" class="muted">0 треков</span></div>
+        <div class="deck-selector" role="group" aria-label="Просмотр деки">
+          <button type="button" data-deck="A" aria-pressed="true"><span>Дека A</span><small id="deckNameA">Нет плейлиста</small></button>
+          <button type="button" data-deck="B" aria-pressed="false"><span>Дека B</span><small id="deckNameB">Нет плейлиста</small></button>
         </div>
-    </div>
-
-    <script src="remote.js"></script>
+        <label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input id="trackSearch" type="search" placeholder="Найти трек" aria-label="Найти трек в выбранной деке" autocomplete="off"></label>
+        <p class="screen-hint">Выберите трек, затем нажмите «Запустить».</p>
+        <div id="tracklist" class="tracklist"></div>
+      </section>
+      <section id="screenPads" class="screen" aria-labelledby="padsHeading" hidden>
+        <div class="section-heading"><h1 id="padsHeading">Пэды</h1><span id="padCount" class="muted">0 из 12</span></div>
+        <p class="screen-hint">Нажатие сразу запускает назначенный звук.</p>
+        <div id="padsGrid" class="pads-grid"></div>
+        <button type="button" id="btnStopPads" class="stop-button pads-stop" data-command>Остановить все пэды</button>
+        <p id="padsHint" class="screen-hint">Назначьте звуки пэдам в CAS на компьютере.</p>
+      </section>
+    </main>
+    <aside class="cue-bar" id="cueBar" aria-label="Подготовленный трек" hidden>
+      <div class="cue-info"><small id="cueDeck">К запуску · Дека A</small><strong id="cueTitle"></strong></div>
+      <button type="button" id="btnLaunch" class="launch-button" data-command>Запустить</button>
+      <button type="button" id="btnClearCue" class="clear-cue" aria-label="Отменить выбор трека">×</button>
+    </aside>
+    <div class="safety-bar"><button type="button" id="btnMute" data-command aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6l5 4ZM16 9l6 6M22 9l-6 6"/></svg><span id="muteLabel">Выключить весь звук</span></button></div>
+    <nav class="tab-bar" aria-label="Разделы пульта">
+      <button type="button" data-screen="screenTransport" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg><span>Эфир</span></button>
+      <button type="button" data-screen="screenTracks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg><span>Треки</span></button>
+      <button type="button" data-screen="screenPads"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Пэды</span></button>
+    </nav>
+  </div>
+  <div class="pairing" id="pairing">
+    <form id="pinForm" class="pairing-card">
+      <div class="pairing-logo" aria-hidden="true">CAS<span>/</span></div>
+      <h1>Пульт в ваших руках</h1>
+      <p>Включите мобильный пульт в настройках CAS. Телефон и компьютер должны быть в одной сети Wi-Fi.</p>
+      <label for="pinInput">PIN с экрана компьютера</label>
+      <input id="pinInput" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" placeholder="0000" required aria-describedby="pinError">
+      <p id="pinError" class="pin-error" role="alert" hidden></p>
+      <button type="submit" id="btnConnect" class="launch-button">Подключиться</button>
+      <small>Звук воспроизводится на компьютере</small>
+    </form>
+  </div>
+  <script src="remote.js"></script>
 </body>
 </html>

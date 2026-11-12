@@ -1,406 +1,479 @@
-/**
- * CAS Remote Web Client
- * Connects via SSE and sends commands via HTTP POST.
- */
+/* CAS phone client. Browsing and cueing are local; only explicit actions send commands. */
+(() => {
+  'use strict';
 
-(function () {
-    'use strict';
+  const $ = id => document.getElementById(id);
+  const app = document.querySelector('.remote-app');
+  const deckButtons = [...document.querySelectorAll('[data-deck]')];
+  const navButtons = [...document.querySelectorAll('[data-screen]')];
+  const commandButtons = [...document.querySelectorAll('[data-command]')];
+  let token = new URLSearchParams(location.search).get('token') || new URLSearchParams(location.search).get('t') || '';
+  try { token ||= sessionStorage.getItem('cas-remote-token') || ''; } catch {}
+  let state = null;
+  let selectedDeck = 'A';
+  let screen = 'screenTransport';
+  let cue = null;
+  let stream = null;
+  let generation = 0;
+  let ready = false;
+  let connecting = false;
+  let retryTimer = null;
+  let healthTimer = null;
+  let retryDelay = 1000;
+  let cooldownUntil = 0;
+  let trackSignature = '';
+  let trackRows = [];
+  const padRows = [];
+  const pending = new Set();
+  let volumeTimer = null;
+  let queuedVolume = null;
+  let volumeSending = false;
 
-    // State
-    let token = new URLSearchParams(window.location.search).get('token') || '';
-    let eventSource = null;
-    let latestState = null;
-    let selectedDeck = 'A';
-    let isConnected = false;
-    let tracklistMarkup = '';
+  const tracksFor = deck => state?.[deck === 'A' ? 'deckA' : 'deckB']?.tracks || [];
+  const deckSignature = deck => JSON.stringify([state?.[deck === 'A' ? 'deckA' : 'deckB']?.name,
+    tracksFor(deck).map(t => [t.index, t.name, t.durationStr])]);
+  const isPlaying = () => Boolean(state?.isPlaying && !state?.isPaused);
+  const time = value => {
+    const seconds = Math.max(0, Math.floor(Number(value) || 0));
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  };
 
-    // DOM Elements
-    const connectionStatus = document.getElementById('connectionStatus');
-    const statusText = connectionStatus.querySelector('.status-text');
-    const btnDeckA = document.getElementById('btnDeckA');
-    const btnDeckB = document.getElementById('btnDeckB');
+  function error(message = '') {
+    $('commandError').textContent = message;
+    $('commandError').hidden = !message;
+  }
 
-    // Transport Elements
-    const nowPlayingDeckBadge = document.getElementById('nowPlayingDeckBadge');
-    const nowPlayingTitle = document.getElementById('nowPlayingTitle');
-    const nowPlayingArtist = document.getElementById('nowPlayingArtist');
-    const trackProgressFill = document.getElementById('trackProgressFill');
-    const currentTimeDisplay = document.getElementById('currentTimeDisplay');
-    const remainingTimeBadge = document.getElementById('remainingTimeBadge');
-    const totalTimeDisplay = document.getElementById('totalTimeDisplay');
-    const btnPlayPause = document.getElementById('btnPlayPause');
-    const iconPlay = document.getElementById('iconPlay');
-    const iconPause = document.getElementById('iconPause');
-    const btnPrev = document.getElementById('btnPrev');
-    const btnNext = document.getElementById('btnNext');
-    const btnStop = document.getElementById('btnStop');
-    const btnMute = document.getElementById('btnMute');
-    const volumeSlider = document.getElementById('volumeSlider');
-    const volumeValue = document.getElementById('volumeValue');
+  function connection(online, label, message = '') {
+    ready = online;
+    $('connectionStatus').dataset.online = String(online);
+    $('statusText').textContent = label;
+    $('connectionNotice').textContent = message;
+    $('connectionNotice').hidden = !message;
+    renderControls();
+  }
 
-    // Tracklist Elements
-    const trackSearchInput = document.getElementById('trackSearchInput');
-    const tracklistContainer = document.getElementById('tracklistContainer');
+  function pairing(show, message = '') {
+    const wasOpen = !$('pairing').hidden;
+    $('pairing').hidden = !show;
+    app.inert = show;
+    $('pinError').textContent = message;
+    $('pinError').hidden = !message;
+    if (show) $('pinInput').focus();
+    else if (wasOpen) $('main').focus();
+  }
 
-    // Pads Elements
-    const padsGrid = document.getElementById('padsGrid');
-    const btnStopPads = document.getElementById('btnStopPads');
-
-    // Navigation & PIN
-    const tabButtons = document.querySelectorAll('.tab-item');
-    const screens = document.querySelectorAll('.remote-screen');
-    const pinOverlay = document.getElementById('pinOverlay');
-    const pinInput = document.getElementById('pinInput');
-    const btnPinSubmit = document.getElementById('btnPinSubmit');
-    const pinError = document.getElementById('pinError');
-
-    // Haptic feedback helper
-    function vibrate(ms = 15) {
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-            try { navigator.vibrate(ms); } catch {}
-        }
+  async function request(endpoint, options = {}) {
+    const response = await fetch(`/api/${endpoint}?token=${encodeURIComponent(token)}`, {
+      ...options, signal: AbortSignal.timeout(6000), cache: 'no-store'
+    });
+    if (!response.ok) {
+      const failure = new Error(`HTTP ${response.status}`);
+      failure.status = response.status;
+      failure.retryAfter = Number(response.headers.get('Retry-After')) || 60;
+      throw failure;
     }
+    return response.json();
+  }
 
-    // Format seconds to mm:ss
-    function formatTime(seconds) {
-        if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  function closeStream() {
+    stream?.close();
+    stream = null;
+    clearTimeout(retryTimer);
+    retryTimer = null;
+    clearInterval(healthTimer);
+  }
+
+  function forgetAccess(message) {
+    generation++;
+    closeStream();
+    token = '';
+    try { sessionStorage.removeItem('cas-remote-token'); } catch {}
+    // An expired QR credential must not be picked up again on reload.
+    const url = new URL(location.href);
+    url.searchParams.delete('token');
+    url.searchParams.delete('t');
+    history.replaceState(null, '', url);
+    cue = null;
+    renderCue();
+    connection(false, 'Нужен PIN');
+    pairing(true, message);
+  }
+
+  function disconnected() {
+    closeStream();
+    queuedVolume = null;
+    clearTimeout(volumeTimer);
+    cue = null;
+    renderCue();
+    connection(false, 'Нет связи', 'Связь с CAS потеряна. Проверьте сеть Wi-Fi. Подключение восстановится автоматически.');
+    if (token && document.visibilityState !== 'hidden') {
+      retryTimer = setTimeout(connect, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 10000);
     }
+  }
 
-    // Send command to CAS desktop
-    async function sendCommand(action, params = {}) {
-        vibrate();
+  async function connect() {
+    if (Date.now() < cooldownUntil || document.visibilityState === 'hidden') return;
+    closeStream();
+    const attempt = ++generation;
+    if (!token) {
+      connection(false, 'Нужен PIN');
+      pairing(true);
+      return;
+    }
+    connecting = true;
+    $('btnConnect').disabled = true;
+    $('btnConnect').textContent = 'Подключаемся…';
+    connection(false, 'Подключение', 'Получаем состояние CAS…');
+    try {
+      // Validate once before SSE: invalid PINs never enter an automatic retry loop.
+      const snapshot = await request('status');
+      if (attempt !== generation) return;
+      if (snapshot.state) receiveState(snapshot.state);
+      else state = null;
+      const source = new EventSource(`/api/stream?token=${encodeURIComponent(token)}`);
+      stream = source;
+      source.onopen = () => {
+        if (attempt !== generation) return;
+        retryDelay = 1000;
+        try { sessionStorage.setItem('cas-remote-token', token); } catch {}
+        pairing(false);
+        connection(Boolean(state), state ? 'На связи' : 'Ожидание CAS', state ? '' : 'CAS ещё готовит рабочее пространство…');
+        // Detect silent network loss, including Wi-Fi changes while SSE is idle.
+        healthTimer = setInterval(async () => {
+          try {
+            const current = await request('status');
+            if (attempt !== generation) return;
+            if (current.state) {
+              receiveState(current.state);
+              connection(true, 'На связи');
+            }
+          } catch {
+            if (attempt !== generation) return;
+            generation++;
+            disconnected();
+          }
+        }, 10000);
+      };
+      source.addEventListener('state', event => {
+        if (attempt !== generation) return;
         try {
-            const res = await fetch(`/api/command?token=${encodeURIComponent(token)}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action, ...params })
-            });
-            if (res.status === 401) {
-                showPinPrompt();
-            }
-            return await res.json();
-        } catch (err) {
-            console.error('Command failed:', err);
+          receiveState(JSON.parse(event.data));
+          connection(true, 'На связи');
+        } catch {
+          error('Не удалось прочитать состояние CAS. Переподключитесь нажатием на статус связи.');
+          connection(false, 'Ошибка данных');
         }
+      });
+      source.onerror = () => {
+        if (attempt !== generation) return;
+        generation++;
+        disconnected();
+      };
+    } catch (failure) {
+      if (attempt !== generation) return;
+      if (failure.status === 401) {
+        forgetAccess('PIN не принят или срок доступа истёк. Введите PIN из CAS.');
+      } else if (failure.status === 429) {
+        cooldownUntil = Date.now() + failure.retryAfter * 1000;
+        forgetAccess(`Слишком много попыток. Повторите через ${failure.retryAfter} сек.`);
+      } else {
+        disconnected();
+        if (!$('pairing').hidden) pairing(true, 'CAS недоступен. Проверьте адрес, сеть и тумблер в настройках CAS.');
+      }
+    } finally {
+      if (attempt === generation || !token) {
+        connecting = false;
+        $('btnConnect').disabled = false;
+        $('btnConnect').textContent = 'Подключиться';
+      }
     }
+  }
 
-    // Connect to SSE stream
-    function connectStream() {
-        if (!token) {
-            showPinPrompt();
-            return;
-        }
-
-        if (eventSource) {
-            eventSource.close();
-        }
-
-        updateStatus(false, 'Подключение...');
-
-        eventSource = new EventSource(`/api/stream?token=${encodeURIComponent(token)}`);
-
-        eventSource.onopen = () => {
-            isConnected = true;
-            updateStatus(true, 'Онлайн');
-            hidePinPrompt();
-        };
-
-        eventSource.addEventListener('state', (event) => {
-            try {
-                const state = JSON.parse(event.data);
-                latestState = state;
-                renderState(state);
-            } catch (err) {
-                console.error('Failed to parse state:', err);
-            }
-        });
-
-        eventSource.onerror = () => {
-            isConnected = false;
-            updateStatus(false, 'Связь потеряна');
-            // Reconnect is handled automatically by EventSource, but if 401:
-            fetch(`/api/status?token=${encodeURIComponent(token)}`).then(res => {
-                if (res.status === 401) {
-                    showPinPrompt('Неверный PIN-код. Проверьте код на компьютере.');
-                } else if (res.status === 429) {
-                    showPinPrompt('Слишком много попыток. Повторите через минуту.');
-                }
-            }).catch(() => {});
-        };
+  async function command(action, params = {}) {
+    const key = action === 'triggerPad' ? `${action}:${params.index}` : action;
+    if (!ready || pending.has(key)) return false;
+    const attempt = generation;
+    pending.add(key);
+    error();
+    renderControls();
+    try {
+      const result = await request('command', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ...params })
+      });
+      if (attempt !== generation) return false;
+      if (!result.success) throw new Error('Command rejected');
+      return true;
+    } catch (failure) {
+      if (attempt !== generation) return false;
+      if (failure.status === 401) forgetAccess('Доступ изменился. Введите текущий PIN из CAS.');
+      else {
+        error('Не удалось подтвердить команду. Проверьте состояние CAS перед повторным нажатием.');
+        generation++;
+        disconnected();
+      }
+      // Commands are never replayed after reconnect: a pad or next-track action is not idempotent.
+      return false;
+    } finally {
+      pending.delete(key);
+      renderControls();
     }
+  }
 
-    function updateStatus(online, text) {
-        connectionStatus.className = 'header-status ' + (online ? 'online' : 'offline');
-        statusText.textContent = text;
+  function renderControls() {
+    commandButtons.forEach(button => { button.disabled = !ready; });
+    trackRows.forEach(({ row }) => { row.disabled = !ready; });
+    const hasTrack = Boolean(state?.currentTrack);
+    const deck = state?.playingDeck || state?.activeDeck || 'A';
+    $('btnPlayPause').disabled = !ready || !hasTrack || pending.has('play') || pending.has('pause');
+    $('btnStop').disabled = !ready || !hasTrack || pending.has('stop');
+    $('btnPrev').disabled = !ready || !tracksFor(deck).length || pending.has('prev');
+    $('btnNext').disabled = !ready || !tracksFor(deck).length || pending.has('next');
+    $('btnMute').disabled = !ready || pending.has('panicMute');
+    $('btnLaunch').disabled = !ready || !cue || pending.has('selectTrack');
+    $('btnLaunch').textContent = pending.has('selectTrack') ? 'Запуск…' : 'Запустить';
+    $('btnStopPads').disabled = !ready || pending.has('stopPads') || !state?.pads?.some(p => p.isPlaying);
+    padRows.forEach((row, i) => { row.disabled = !ready || !state?.pads?.[i]?.isAssigned || pending.has(`triggerPad:${i}`); });
+  }
+
+  function receiveState(next) {
+    if (!next || typeof next !== 'object' || !next.deckA || !next.deckB || !Array.isArray(next.pads)) throw new Error('Invalid state');
+    state = next;
+    if (cue && cue.signature !== deckSignature(cue.deck)) {
+      cue = null;
+      error('Список треков изменился на компьютере. Выберите трек заново.');
     }
-
-    // Render incoming state
-    function renderState(state) {
-        if (!state) return;
-
-        // Active Deck sync
-        if (state.activeDeck && state.activeDeck !== selectedDeck) {
-            selectedDeck = state.activeDeck;
-            updateDeckButtons();
-        }
-
-        // Current track
-        const track = state.currentTrack;
-        if (track && track.title) {
-            nowPlayingTitle.textContent = track.title;
-            nowPlayingArtist.textContent = track.artist || track.playlistName || 'Плейлист CAS';
-            nowPlayingDeckBadge.textContent = `ДЕКА ${track.deck || selectedDeck}`;
-
-            const cur = track.currentTime || 0;
-            const dur = track.duration || 0;
-            const rem = track.remainingTime !== undefined ? track.remainingTime : Math.max(0, dur - cur);
-
-            currentTimeDisplay.textContent = formatTime(cur);
-            totalTimeDisplay.textContent = formatTime(dur);
-            remainingTimeBadge.textContent = `-${formatTime(rem)}`;
-
-            const pct = dur > 0 ? Math.min(100, Math.max(0, (cur / dur) * 100)) : 0;
-            trackProgressFill.style.width = `${pct}%`;
-
-            // Stage Ending Alerts
-            remainingTimeBadge.classList.remove('stage-ending-warning', 'stage-ending-critical');
-            if (state.isPlaying && !state.isPaused && dur > 15) {
-                if (rem <= 5) {
-                    remainingTimeBadge.classList.add('stage-ending-critical');
-                } else if (rem <= 15) {
-                    remainingTimeBadge.classList.add('stage-ending-warning');
-                }
-            }
-        } else {
-            nowPlayingTitle.textContent = 'Трек не выбран';
-            nowPlayingArtist.textContent = `Дека ${selectedDeck} готова к загрузке`;
-            nowPlayingDeckBadge.textContent = `ДЕКА ${selectedDeck}`;
-            currentTimeDisplay.textContent = '0:00';
-            totalTimeDisplay.textContent = '0:00';
-            remainingTimeBadge.textContent = '-0:00';
-            trackProgressFill.style.width = '0%';
-            remainingTimeBadge.classList.remove('stage-ending-warning', 'stage-ending-critical');
-        }
-
-        // Play/Pause button
-        const isPlaying = Boolean(state.isPlaying && !state.isPaused);
-        if (isPlaying) {
-            btnPlayPause.classList.add('is-playing');
-            iconPlay.toggleAttribute('hidden', true);
-            iconPause.toggleAttribute('hidden', false);
-        } else {
-            btnPlayPause.classList.remove('is-playing');
-            iconPlay.toggleAttribute('hidden', false);
-            iconPause.toggleAttribute('hidden', true);
-        }
-
-        // Mute button
-        if (state.isMuted) {
-            btnMute.classList.add('is-muted');
-        } else {
-            btnMute.classList.remove('is-muted');
-        }
-
-        // Volume
-        if (typeof state.masterVolume === 'number') {
-            const volPct = Math.round(state.masterVolume * 100);
-            if (document.activeElement !== volumeSlider) {
-                volumeSlider.value = volPct;
-            }
-            volumeValue.textContent = `${volPct}%`;
-        }
-
-        // Render Tracklist for selected deck
-        renderTracklist(state);
-
-        // Render Pads
-        renderPads(state.pads);
+    const track = state.currentTrack;
+    const playing = isPlaying();
+    $('playingDeck').textContent = `Дека ${track?.deck || state.playingDeck || state.activeDeck || 'A'}`;
+    $('playbackStatus').textContent = playing ? 'Воспроизводится' : state.isPaused ? 'На паузе' : 'Ожидание';
+    $('nowPlayingTitle').textContent = track?.title || 'Трек не выбран';
+    $('nowPlayingArtist').textContent = track?.artist || track?.playlistName || 'Откройте треки и подготовьте запуск';
+    $('trackPosition').textContent = state.isMuted ? 'Звук выключен' : '';
+    const duration = Math.max(0, Number(track?.duration) || 0);
+    const current = Math.max(0, Number(track?.currentTime) || 0);
+    const remaining = Math.max(0, Number(track?.remainingTime ?? (duration - current)) || 0);
+    const progress = duration ? Math.min(1, current / duration) : 0;
+    $('currentTime').textContent = time(current);
+    $('totalTime').textContent = time(duration);
+    $('remainingTime').textContent = time(remaining);
+    $('trackProgressFill').style.transform = `scaleX(${progress})`;
+    $('trackProgress').setAttribute('aria-valuenow', String(Math.round(progress * 100)));
+    $('trackProgress').setAttribute('aria-valuetext', `${time(current)} из ${time(duration)}`);
+    $('playbackPanel').dataset.ending = playing && duration > 15 && remaining <= 15 ? (remaining <= 5 ? 'critical' : 'warning') : '';
+    $('playIcon').toggleAttribute('hidden', playing);
+    $('pauseIcon').toggleAttribute('hidden', !playing);
+    $('playLabel').textContent = playing ? 'Пауза' : state.isPaused ? 'Продолжить' : 'Воспроизвести';
+    $('btnMute').setAttribute('aria-pressed', String(Boolean(state.isMuted)));
+    $('muteLabel').textContent = state.isMuted ? 'Включить весь звук' : 'Выключить весь звук';
+    if (!volumeSending && queuedVolume === null) {
+      const percent = Math.round(Math.max(0, Math.min(1, Number(state.masterVolume) || 0)) * 100);
+      $('volumeSlider').value = percent;
+      $('volumeValue').textContent = `${percent}%`;
     }
+    ['A', 'B'].forEach(deck => { $(`deckName${deck}`).textContent = state[deck === 'A' ? 'deckA' : 'deckB'].name || `Дека ${deck}`; });
+    renderPads();
+    renderCue();
+    renderControls();
+  }
 
-    function updateDeckButtons() {
-        btnDeckA.classList.toggle('is-active', selectedDeck === 'A');
-        btnDeckB.classList.toggle('is-active', selectedDeck === 'B');
-        if (latestState) renderTracklist(latestState);
+  function empty(title, hint) {
+    const element = document.createElement('div');
+    element.className = 'empty-state';
+    const heading = document.createElement('strong');
+    heading.textContent = title;
+    element.append(heading, document.createTextNode(hint));
+    return element;
+  }
+
+  function renderTracks() {
+    const tracks = tracksFor(selectedDeck);
+    const query = $('trackSearch').value.trim().toLocaleLowerCase('ru');
+    const filtered = tracks.filter(track => !query || String(track.name || '').toLocaleLowerCase('ru').includes(query));
+    $('trackCount').textContent = query ? `${filtered.length} / ${tracks.length}` : `${tracks.length} в списке`;
+    // Rebuild only when the list/filter changes. Playback ticks preserve focus, scroll and touch targets.
+    const signature = JSON.stringify([selectedDeck, query, tracks.map(t => [t.index, t.name, t.durationStr])]);
+    if (signature !== trackSignature) {
+      trackSignature = signature;
+      trackRows = filtered.map(track => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'track-row';
+        row.dataset.index = track.index;
+        const number = document.createElement('span');
+        number.className = 'track-number';
+        number.textContent = String(track.index + 1).padStart(2, '0');
+        const copy = document.createElement('span');
+        copy.className = 'track-copy';
+        const name = document.createElement('span');
+        name.className = 'track-name';
+        name.textContent = track.name || 'Без названия';
+        const meta = document.createElement('span');
+        meta.className = 'track-meta';
+        const check = document.createElement('span');
+        check.className = 'track-check';
+        check.setAttribute('aria-hidden', 'true');
+        copy.append(name, meta);
+        row.append(number, copy, check);
+        return { row, track, meta, check };
+      });
+      $('tracklist').replaceChildren(...(trackRows.length ? trackRows.map(item => item.row) : [empty(
+        tracks.length ? 'Ничего не найдено' : 'Дека пока пуста',
+        tracks.length ? 'Измените запрос или очистите поиск.' : 'Загрузите плейлист в эту деку на компьютере.'
+      )]));
     }
+    const currentTracks = new Map(tracks.map(track => [track.index, track]));
+    trackRows.forEach(({ row, track, meta, check }) => {
+      const playing = Boolean(currentTracks.get(track.index)?.isPlaying);
+      const selected = cue?.deck === selectedDeck && cue.index === track.index;
+      row.classList.toggle('is-playing', playing);
+      row.setAttribute('aria-pressed', String(Boolean(selected)));
+      meta.textContent = `${track.durationStr || 'Длительность неизвестна'}${playing ? ' · В эфире' : selected ? ' · К запуску' : ''}`;
+      check.textContent = selected ? '✓' : '';
+      row.disabled = !ready;
+    });
+  }
 
-    function renderTracklist(state) {
-        const deckData = selectedDeck === 'A' ? state.deckA : state.deckB;
-        if (!deckData || !Array.isArray(deckData.tracks) || deckData.tracks.length === 0) {
-            updateTracklist('<div class="tracklist-empty">В этой деке нет загруженных треков</div>');
-            return;
-        }
-
-        const filter = (trackSearchInput.value || '').trim().toLowerCase();
-        const filtered = deckData.tracks.filter(t => !filter || (t.name || '').toLowerCase().includes(filter));
-
-        if (filtered.length === 0) {
-            updateTracklist('<div class="tracklist-empty">Треки не найдены</div>');
-            return;
-        }
-
-        let html = '';
-        for (const t of filtered) {
-            const isPlaying = Boolean(t.isPlaying);
-            html += `
-                <button type="button" class="track-item ${isPlaying ? 'is-playing' : ''}" data-index="${t.index}">
-                    <div class="track-item-left">
-                        <span class="track-item-num">${t.index + 1}</span>
-                        <span class="track-item-name">${escapeHtml(t.name)}</span>
-                    </div>
-                    <span class="track-item-time">${t.durationStr || '--:--'}</span>
-                </button>
-            `;
-        }
-        updateTracklist(html);
+  function renderPads() {
+    if (!padRows.length) {
+      for (let i = 0; i < 12; i++) {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'pad-cell';
+        row.dataset.pad = i;
+        const number = document.createElement('span');
+        number.className = 'pad-number';
+        const name = document.createElement('span');
+        name.className = 'pad-name';
+        row.append(number, name);
+        padRows.push(row);
+      }
+      $('padsGrid').replaceChildren(...padRows);
     }
+    let count = 0;
+    padRows.forEach((row, i) => {
+      const pad = state?.pads?.[i];
+      const assigned = Boolean(pad?.isAssigned);
+      if (assigned) count++;
+      row.classList.toggle('is-playing', Boolean(pad?.isPlaying));
+      row.children[0].textContent = `${String(i + 1).padStart(2, '0')}${pad?.isPlaying ? ' · Звучит' : ''}`;
+      row.children[1].textContent = assigned ? pad.name || `Пэд ${i + 1}` : 'Не назначен';
+      row.setAttribute('aria-label', `Пэд ${i + 1}: ${assigned ? pad.name || 'Звук' : 'Не назначен'}${pad?.isPlaying ? ', звучит' : ''}`);
+    });
+    $('padCount').textContent = `${count} из 12`;
+    $('padsHint').hidden = count > 0;
+  }
 
-    function updateTracklist(html) {
-        if (tracklistMarkup === html) return;
-        const focusedIndex = tracklistContainer.contains(document.activeElement) ? document.activeElement.dataset.index : null;
-        tracklistMarkup = html;
-        tracklistContainer.innerHTML = html;
-        if (focusedIndex !== null) tracklistContainer.querySelector(`[data-index="${focusedIndex}"]`)?.focus();
+  function renderCue() {
+    $('cueBar').hidden = !cue;
+    if (cue) {
+      $('cueDeck').textContent = `К запуску · Дека ${cue.deck}`;
+      $('cueTitle').textContent = cue.name;
     }
+    renderTracks();
+    renderControls();
+  }
 
-    function renderPads(pads) {
-        if (!Array.isArray(pads) || pads.length === 0) return;
-        for (let i = 0; i < 12; i++) {
-            const pad = pads[i] || { index: i, name: '', isPlaying: false };
-            let button = padsGrid.querySelector(`[data-pad="${i}"]`);
-            if (!button) {
-                button = document.createElement('button');
-                button.type = 'button';
-                button.className = 'pad-cell';
-                button.dataset.pad = i;
-                button.innerHTML = `<span class="pad-number">${i + 1}</span><span class="pad-name"></span>`;
-                padsGrid.appendChild(button);
-            }
-            button.classList.toggle('is-playing', Boolean(pad.isPlaying));
-            button.querySelector('.pad-name').textContent = pad.name || `Пэд ${i + 1}`;
-        }
+  function navigate(target) {
+    screen = target;
+    document.querySelectorAll('.screen').forEach(section => { section.hidden = section.id !== target; });
+    navButtons.forEach(button => {
+      if (button.dataset.screen === target) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    $('main').scrollTop = 0;
+  }
+
+  async function flushVolume() {
+    clearTimeout(volumeTimer);
+    if (volumeSending || queuedVolume === null || !ready) return;
+    volumeSending = true;
+    const value = queuedVolume;
+    queuedVolume = null;
+    await command('setVolume', { volume: value / 100 });
+    volumeSending = false;
+    if (queuedVolume !== null && ready) flushVolume();
+  }
+
+  $('volumeSlider').addEventListener('input', () => {
+    if (!ready) return;
+    queuedVolume = Number($('volumeSlider').value);
+    $('volumeValue').textContent = `${queuedVolume}%`;
+    clearTimeout(volumeTimer);
+    volumeTimer = setTimeout(flushVolume, 100);
+  });
+  $('volumeSlider').addEventListener('change', flushVolume);
+  $('btnPlayPause').addEventListener('click', () => command(isPlaying() ? 'pause' : 'play'));
+  $('btnPrev').addEventListener('click', () => command('prev'));
+  $('btnNext').addEventListener('click', () => command('next'));
+  $('btnStop').addEventListener('click', () => command('stop'));
+  $('btnMute').addEventListener('click', () => command('panicMute'));
+  $('btnStopPads').addEventListener('click', () => command('stopPads'));
+  $('browseTracks').addEventListener('click', () => navigate('screenTracks'));
+  navButtons.forEach(button => button.addEventListener('click', () => navigate(button.dataset.screen)));
+  deckButtons.forEach(button => button.addEventListener('click', () => {
+    selectedDeck = button.dataset.deck;
+    deckButtons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    $('trackSearch').value = '';
+    renderTracks();
+  }));
+  $('trackSearch').addEventListener('input', renderTracks);
+  $('tracklist').addEventListener('click', event => {
+    if (!ready) return;
+    const row = event.target.closest('[data-index]');
+    if (!row) return;
+    const track = tracksFor(selectedDeck).find(item => item.index === Number(row.dataset.index));
+    if (!track) return;
+    cue = { deck: selectedDeck, index: track.index, name: track.name, signature: deckSignature(selectedDeck) };
+    error();
+    renderCue();
+  });
+  $('btnClearCue').addEventListener('click', () => { cue = null; renderCue(); });
+  $('btnLaunch').addEventListener('click', async () => {
+    if (!cue) return;
+    const launch = cue;
+    if (launch.signature !== deckSignature(launch.deck)) return;
+    if (await command('selectTrack', { deck: launch.deck, index: launch.index, autoplay: true })) {
+      if (cue === launch) cue = null;
+      renderCue();
+      navigate('screenTransport');
     }
-
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
+  });
+  $('padsGrid').addEventListener('click', event => {
+    const row = event.target.closest('[data-pad]');
+    if (row && !row.disabled) command('triggerPad', { index: Number(row.dataset.pad) });
+  });
+  $('pinForm').addEventListener('submit', event => {
+    event.preventDefault();
+    if (connecting) return;
+    if (Date.now() < cooldownUntil) {
+      pairing(true, `Повторите через ${Math.ceil((cooldownUntil - Date.now()) / 1000)} сек.`);
+      return;
     }
-
-    // PIN prompt
-    function showPinPrompt(message = '') {
-        eventSource?.close();
-        eventSource = null;
-        isConnected = false;
-        const wasHidden = pinOverlay.hidden;
-        pinOverlay.hidden = false;
-        pinError.hidden = !message;
-        if (message) pinError.textContent = message;
-        if (wasHidden) {
-            pinInput.value = '';
-            pinInput.focus();
-        }
+    const value = $('pinInput').value.trim();
+    if (!/^\d{4}$/.test(value)) { pairing(true, 'Введите четыре цифры PIN из CAS.'); return; }
+    token = value;
+    connect();
+  });
+  $('connectionStatus').addEventListener('click', connect);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') connect();
+    else {
+      generation++;
+      closeStream();
+      queuedVolume = null;
+      clearTimeout(volumeTimer);
+      connection(false, 'Подключение');
     }
+  });
+  window.addEventListener('pagehide', () => { generation++; closeStream(); });
+  window.addEventListener('pageshow', event => { if (event.persisted) connect(); });
+  window.addEventListener('online', connect);
+  window.addEventListener('offline', () => { generation++; disconnected(); });
 
-    function hidePinPrompt() {
-        pinOverlay.hidden = true;
-    }
-
-    // Bind Event Listeners
-    btnPlayPause.addEventListener('click', () => {
-        const isPlaying = Boolean(latestState?.isPlaying && !latestState?.isPaused);
-        sendCommand(isPlaying ? 'pause' : 'play');
-    });
-
-    btnPrev.addEventListener('click', () => sendCommand('prev'));
-    btnNext.addEventListener('click', () => sendCommand('next'));
-    btnStop.addEventListener('click', () => sendCommand('stop'));
-    btnMute.addEventListener('click', () => sendCommand('panicMute'));
-
-    volumeSlider.addEventListener('input', (e) => {
-        const val = Number(e.target.value);
-        volumeValue.textContent = `${val}%`;
-        sendCommand('setVolume', { volume: val / 100 });
-    });
-
-    btnDeckA.addEventListener('click', () => {
-        selectedDeck = 'A';
-        updateDeckButtons();
-        sendCommand('selectDeck', { deck: 'A' });
-    });
-
-    btnDeckB.addEventListener('click', () => {
-        selectedDeck = 'B';
-        updateDeckButtons();
-        sendCommand('selectDeck', { deck: 'B' });
-    });
-
-    trackSearchInput.addEventListener('input', () => {
-        if (latestState) renderTracklist(latestState);
-    });
-
-    tracklistContainer.addEventListener('click', (e) => {
-        const item = e.target.closest('.track-item');
-        if (!item) return;
-        const index = Number(item.dataset.index);
-        if (Number.isFinite(index)) {
-            sendCommand('selectTrack', { index, deck: selectedDeck, autoplay: true });
-        }
-    });
-
-    padsGrid.addEventListener('click', (e) => {
-        const cell = e.target.closest('.pad-cell');
-        if (!cell) return;
-        const index = Number(cell.dataset.pad);
-        if (Number.isFinite(index)) {
-            sendCommand('triggerPad', { index });
-        }
-    });
-
-    btnStopPads.addEventListener('click', () => sendCommand('stopPads'));
-
-    // Tab Navigation
-    tabButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            vibrate(10);
-            const targetId = btn.dataset.tab;
-            tabButtons.forEach(b => b.classList.remove('is-active'));
-            screens.forEach(s => s.classList.remove('is-active'));
-
-            btn.classList.add('is-active');
-            const targetScreen = document.getElementById(targetId);
-            if (targetScreen) targetScreen.classList.add('is-active');
-        });
-    });
-
-    // PIN Submit
-    btnPinSubmit.addEventListener('click', () => {
-        const entered = pinInput.value.trim();
-        if (entered.length >= 4) {
-            token = entered;
-            connectStream();
-        } else {
-            pinError.hidden = false;
-            pinError.textContent = 'Введите 4 цифры PIN-кода';
-        }
-    });
-
-    pinInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') btnPinSubmit.click();
-    });
-
-    // Handle Mobile Visibility / Wakeup
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && !isConnected) {
-            connectStream();
-        }
-    });
-
-    // Initial connection
-    connectStream();
+  renderPads();
+  renderControls();
+  navigate(screen);
+  connect();
 })();

@@ -1946,6 +1946,15 @@ class TheatreSoundMixer {
 
         if (api?.onRemoteClientCount) {
             api.onRemoteClientCount((count) => {
+                // Keep paused/idle playback and lazy-loaded pads current on connected phones.
+                // Progress tracking alone only publishes while music is playing.
+                if (count > 0 && !this.remoteStateInterval) {
+                    this.broadcastRemoteState();
+                    this.remoteStateInterval = setInterval(() => this.broadcastRemoteState(), 1000);
+                } else if (!count && this.remoteStateInterval) {
+                    clearInterval(this.remoteStateInterval);
+                    this.remoteStateInterval = null;
+                }
                 if (typeof document !== 'undefined') {
                     const countEl = document.getElementById('remoteClientsText');
                     if (countEl) countEl.textContent = `Подключено устройств: ${count}`;
@@ -2003,7 +2012,7 @@ class TheatreSoundMixer {
         const pads = [];
         for (let i = 0; i < 12; i++) {
             const soundData = this.soundEffects?.get?.(i);
-            const isAssigned = Boolean(soundData && soundData.sound);
+            const isAssigned = Boolean(soundData && soundData.path);
             let isPlaying = false;
             if (isAssigned && soundData?.sound) {
                 try {
@@ -2012,7 +2021,7 @@ class TheatreSoundMixer {
             }
             pads.push({
                 index: i,
-                name: (typeof this.getPadDisplayName === 'function' ? this.getPadDisplayName(i) : null) || `Пэд ${i + 1}`,
+                name: (typeof this.getPadLabel === 'function' ? this.getPadLabel(i) : null) || `Пэд ${i + 1}`,
                 isAssigned,
                 isPlaying
             });
@@ -6328,6 +6337,9 @@ if (typeof window !== 'undefined') {
             
             if (window.soundMixer.clockInterval) {
                 clearInterval(window.soundMixer.clockInterval);
+            }
+            if (window.soundMixer.remoteStateInterval) {
+                clearInterval(window.soundMixer.remoteStateInterval);
             }
             if (window.soundMixer.progressAnimationFrame) {
                 cancelAnimationFrame(window.soundMixer.progressAnimationFrame);

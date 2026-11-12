@@ -141,6 +141,17 @@ async function request(server, pathname, options = {}) {
     });
 }
 
+test('phone fonts are served from explicit packaged aliases', async t => {
+    const server = new CASRemoteServer({ port: 0 });
+    await server.start();
+    t.after(() => server.stop());
+    for (const filename of ['remote-font.ttf', 'remote-font-bold.ttf']) {
+        const response = await request(server, `/${filename}`);
+        assert.equal(response.status, 200);
+        assert.ok(response.body.length > 10000);
+    }
+});
+
 test('remote access rejects other websites and limits PIN guesses without blocking QR access', async t => {
     const server = new CASRemoteServer({ port: 0 });
     await server.start();

@@ -51,7 +51,7 @@ async function main() {
   args.push(`--user-data-dir=${profile}`, `--remote-debugging-port=${port}`, '--mute-audio');
   if (process.platform === 'linux' && process.env.CI) args.push('--no-sandbox');
   const child = spawn(executable, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-  let logs = '', socket, nextId = 0, closeState;
+  let logs = '', socket, nextId = 0, closeState, remoteReader;
   const pending = new Map();
   child.stdout.on('data', bytes => { logs = (logs + bytes).slice(-5000); });
   child.stderr.on('data', bytes => { logs = (logs + bytes).slice(-5000); });
@@ -112,6 +112,48 @@ async function main() {
     assert.ok(state.badges.length === 2 && state.badges.every(Boolean));
     assert.ok(state.search.every(Boolean)); assert.deepEqual(state.volumes, [.42, .36]);
     assert.equal(state.pads, 12); assert.deepEqual(state.errors, []);
+    const remote = await evaluate(`window.electronAPI.toggleRemoteServer(true)`);
+    assert.equal(remote.success, true);
+    const remoteBase = `http://127.0.0.1:${remote.status.port}`;
+    const remoteUrl = route => `${remoteBase}/api/${route}?token=${encodeURIComponent(remote.status.token)}`;
+    // The settings dialog publishes after enabling; reproduce that IPC handoff here.
+    await evaluate(`window.soundMixer.broadcastRemoteState();true`);
+    const initialRemote = await waitFor(async () => {
+      const snapshot = await (await fetch(remoteUrl('status'))).json();
+      return snapshot.state ? snapshot : false;
+    }, 'initial phone state');
+    assert.equal(initialRemote.state.pads[0].isAssigned, true);
+    assert.equal(initialRemote.state.pads[0].isPlaying, false);
+    assert.equal(initialRemote.state.pads[0].name, 'Native pad');
+    for (const file of ['remote-font.ttf', 'remote-font-bold.ttf']) {
+      const font = await fetch(`${remoteBase}/${file}`);
+      assert.equal(font.status, 200);
+      assert.equal(font.headers.get('content-type'), 'font/ttf');
+      assert.ok((await font.arrayBuffer()).byteLength > 10000);
+    }
+    const stream = await fetch(remoteUrl('stream'));
+    assert.equal(stream.status, 200);
+    remoteReader = stream.body.getReader();
+    await remoteReader.read();
+    await waitFor(() => evaluate(`Boolean(window.soundMixer.remoteStateInterval)`), 'phone state updates');
+    const sendRemote = async command => {
+      const result = await fetch(remoteUrl('command'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(command) });
+      assert.equal(result.status, 200);
+      assert.equal((await result.json()).success, true);
+    };
+    await sendRemote({ action: 'triggerPad', index: 0 });
+    await waitFor(() => evaluate(`window.soundMixer.soundEffects.get(0)?.sound?.playing()`), 'phone lazy pad playback');
+    await waitFor(async () => (await (await fetch(remoteUrl('status'))).json()).state.pads[0].isPlaying, 'idle phone pad state');
+    await sendRemote({ action: 'stopPads' });
+    await waitFor(() => evaluate(`!window.soundMixer.soundEffects.get(0)?.sound?.playing()`), 'phone stop pads');
+    await sendRemote({ action: 'selectTrack', deck: 'B', index: 1, autoplay: true });
+    await waitFor(() => evaluate(`window.soundMixer.playingDeck === 'B' && window.soundMixer.decks.B.currentTrackIndex === 1 && window.soundMixer.musicPlayer?.playing()`), 'phone explicit track launch');
+    await sendRemote({ action: 'stop' });
+    await waitFor(() => evaluate(`!window.soundMixer.isPlaying`), 'phone stop track');
+    await remoteReader.cancel();
+    remoteReader = null;
+    await waitFor(() => evaluate(`!window.soundMixer.remoteStateInterval`), 'phone interval cleanup');
+    await evaluate(`window.electronAPI.toggleRemoteServer(false)`);
     assert.deepEqual(await evaluate(`(() => {
       const button = document.getElementById('openSettings');
       button.click(); const opened = window.soundMixer.workspaces.isSettingsOpen;
@@ -157,11 +199,12 @@ async function main() {
       window.soundMixer.setMusicVolume(.53);window.electronAPI.windowControl('close')`);
     await waitFor(async () => closeState, 'settings flushed on native close', 10000);
     assert.equal(closeState.musicVolume, .53);
-    console.log(`Native packaged smoke passed: ${process.platform}/${process.arch}; startup, settings navigation, both decks, transferred audio, trimmed loops, analysis settings, cues, Unicode paths, pads, restart, save on close`);
+    console.log(`Native packaged smoke passed: ${process.platform}/${process.arch}; startup, phone control and lazy pads, settings navigation, both decks, transferred audio, trimmed loops, analysis settings, cues, Unicode paths, pads, restart, save on close`);
   } catch (error) {
     console.error(logs);
     throw error;
   } finally {
+    await remoteReader?.cancel().catch(() => {});
     socket?.close();
     for (const item of pending.values()) clearTimeout(item.timer);
     if (child.exitCode === null) child.kill();
