@@ -50,3 +50,17 @@ test('failed startup offers retry without exposing an incomplete workspace', asy
   assert.equal(retry.hidden, false);
   assert.equal(typeof retry.onclick, 'function');
 });
+
+test('startup completes when a hidden window stops delivering animation frames', async t => {
+  const { mixer, screen, shell } = fixture(t);
+  mixer.initializeApp = async () => {};
+  global.requestAnimationFrame = () => 1;
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const ready = mixer.startApp();
+  await new Promise(setImmediate);
+  assert.equal(screen.hidden, false);
+  t.mock.timers.tick(250);
+  assert.equal(await ready, true);
+  assert.equal(screen.hidden, true);
+  assert.equal(shell.inert, false);
+});

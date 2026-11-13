@@ -93,22 +93,23 @@ test('CSS: toolbar and workspace panels adjust height properly without footer', 
 });
 
 test('renderer & workspaces: keyboard accessibility and settings status handling', () => {
-    const rendererJs = fs.readFileSync(path.join(__dirname, '..', 'renderer.js'), 'utf8');
+    const shellJs = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'shell.js'), 'utf8');
+    const controlsJs = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'controls.js'), 'utf8');
     const workspacesJs = fs.readFileSync(path.join(__dirname, '..', 'workspaces.js'), 'utf8');
 
     // Menu keyboard navigation
-    assert.ok(rendererJs.includes("e.key === 'ArrowRight'"), 'renderer.js must handle ArrowRight navigation for menu bar');
-    assert.ok(rendererJs.includes("e.key === 'ArrowLeft'"), 'renderer.js must handle ArrowLeft navigation for menu bar');
-    assert.ok(rendererJs.includes("e.key === 'ArrowDown'"), 'renderer.js must handle ArrowDown navigation for menu dropdowns');
-    assert.ok(rendererJs.includes("e.key === 'ArrowUp'"), 'renderer.js must handle ArrowUp navigation for menu dropdowns');
+    assert.ok(shellJs.includes("e.key === 'ArrowRight'"), 'shell must handle ArrowRight navigation for menu bar');
+    assert.ok(shellJs.includes("e.key === 'ArrowLeft'"), 'shell must handle ArrowLeft navigation for menu bar');
+    assert.ok(shellJs.includes("e.key === 'ArrowDown'"), 'shell must handle ArrowDown navigation for menu dropdowns');
+    assert.ok(shellJs.includes("e.key === 'ArrowUp'"), 'shell must handle ArrowUp navigation for menu dropdowns');
 
     // Hotkeys guard for #casMenuBar
-    assert.ok(rendererJs.includes('#casMenuBar'), 'renderer.js handleHotkeys must guard #casMenuBar from hotkey interference');
+    assert.ok(controlsJs.includes('#casMenuBar'), 'controls handleHotkeys must guard #casMenuBar from hotkey interference');
 
     // Settings status restoration
     assert.ok(workspacesJs.includes("this.mixer.updateStatus('Готов к работе')"), 'workspaces.js must restore status on deactivating settings');
 
     // Platform formatting logic
-    assert.ok(rendererJs.includes('formatPlatformInfo'), 'renderer.js must implement formatPlatformInfo()');
-    assert.ok(rendererJs.includes('Apple Silicon'), 'renderer.js formatPlatformInfo must identify Apple Silicon');
+    assert.ok(shellJs.includes('formatPlatformInfo'), 'shell must implement formatPlatformInfo()');
+    assert.ok(shellJs.includes('Apple Silicon'), 'shell formatPlatformInfo must identify Apple Silicon');
 });
