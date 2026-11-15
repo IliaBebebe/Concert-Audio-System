@@ -17,6 +17,18 @@
 
 ## Публикация
 
-Результаты нативных CI-сборок, подпись Windows-установщика, tagged SHA и публичные ссылки фиксируются после завершения проверок выпуска.
+- Стабильный [v1.9.2](https://github.com/IliaBebebe/Concert-Audio-System/releases/tag/v1.9.2) опубликован 15 ноября 2026 года: Latest, draft=false, prerelease=false.
+- Tagged SHA: `2939d9e8882a7560011586efe68482df8280d2ca`. [CI 43722587327](https://github.com/IliaBebebe/Concert-Audio-System/actions/runs/43722587327) завершился успешно с тем же SHA: Windows, macOS universal и Linux собраны на нативных runners, проверки пакетов и smoke приложения прошли. macOS проверен через lipo для x86_64/arm64, Debian — amd64.
+- Перед публикацией проверены описание, статусы и ровно четыре полностью загруженных пакета. Windows-установщик из CI скачан из draft: версия 1.9.2, SHA-256 совпал с digest GitHub, Get-AuthenticodeSignature — NotSigned.
+- Локальный build:win также создал NSIS-установщик 1.9.2, NotSigned, 182014111 байт; его SHA-256 `d48dd91eb90aa7b8ab26ab930923f29d9781925bed726939f69e656ede3c7170`. Повторные проверки содержимого сборки прошли. Локальная и CI-сборка различаются контрольными суммами; опубликованы пакеты CI.
 
-Локальный build:win создал NSIS-установщик 1.9.2. Get-AuthenticodeSignature: NotSigned. Повторные проверки содержимого готовой сборки прошли.
+| Опубликованный пакет | Размер, байт | SHA-256 |
+| --- | ---: | --- |
+| Concert-Audio-System-Setup.exe | 182014084 | babfce7bf7299439cfdc7420a2ac484524a030ee77689fa05a08d780f7d3ab53 |
+| Concert-Audio-System-macOS.dmg | 426023512 | 2561aa601df98efd16114c939abef48174c4bdd89ca0ee8be46079688f33771f |
+| Concert-Audio-System-linux.AppImage | 246499609 | 05cf1146c98cba84235739fc91728cea85b4a1ba2104c06cdbb666925fe3a8c7 |
+| Concert-Audio-System-linux.deb | 202857376 | d94ce78fa43d05b0ddb25b87f3b6a7af7e4275d1ae5743f74a2d0968498bf863 |
+
+Все восемь публичных адресов пакетов проверены с переходом по редиректам: четыре URL `/releases/download/v1.9.2/` и четыре `/releases/latest/download/` вернули конечный HTTP 200. Для latest AppImage потребовался повтор после сбоя TLS в локальной сети; итоговый запрос успешно завершён.
+
+Публичный сайт при проверке до публикации вернул HTTP 530; повторное обращение после публикации завершилось сетевым таймаутом. Подтвердить отображение новой версии на сайте не удалось. Его исходники используют latest GitHub и прежние имена всех четырёх пакетов; деплой сайта не выполнялся. Для скачивания доступна страница GitHub-релиза.
