@@ -27,6 +27,7 @@ class CASControlsController {
             revealDetachedBlock('tracks');
             const panel = document.getElementById('onlineMusicPanel');
             if (panel) panel.open = true;
+            if (this.app.onlinePanel?.view === 'library') this.app.onlinePanel.showSearch();
             document.getElementById('onlineQuery')?.focus();
         });
         this.app.onClick('openRemoteControl', () => this.app.showRemoteControlDialog());

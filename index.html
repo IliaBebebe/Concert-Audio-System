@@ -47,7 +47,7 @@
                     </button>
                     <div class="cas-menu-divider" role="separator"></div>
                     <button type="button" class="cas-menu-action" data-action="online-search" role="menuitem">
-                        <span class="menu-action-label"><i class="fas fa-search" aria-hidden="true"></i> Поиск музыки (YouTube)...</span>
+                        <span class="menu-action-label"><i class="fas fa-search" aria-hidden="true"></i> Музыка онлайн...</span>
                     </button>
                     <div class="cas-menu-divider" role="separator"></div>
                     <button type="button" class="cas-menu-action" data-action="quit" role="menuitem">
@@ -164,7 +164,7 @@
                 <span class="status-indicator-text">Готов к работе</span>
             </div>
 
-            <button type="button" class="toolbar-button" id="openOnlineSearch" title="Поиск музыки в YouTube"><svg class="lucide lucide-search" data-lucide="search" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.34-4.34"/></svg> Поиск</button>
+            <button type="button" class="toolbar-button" id="openOnlineSearch" title="Поиск в SoundCloud, Яндекс Музыке и YouTube" aria-controls="onlineMusicPanel" aria-expanded="false"><svg class="lucide lucide-search" data-lucide="search" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.34-4.34"/></svg> Поиск</button>
             <button type="button" class="toolbar-button icon-button" id="openRemoteControl" aria-label="Мобильный пульт" title="Подключить телефон оператора"><svg class="lucide lucide-smartphone" data-lucide="smartphone" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg></button>
             <button type="button" class="toolbar-button icon-button" id="openKeyboardHelp" aria-label="Горячие клавиши" aria-controls="keyboardHelp" aria-expanded="false" title="Горячие клавиши"><svg class="lucide lucide-keyboard" data-lucide="keyboard" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M7 16h10"/></svg></button>
             <button type="button" class="toolbar-button icon-button" id="openSettings" aria-label="Настройки" title="Настройки системы (обрезка тишины, стабилизация, звук)"><svg class="lucide lucide-settings" data-lucide="settings" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg></button>
@@ -240,20 +240,44 @@
                     <div class="active-deck-status"><span>Загружать в</span><span class="active-deck-badge" id="activeDeckBadge">ДЕКА A</span></div>
                 </div>
                 <details class="online-music" id="onlineMusicPanel">
-                    <summary><i class="fas fa-search" aria-hidden="true"></i> Поиск музыки <span class="source-tag">YouTube</span></summary>
-                    <form id="onlineSearchForm" class="online-search-form">
-                        <input type="search" id="onlineQuery" maxlength="300" placeholder="Название, исполнитель или ссылка YouTube / Music" aria-label="Поиск в YouTube">
-                        <button type="submit" class="deck-view-btn" id="onlineSearchButton">Найти</button>
-                        <button type="button" class="deck-view-btn" id="onlineSavedButton">Сохранённые</button>
-                        <button type="button" class="deck-view-btn" id="onlineFolderButton" title="Открыть папку загруженной музыки">Папка</button>
-                    </form>
-                    <div class="online-toolbar">
-                        <label>Добавлять в <select id="onlineTargetDeck" aria-label="Целевая дека для найденных треков"><option value="A">Деку A</option><option value="B">Деку B</option></select></label>
-                        <span id="onlineStatus" role="status" aria-live="polite">Найдите трек и добавьте в очередь или запустите после подготовки.</span>
+                    <summary>
+                        <svg class="online-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+                        <span>Музыка онлайн</span>
+                        <span class="online-summary-state" id="onlineSummaryState">3 источника</span>
+                    </summary>
+                    <div class="online-body">
+                        <div class="online-navigation" role="group" aria-label="Раздел музыки">
+                            <button type="button" class="online-nav-btn" id="onlineBrowseButton" aria-pressed="true">Поиск</button>
+                            <button type="button" class="online-nav-btn" id="onlineSavedButton" aria-pressed="false">Сохранённые</button>
+                            <button type="button" class="online-folder-btn" id="onlineFolderButton" title="Открыть папку сохранённой музыки" aria-label="Открыть папку сохранённой музыки"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v1M3 7h17a1 1 0 0 1 1 1l-2 11H3a1 1 0 0 1-1-1Z"/></svg></button>
+                        </div>
+                        <div id="onlineSearchControls">
+                            <form id="onlineSearchForm" class="online-search-form">
+                                <label for="onlineQuery">Трек или ссылка</label>
+                                <div class="online-query-row">
+                                    <input type="search" id="onlineQuery" maxlength="300" placeholder="Название, исполнитель или ссылка" aria-describedby="onlineSourceHint" autocomplete="off" spellcheck="false" required>
+                                    <button type="submit" class="online-btn online-primary" id="onlineSearchButton">Найти</button>
+                                </div>
+                            </form>
+                            <div class="online-sources" role="group" aria-label="Источник поиска">
+                                <button type="button" class="online-source" data-online-source="all" aria-pressed="true">Все</button>
+                                <button type="button" class="online-source" data-online-source="soundcloud" aria-pressed="false"><span class="online-source-dot" aria-hidden="true"></span>SoundCloud</button>
+                                <button type="button" class="online-source" data-online-source="yandex" aria-pressed="false"><span class="online-source-dot" aria-hidden="true"></span>Яндекс Музыка</button>
+                                <button type="button" class="online-source" data-online-source="youtube" aria-pressed="false"><span class="online-source-dot" aria-hidden="true"></span>YouTube</button>
+                            </div>
+                            <p class="online-source-hint" id="onlineSourceHint">Поиск в трёх источниках. Источник ссылки определяется автоматически.</p>
+                        </div>
+                        <div class="online-toolbar">
+                            <label for="onlineTargetDeck">Добавлять в</label>
+                            <select id="onlineTargetDeck"><option value="A">Деку A</option><option value="B">Деку B</option></select>
+                            <span class="online-limit">До 30 минут</span>
+                        </div>
+                        <p class="online-status" id="onlineStatus" role="status" aria-atomic="true">Найдите трек или откройте сохранённые записи.</p>
+                        <p class="online-warnings" id="onlineWarnings" hidden></p>
+                        <ul class="online-jobs" id="onlineJobs" aria-label="Подготовка треков" hidden></ul>
+                        <ul class="online-results" id="onlineResults" aria-label="Результаты поиска"></ul>
+                        <p class="online-note">Подготовленные треки остаются в CAS и доступны без сети. Используйте записи, которые разрешено скачивать и воспроизводить.</p>
                     </div>
-                    <div class="online-results" id="onlineResults" role="group" aria-label="Результаты поиска"></div>
-                    <div class="online-jobs" id="onlineJobs" aria-label="Подготовка треков"></div>
-                    <p class="online-note">Интернет нужен для поиска и загрузки. Сохранённые треки доступны без сети. Используйте материалы, скачивание и воспроизведение которых разрешены.</p>
                 </details>
                 <div class="decks-container" id="decksContainer">
                     <div class="deck-column deck-a active" id="deckColumnA" data-deck="A">
@@ -749,7 +773,7 @@
             <div class="about-dialog-header">
                 <img src="assets/cas-logo-transparent.png" alt="CAS" class="about-logo" draggable="false">
                 <h2 id="aboutDialogTitle">Concert Audio System</h2>
-                <span class="about-version">Версия 1.9.1</span>
+                <span class="about-version">Версия 1.9.2</span>
             </div>
             <p class="about-desc">Профессиональный звуковой микшер для театральных постановок и концертов.</p>
             <div class="about-meta">

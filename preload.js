@@ -42,7 +42,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('window-visibility', listener);
     return () => ipcRenderer.removeListener('window-visibility', listener);
   },
-  searchOnline: query => ipcRenderer.invoke('online-search', query),
+  searchOnline: (query, source = 'all') => ipcRenderer.invoke('online-search', { query, source }),
+  cancelOnlineSearch: () => ipcRenderer.invoke('online-search-cancel'),
   getOnlineLibrary: () => ipcRenderer.invoke('online-library'),
   removeOnlineTrack: id => ipcRenderer.invoke('online-remove', id),
   prepareOnlineTrack: id => ipcRenderer.invoke('online-prepare', id),

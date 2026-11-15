@@ -960,13 +960,9 @@ ipcMain.handle('get-config', async (event) => {
   return loadConfig();
 });
 
-let onlineSearchBusy = false;
 for (const [channel, action] of Object.entries({
-  'online-search': async (_event, query) => {
-    if (onlineSearchBusy) throw new Error('Дождитесь завершения поиска');
-    onlineSearchBusy = true;
-    try { return await getOnlineMusic().search(query); } finally { onlineSearchBusy = false; }
-  },
+  'online-search': (_event, request) => getOnlineMusic().search(request),
+  'online-search-cancel': () => { getOnlineMusic().cancelSearch(); return true; },
   'online-library': async () => {
     const config = await loadConfig();
     return (await getOnlineMusic().list()).map(track => applyTrackMetadataOverride(track, config.trackMetadataOverrides[getTrackMetadataKey(track.path, getOnlineMusic().root)]));
