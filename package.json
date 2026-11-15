@@ -1,6 +1,6 @@
 {
   "name": "theatre-sound-mixer",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "description": "Professional sound mixer for theatre productions - Concert Audio System (CAS)",
   "desktopName": "concert-audio-system",
   "main": "main.js",
@@ -60,6 +60,7 @@
       "assets/lucide.min.js",
       "assets/fontawesome/**/*",
       "online-music.js",
+      "online-accounts.js",
       "online-ui.js",
       "THIRD_PARTY_NOTICES.md",
       "licenses/**/*",

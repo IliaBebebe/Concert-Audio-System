@@ -20,15 +20,45 @@ class Element {
   remove() { this.parent.children = this.parent.children.filter(child => child !== this); }
   setAttribute(name, value) { this.attributes[name] = value; }
   removeAttribute(name) { delete this.attributes[name]; }
+  getAttribute(name) { return this.attributes[name]; }
   querySelectorAll(selector) { return this.children.flatMap(child => [...(selector === 'button' && child.tagName === 'BUTTON' ? [child] : []), ...child.querySelectorAll(selector)]); }
   focus() { this.focused = true; }
+  showModal() { this.open = true; }
 }
+
+test('account setup opens a native dialog and reports errors without duplicate requests', async () => {
+  let reply, calls = 0;
+  const { panel, elements } = panelFixture({ manageOnlineAccounts: request => { assert.equal(request.source, 'youtube'); calls++; return new Promise(resolve => { reply = resolve; }); } });
+  await elements.onlineAccountsButton.emit('click');
+  assert.equal(elements.onlineAccountsDialog.open, true);
+  const button = elements['account-youtube-connect'];
+  const first = button.emit('click');
+  await button.emit('click');
+  assert.equal(calls, 1);
+  assert.equal(button.getAttribute('aria-disabled'), 'true');
+  reply({ success: false, error: 'Sign-in cancelled' });
+  await first;
+  assert.equal(button.getAttribute('aria-disabled'), undefined);
+  assert.equal(elements.onlineAccountsStatus.textContent, 'Sign-in cancelled');
+  assert.equal(panel.accountsBusy, false);
+});
+
+test('saved imports also pass through preparation so an old preview cannot bypass validation', async () => {
+  let requested;
+  const { panel, inserted } = panelFixture({ prepareOnlineTrack: async id => {
+    requested = id;
+    return { success: false, error: 'Full recording unavailable' };
+  } });
+  await panel.prepare({ onlineId: 'soundcloud-123', source: 'soundcloud', title: 'Old preview', duration: 30, path: '/library/soundcloud-123.m4a' }, true);
+  assert.equal(requested, 'soundcloud-123');
+  assert.equal(inserted.length, 0);
+});
 
 function panelFixture(overrides = {}) {
   const elements = Object.fromEntries([...fs.readFileSync(require.resolve('../index.html'), 'utf8').matchAll(/id="([^"]+)"/g)].map(match => [match[1], new Element()]));
   elements.onlineTargetDeck.value = 'A';
   const sources = ['all', 'soundcloud', 'yandex', 'youtube'].map(source => Object.assign(new Element('button'), { dataset: { onlineSource: source } }));
-  const api = { onOnlineProgress() {}, cancelOnlineSearch: async () => ({}), cancelOnlineTrack: async () => ({}), getOnlineLibrary: async () => ({ success: true, data: [] }), ...overrides };
+  const api = { onOnlineProgress() {}, cancelOnlineSearch: async () => ({}), cancelOnlineTrack: async () => ({}), getOnlineLibrary: async () => ({ success: true, data: [] }), getOnlineAccountsStatus: async () => ({ success: true, data: {} }), ...overrides };
   const storage = new Map();
   const context = { document: { getElementById: id => elements[id], createElement: tag => new Element(tag), querySelectorAll: () => sources }, window: { electronAPI: api }, localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) } };
   vm.createContext(context);

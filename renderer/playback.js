@@ -207,7 +207,7 @@ class CASPlaybackController {
         this.app.updateCurrentTrackDisplay(track);
         this.app.updateMediaSessionMetadata(track);
         this.app.highlightCurrentTrack();
-        this.app.loadWaveformForTrack(track);
+        this.musicStartAnalysis = this.app.loadWaveformForTrack(track);
         return player;
     }
 
@@ -272,6 +272,25 @@ class CASPlaybackController {
         this.app.resumeAudioContext();
         const player = this.musicPlayer;
         if (!player) return;
+
+        const track = this.musicPlayerTrack;
+        const playerToken = this.musicPlayerToken;
+        const needsAnalysis = !this.isPaused && this.app.audioSettings?.trimSilenceEnabled &&
+            this.app.audioSettings?.trimSilenceStart && !this.app.getTrackStartOffset(track) &&
+            !track?.silenceBounds && !this.app.silenceBoundsCache?.has(track?.path);
+        if (needsAnalysis && this.musicStartAnalysis) {
+            const analysis = this.musicStartAnalysis;
+            this.pendingMusicStart = true;
+            this.app.updateStatus('Определяю начало трека…');
+            this.app.updateDeckUI();
+            Promise.resolve(analysis).catch(() => {}).then(() => {
+                if (this.musicPlayer !== player || this.musicPlayerToken !== playerToken || !this.pendingMusicStart) return;
+                this.musicStartAnalysis = null;
+                this.pendingMusicStart = false;
+                this.app.playMusic(options);
+            });
+            return;
+        }
 
         const isPlayerActuallyPlaying = Boolean(player.playing && player.playing());
         if (this.pendingMusicStart || (!this.isPaused && isPlayerActuallyPlaying)) {

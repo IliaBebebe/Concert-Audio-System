@@ -60,6 +60,60 @@ test('playing a cued track reuses its player and preserves seek position', t => 
   assert.equal(mixer.musicPlayer.seek(), 12);
 });
 
+test('first playback waits for silence analysis and starts at the detected onset', async t => {
+  const { mixer } = mixerFixture(t);
+  mixer.audioSettings = { trimSilenceEnabled: true, trimSilenceStart: true };
+  let finish;
+  mixer.loadWaveformForTrack = track => new Promise(resolve => {
+    finish = () => { track.silenceBounds = { startSec: 3, endSec: 50 }; resolve(); };
+  });
+  mixer.playMusic();
+  const player = mixer.musicPlayer;
+  assert.equal(player.playing(), false);
+  assert.equal(mixer.pendingMusicStart, true);
+  mixer.playMusic(); // A repeated click must not schedule another start.
+  finish();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(player.playing(), true);
+  assert.equal(player.seek(), 3);
+});
+
+test('stop and pause cancel a start waiting for analysis, including a later play of the same track', async t => {
+  for (const action of ['stopMusic', 'pauseMusic']) {
+    const { mixer } = mixerFixture(t);
+    mixer.audioSettings = { trimSilenceEnabled: true, trimSilenceStart: true };
+    const finishes = [];
+    mixer.loadWaveformForTrack = () => new Promise(resolve => finishes.push(resolve));
+    mixer.playMusic();
+    const old = mixer.musicPlayer;
+    mixer[action]();
+    mixer.playMusic();
+    const current = mixer.musicPlayer;
+    finishes[0]();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(old.playing(), false);
+    assert.equal(current.playing(), false);
+    finishes[1]();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(current.playing(), true);
+  }
+});
+
+test('cached bounds and manual cues start immediately; analysis failure does not hang playback', async t => {
+  for (const mode of ['cached', 'manual', 'failed', 'disabled']) {
+    const { mixer } = mixerFixture(t);
+    mixer.audioSettings = { trimSilenceEnabled: mode !== 'disabled', trimSilenceStart: true };
+    const track = mixer.decks.A.tracks[0];
+    if (mode === 'cached') track.silenceBounds = { startSec: 2 };
+    if (mode === 'manual') track.startOffset = 4;
+    mixer.loadWaveformForTrack = () => mode === 'failed' ? Promise.reject(new Error('decode failed')) : new Promise(() => {});
+    mixer.playMusic();
+    if (mode === 'failed') await new Promise(resolve => setImmediate(resolve));
+    assert.equal(mixer.musicPlayer.playing(), true);
+    assert.equal(mixer.musicPlayer.seek(), mode === 'cached' ? 2 : mode === 'manual' ? 4 : 0);
+  }
+});
+
 test('remote track selection rejects unknown decks and out-of-range indices', t => {
   const { mixer } = mixerFixture(t);
   let receiveCommand;

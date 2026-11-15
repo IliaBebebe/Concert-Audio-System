@@ -42,6 +42,20 @@ class CASOnlinePanel {
     }));
     document.getElementById('onlineBrowseButton').addEventListener('click', () => this.showSearch());
     document.getElementById('onlineSavedButton').addEventListener('click', () => this.showLibrary());
+    document.getElementById('onlineAccountsButton')?.addEventListener('click', () => this.openAccounts());
+    for (const source of ['yandex', 'youtube', 'soundcloud']) {
+      for (const action of ['connect', 'disconnect', 'open']) {
+        document.getElementById(`account-${source}-${action}`)?.addEventListener('click', () => this.accountAction(source, action));
+      }
+    }
+    for (const topic of ['guide', 'chrome', 'firefox']) {
+      document.getElementById(`account-help-${topic}`)?.addEventListener('click', async () => {
+        try {
+          const result = await this.api.openOnlineAccountsHelp(topic);
+          if (!result.success) this.accountStatus(result.error, true);
+        } catch { this.accountStatus('Не удалось открыть справку. Проверьте браузер.', true); }
+      });
+    }
     document.getElementById('onlineFolderButton').addEventListener('click', async () => {
       try {
         const result = await this.api.openOnlineLibrary();
@@ -50,6 +64,57 @@ class CASOnlinePanel {
     });
     this.api.onOnlineProgress(progress => this.updateProgress(progress));
     this.render([]);
+  }
+
+  accountStatus(message, error = false) {
+    const status = document.getElementById('onlineAccountsStatus');
+    status.textContent = message;
+    status.classList.toggle('is-error', error);
+  }
+
+  async refreshAccounts() {
+    const result = await this.api.getOnlineAccountsStatus();
+    if (!result.success) throw new Error(result.error);
+    for (const source of ['yandex', 'youtube', 'soundcloud']) {
+      const saved = result.data[source] === true;
+      document.getElementById(`account-${source}-state`).textContent = saved ? 'Данные входа сохранены' : 'Пока не подключён';
+      document.getElementById(`account-${source}-disconnect`).hidden = !saved;
+      document.getElementById(`account-${source}-connect`).textContent = source === 'yandex'
+        ? saved ? 'Войти заново' : 'Войти в Яндекс'
+        : saved ? 'Заменить файл' : 'Выбрать cookies.txt';
+      const button = document.getElementById(`account-${source}-connect`);
+      button.setAttribute('aria-label', `${button.textContent}: ${ONLINE_SOURCE_NAMES[source]}`);
+    }
+  }
+
+  async openAccounts() {
+    const dialog = document.getElementById('onlineAccountsDialog');
+    if (!dialog.open) dialog.showModal();
+    if (this.accountsBusy) return;
+    this.accountStatus('Подключите нужный сервис один раз. Затем повторите подготовку трека.');
+    try { await this.refreshAccounts(); }
+    catch (error) { this.accountStatus(error.message, true); }
+  }
+
+  async accountAction(source, action) {
+    if (this.accountsBusy) return;
+    this.accountsBusy = true;
+    for (const service of ['yandex', 'youtube', 'soundcloud']) {
+      for (const name of ['connect', 'disconnect', 'open']) document.getElementById(`account-${service}-${name}`).setAttribute('aria-disabled', 'true');
+    }
+    try {
+      const result = await this.api.manageOnlineAccounts({ source, action });
+      if (!result.success) throw new Error(result.error);
+      this.accountStatus(result.data);
+      this.setStatus(result.data);
+      await this.refreshAccounts();
+    } catch (error) { this.accountStatus(error.message, true); }
+    finally {
+      this.accountsBusy = false;
+      for (const service of ['yandex', 'youtube', 'soundcloud']) {
+        for (const name of ['connect', 'disconnect', 'open']) document.getElementById(`account-${service}-${name}`).removeAttribute('aria-disabled');
+      }
+    }
   }
 
   savePreferences() {
@@ -291,7 +356,7 @@ class CASOnlinePanel {
     this.failures.delete(track.onlineId); this.jobs.set(track.onlineId, job);
     this.refreshRow(track.onlineId); this.updateSummary();
     try {
-      const result = track.path ? { success: true, data: track } : await this.api.prepareOnlineTrack(track.onlineId);
+      const result = await this.api.prepareOnlineTrack(track.onlineId);
       if (job.cancelled) throw new Error('Подготовка отменена');
       if (!result.success || !result.data) throw new Error(result.error || 'Не удалось подготовить трек');
       Object.assign(track, result.data);

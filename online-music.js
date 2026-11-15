@@ -1,5 +1,6 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const os = require('node:os');
 const { spawn, execFile } = require('node:child_process');
 const { createHash } = require('node:crypto');
 
@@ -77,15 +78,16 @@ function normalizeResult(item, source = 'youtube') {
 function sourceError(stderr, source = '', operation = 'audio') {
   const name = SOURCES[source] || 'Источник';
   if (/ENOSPC|No space left|not enough space/i.test(stderr)) return 'Недостаточно места на диске';
-  if (/captcha|sign in|login|bot|premium|subscription|403|401/i.test(stderr)) return `${name}: доступ к полной записи ограничен. Выберите другой трек или найдите его в другом источнике`;
+  if (source === 'soundcloud' && /requested format.*not available/i.test(stderr)) return 'SoundCloud: полная запись недоступна, источник может предлагать только превью. Откройте «Аккаунты» или выберите другой результат';
+  if (/captcha|sign in|login|bot|premium|subscription|403|401/i.test(stderr)) return `${name}: требуется вход или доступ к полной записи. Откройте «Аккаунты» в музыке онлайн. Доступ также зависит от подписки и региона`;
   if (/429|too many requests/i.test(stderr)) return `${name}: слишком много запросов. Повторите позже или выберите другой источник`;
   if (/not available|unavailable|private|blocked|404|geo.?restrict/i.test(stderr)) return `${name}: трек недоступен или удалён. Попробуйте другой результат`;
   return `${name}: не удалось ${operation === 'search' ? 'выполнить поиск' : 'получить аудио'}. Проверьте сеть или выберите другой источник`;
 }
 
-async function fetchJson(url, { signal } = {}) {
+async function fetchJson(url, { signal, headers } = {}) {
   let response;
-  try { response = await fetch(url, { signal: AbortSignal.any([AbortSignal.timeout(15000), ...(signal ? [signal] : [])]), redirect: 'error' }); }
+  try { response = await fetch(url, { headers, signal: AbortSignal.any([AbortSignal.timeout(15000), ...(signal ? [signal] : [])]), redirect: 'error' }); }
   catch { throw new Error(signal?.aborted ? 'Запрос отменён' : 'Яндекс Музыка не ответила. Проверьте сеть или повторите позже'); }
   if (!response.ok) throw new Error(sourceError(String(response.status), 'yandex'));
   let size = 0;
@@ -149,12 +151,13 @@ function runProcess(binary, args, { signal, onLine = () => {}, timeout = 120000,
 }
 
 class OnlineMusic {
-  constructor({ root, toolsRoot, platform = process.platform, arch = process.arch, run = runProcess, request = fetchJson }) {
+  constructor({ root, toolsRoot, platform = process.platform, arch = process.arch, run = runProcess, request = fetchJson, credentials = async () => ({}) }) {
     this.root = root;
     this.toolsPath = path.join(toolsRoot, `${platform}-${arch}`);
     this.ext = platform === 'win32' ? '.exe' : '';
     this.run = run;
     this.request = request;
+    this.credentials = credentials;
     this.searchController = null;
     this.knownTracks = new Map();
     this.tasks = new Map();
@@ -180,6 +183,23 @@ class OnlineMusic {
     return ['--ignore-config', '--no-cache-dir', '--no-playlist', '--no-warnings', '--socket-timeout', '15', '--retries', '1', '--extractor-retries', '1', '--no-js-runtimes', '--js-runtimes', `deno:${this.binary('deno')}`];
   }
 
+  async runDownloader(args, options) {
+    const { cookies } = await this.credentials(options.source);
+    if (options.signal?.aborted) throw new Error('Подготовка отменена');
+    if (!cookies) return this.run(this.binary('yt-dlp'), [...this.baseArgs(), ...args], options);
+    const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'cas-online-auth-'));
+    try {
+      const file = path.join(folder, 'cookies.txt');
+      await fs.writeFile(file, cookies, { mode: 0o600 });
+      return await this.run(this.binary('yt-dlp'), [...this.baseArgs(), '--cookies', file, ...args], options);
+    } finally { await fs.rm(folder, { recursive: true, force: true }); }
+  }
+
+  async requestYandex(url, signal) {
+    const { token } = await this.credentials('yandex');
+    return this.request(url, { signal, headers: token ? { Authorization: `OAuth ${token}` } : {} });
+  }
+
   async search(request) {
     const parsed = onlineTarget(typeof request === 'string' ? request : request?.query, typeof request === 'string' ? 'all' : request?.source || 'all');
     this.cancelSearch();
@@ -191,13 +211,13 @@ class OnlineMusic {
       const responses = await Promise.allSettled(sources.map(async source => {
         if (source === 'yandex') {
           const endpoint = parsed.target ? `/tracks/${parsed.target}` : `/search?${new URLSearchParams({ text: parsed.query, type: 'track', page: '0', 'page-size': '10' })}`;
-          const response = await this.request(`https://api.music.yandex.net${endpoint}`, { signal });
+          const response = await this.requestYandex(`https://api.music.yandex.net${endpoint}`, signal);
           if (response.error || !response.result) throw new Error('Яндекс Музыка: поиск сейчас недоступен');
           const items = parsed.target ? response.result : response.result.tracks?.results || [];
           return items.filter(item => item.available !== false).map(yandexMetadata).filter(Boolean).slice(0, 10);
         }
         const target = parsed.target || `${source === 'soundcloud' ? 'sc' : 'yt'}search10:${parsed.query}`;
-        const output = await this.run(this.binary('yt-dlp'), [...this.baseArgs(), '--flat-playlist', '--dump-single-json', '--skip-download', '--', target], { signal, source, operation: 'search', timeout: 30000 });
+        const output = await this.runDownloader(['--flat-playlist', '--dump-single-json', '--skip-download', '--', target], { signal, source, operation: 'search', timeout: 30000 });
         let response;
         try { response = JSON.parse(output); } catch { throw new Error(`${SOURCES[source]}: источник вернул непонятный ответ`); }
         return (response.entries || [response]).map(item => normalizeResult(item, source)).filter(Boolean).slice(0, 10);
@@ -230,7 +250,7 @@ class OnlineMusic {
       const stats = await fs.stat(real);
       if (real !== filePath || !stats.isFile()) return null;
       const metadata = normalizeResult({ ...item, id: source === 'youtube' ? id : id.slice(id.indexOf('-') + 1) }, source);
-      return metadata ? { ...metadata, path: real, filename: `${id}.m4a`, name: metadata.title, ext: '.m4a', size: stats.size } : null;
+      return metadata ? { ...metadata, fullAudioValidated: item.fullAudioValidated === 1, path: real, filename: `${id}.m4a`, name: metadata.title, ext: '.m4a', size: stats.size } : null;
     } catch { return null; }
   }
 
@@ -259,13 +279,13 @@ class OnlineMusic {
 
   async downloadYandex(id, folder, signal) {
     const rawId = id.slice('yandexmusic-'.length);
-    const response = await this.request(`https://api.music.yandex.net/tracks/${rawId}`, { signal });
+    const response = await this.requestYandex(`https://api.music.yandex.net/tracks/${rawId}`, signal);
     const item = response.result?.find(track => String(track.id) === rawId);
     const metadata = yandexMetadata(item);
     if (!metadata || item.available === false) throw new Error('Яндекс Музыка: трек недоступен');
-    const downloads = await this.request(`https://api.music.yandex.net/tracks/${rawId}/download-info`, { signal });
+    const downloads = await this.requestYandex(`https://api.music.yandex.net/tracks/${rawId}/download-info`, signal);
     const full = downloads.result?.filter(format => format.preview === false && format.codec === 'mp3').sort((a, b) => b.bitrateInKbps - a.bitrateInKbps)[0];
-    if (!full) throw new Error('Яндекс Музыка не предоставила полную запись без авторизации. Фрагмент не загружен. Найдите трек в другом источнике');
+    if (!full) throw new Error('Яндекс Музыка не предоставила полную запись. Фрагмент не загружен. Откройте «Аккаунты» и войдите в аккаунт с доступом к треку');
     const infoUrl = yandexDownloadUrl(full.downloadInfoUrl);
     infoUrl.searchParams.set('format', 'json');
     const info = await this.request(infoUrl.href, { signal });
@@ -286,17 +306,23 @@ class OnlineMusic {
     onProgress({ id, stage: 'queued' });
     const task = this.tail.then(async () => {
       if (controller.signal.aborted) throw new Error('Подготовка отменена');
+      const source = trackSource(id);
       const cached = await this.get(id);
-      if (cached) return cached;
+      // Older imports could save a SoundCloud preview whose own metadata says 30s.
+      // Retry those after login; preserve the old file until a full replacement succeeds.
+      const suspectPreview = source === 'soundcloud' && cached && !cached.fullAudioValidated && cached.duration <= 35;
+      const expectedDuration = this.knownTracks.get(id)?.duration || 0;
+      const shorterThanSearch = cached && expectedDuration > cached.duration + Math.max(2, expectedDuration * .05);
+      if (cached && !suspectPreview && !shorterThanSearch) return cached;
       const folder = path.join(this.root, `job-${id}`);
       await fs.mkdir(folder, { recursive: true });
       const signal = controller.signal;
-      const source = trackSource(id);
+      const sourceUrl = this.knownTracks.get(id)?.sourceUrl || cached?.sourceUrl;
       try {
         onProgress({ id, stage: 'downloading' });
         let output, metadata;
         if (source === 'yandex') ({ output, metadata } = await this.downloadYandex(id, folder, signal));
-        else output = await this.run(this.binary('yt-dlp'), [...this.baseArgs(), '--restrict-filenames', '--max-filesize', String(MAX_BYTES), '--match-filters', `!is_live & duration <= ${MAX_DURATION}`, '-f', 'bestaudio[ext=m4a]/bestaudio', '--write-info-json', '--no-simulate', '--newline', '--progress', '--progress-template', 'download:CAS_PROGRESS:%(progress._percent_str)s', '--print', 'after_move:CAS_FILE:%(filepath)s', '-o', path.join(folder, 'audio.%(ext)s'), '--', source === 'youtube' ? `https://www.youtube.com/watch?v=${id}` : this.knownTracks.get(id)?.sourceUrl || `https://api.soundcloud.com/tracks/${id.slice('soundcloud-'.length)}`], {
+        else output = await this.runDownloader(['--restrict-filenames', '--max-filesize', String(MAX_BYTES), '--match-filters', `!is_live & duration <= ${MAX_DURATION}`, '-f', 'bestaudio[ext=m4a][format_id!*=preview]/bestaudio[format_id!*=preview]', '--write-info-json', '--no-simulate', '--newline', '--progress', '--progress-template', 'download:CAS_PROGRESS:%(progress._percent_str)s', '--print', 'after_move:CAS_FILE:%(filepath)s', '-o', path.join(folder, 'audio.%(ext)s'), '--', source === 'youtube' ? `https://www.youtube.com/watch?v=${id}` : sourceUrl || `https://api.soundcloud.com/tracks/${id.slice('soundcloud-'.length)}`], {
           signal, source, timeout: 180000,
           onLine: line => { if (line.startsWith('CAS_PROGRESS:')) onProgress({ id, stage: 'downloading', percent: Math.min(100, Math.max(0, parseFloat(line.slice(13)) || 0)) }); }
         });
@@ -306,19 +332,21 @@ class OnlineMusic {
         if (realAudio !== audioPath || (await fs.stat(realAudio)).size > MAX_BYTES) throw new Error('Аудиофайл превышает допустимый размер');
         if (!metadata) {
           const info = JSON.parse(await fs.readFile(path.join(folder, 'audio.info.json'), 'utf8'));
-          if (/preview|snippet/i.test(`${info.format || ''} ${info.format_note || ''}`)) throw new Error(`${SOURCES[source]} предоставил только фрагмент записи. Найдите трек в другом источнике`);
+          const selected = [info, ...(info.requested_downloads || [])];
+          if (selected.some(format => /preview|snippet/i.test(`${format.format_id || ''} ${format.format || ''} ${format.format_note || ''}`))) throw new Error(`${SOURCES[source]} предоставил только фрагмент записи. Откройте «Аккаунты» или выберите другой источник`);
           metadata = normalizeResult(info, source);
         }
         if (!metadata || metadata.onlineId !== id) throw new Error('Метаданные трека не прошли проверку');
+        metadata.duration = Math.max(metadata.duration, this.knownTracks.get(id)?.duration || 0);
         onProgress({ id, stage: 'processing' });
         const codec = path.extname(realAudio) === '.m4a' ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '192k'];
         const conversion = await this.run(this.binary('ffmpeg'), ['-nostdin', '-hide_banner', '-loglevel', 'error', '-progress', 'pipe:1', '-nostats', '-protocol_whitelist', 'file,pipe', '-i', realAudio, '-map', '0:a:0', '-vn', '-t', String(MAX_DURATION), ...codec, '-metadata', `title=${metadata.title}`, '-metadata', `artist=${metadata.artist}`, '-movflags', '+faststart', '-y', path.join(folder, 'ready.m4a')], { signal, source });
         const elapsed = [...conversion.matchAll(/out_time_us=(\d+)/g)].at(-1)?.[1];
-        if (elapsed && metadata.duration > 35 && Number(elapsed) / 1000000 < metadata.duration - Math.max(5, metadata.duration * 0.05)) throw new Error(`${SOURCES[source]} предоставил неполную запись. Фрагмент не сохранён; выберите другой источник`);
+        if ((source !== 'youtube' && (!elapsed || Number(elapsed) <= 0)) || (elapsed && metadata.duration > 0 && Number(elapsed) / 1000000 < metadata.duration - Math.max(2, metadata.duration * 0.05))) throw new Error(`${SOURCES[source]} предоставил неполную запись. Фрагмент не сохранён; откройте «Аккаунты» или выберите другой источник`);
         if (signal.aborted) throw new Error('Подготовка отменена');
         const size = (await fs.stat(path.join(folder, 'ready.m4a'))).size;
         if (size < 32 || size > MAX_BYTES) throw new Error('Не удалось подготовить аудиофайл');
-        await fs.writeFile(path.join(folder, 'ready.json'), JSON.stringify(metadata));
+        await fs.writeFile(path.join(folder, 'ready.json'), JSON.stringify({ ...metadata, fullAudioValidated: 1 }));
         await fs.rename(path.join(folder, 'ready.m4a'), path.join(this.root, `${id}.m4a`));
         await fs.rename(path.join(folder, 'ready.json'), path.join(this.root, `${id}.json`));
         return this.get(id);

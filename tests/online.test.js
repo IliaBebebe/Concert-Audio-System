@@ -87,12 +87,16 @@ test('a failed provider preserves results from the others, with their source and
 
 test('a newer search aborts the old processes without overwriting the new results', async t => {
   let previousSignal;
+  let started;
+  const running = new Promise(resolve => { started = resolve; });
   const { service } = await fixture(t, (_binary, _args, { signal }) => new Promise((_resolve, reject) => {
     previousSignal = signal;
+    started();
     signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true });
   }), { request: async () => ({ result: { tracks: { results: [{ id: 12, title: 'Latest' }] } } }) });
   const first = service.search({ query: 'old', source: 'soundcloud' });
   const oldCheck = assert.rejects(first, /Поиск отменён/);
+  await running;
   const second = await service.search({ query: 'new', source: 'yandex' });
   await oldCheck;
   assert.equal(previousSignal.aborted, true);
@@ -238,6 +242,76 @@ test('process cancellation and timeout terminate an actual child', async () => {
   controller.abort();
   await assert.rejects(task, /отменена/);
   await assert.rejects(runProcess(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { timeout: 30 }), /вовремя/);
+});
+
+test('cookie credentials are temporary, separated per source and cleaned after downloader failure', async t => {
+  let cookieFile;
+  const { service } = await fixture(t, async (_binary, args) => {
+    cookieFile = args[args.indexOf('--cookies') + 1];
+    assert.equal(await fs.readFile(cookieFile, 'utf8'), '# test cookies');
+    throw new Error('network');
+  }, { credentials: async source => { assert.equal(source, 'youtube'); return { cookies: '# test cookies' }; } });
+  await assert.rejects(service.search({ query: 'song', source: 'youtube' }), /network/);
+  await assert.rejects(fs.stat(cookieFile), { code: 'ENOENT' });
+});
+
+test('Yandex sends OAuth only to its API, never to media hosts or downloader arguments', async t => {
+  const { service } = await fixture(t, async (binary, args) => {
+    assert.equal(args.some(arg => arg.includes('test-token')), false);
+    if (binary.includes('yt-dlp')) {
+      const file = args[args.indexOf('-o') + 1];
+      await fs.writeFile(file, Buffer.alloc(64));
+      return `CAS_FILE:${file}\n`;
+    }
+    await fs.writeFile(args.at(-1), Buffer.alloc(64));
+    return 'out_time_us=120000000\n';
+  }, {
+    credentials: async () => ({ token: 'test-token' }),
+    request: async (url, options) => {
+      if (url.includes('storage.yandex.net')) {
+        assert.equal(options.headers, undefined);
+        return { host: 'test.storage.yandex.net', path: '/audio.mp3', ts: '123', s: 'salt' };
+      }
+      assert.equal(options.headers.Authorization, 'OAuth test-token');
+      if (url.endsWith('/download-info')) return { result: [{ codec: 'mp3', preview: false, downloadInfoUrl: 'https://test.storage.yandex.net/info' }] };
+      return { result: [{ id: '123', title: 'Song', durationMs: 120000 }] };
+    }
+  });
+  await service.prepare('yandexmusic-123');
+});
+
+test('SoundCloud preview format IDs and shortened extraction metadata cannot enter the library', async t => {
+  for (const format of ['http_aac_preview', 'http_aac']) {
+    let conversions = 0;
+    const { service } = await fixture(t, async (binary, args) => {
+      if (binary.includes('yt-dlp')) {
+        assert.match(args[args.indexOf('-f') + 1], /format_id!\*=preview/);
+        const folder = path.dirname(args[args.indexOf('-o') + 1]);
+        await fs.writeFile(path.join(folder, 'audio.mp3'), Buffer.alloc(64));
+        await fs.writeFile(path.join(folder, 'audio.info.json'), JSON.stringify({ id: '123', title: 'Song', duration: 30, format_id: format, webpage_url: 'https://soundcloud.com/artist/song' }));
+        return `CAS_FILE:${path.join(folder, 'audio.mp3')}\n`;
+      }
+      conversions++;
+      await fs.writeFile(args.at(-1), Buffer.alloc(64));
+      return 'out_time_us=30000000\n';
+    });
+    service.knownTracks.set('soundcloud-123', { duration: 180, sourceUrl: 'https://soundcloud.com/artist/song' });
+    await assert.rejects(service.prepare('soundcloud-123'), /фрагмент|неполную запись/);
+    assert.equal(conversions, format.endsWith('preview') ? 0 : 1);
+    assert.deepEqual(await service.list(), []);
+  }
+});
+
+test('an old cached SoundCloud preview is retried without deleting the original on failure', async t => {
+  let downloads = 0;
+  const { service, root } = await fixture(t, async () => { downloads++; throw new Error('no full audio'); });
+  await service.initialize();
+  const audio = path.join(root, 'soundcloud-123.m4a');
+  await fs.writeFile(audio, Buffer.alloc(64, 7));
+  await fs.writeFile(path.join(root, 'soundcloud-123.json'), JSON.stringify({ title: 'Old preview', duration: 30, sourceUrl: 'https://soundcloud.com/artist/song' }));
+  await assert.rejects(service.prepare('soundcloud-123'), /no full audio/);
+  assert.equal(downloads, 1);
+  assert.deepEqual(await fs.readFile(audio), Buffer.alloc(64, 7));
 });
 
 function mixerFixture() {

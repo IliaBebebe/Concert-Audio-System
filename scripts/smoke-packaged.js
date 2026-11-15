@@ -112,6 +112,11 @@ async function main() {
     assert.ok(state.badges.length === 2 && state.badges.every(Boolean));
     assert.ok(state.search.every(Boolean)); assert.deepEqual(state.volumes, [.42, .36]);
     assert.equal(state.pads, 12); assert.deepEqual(state.errors, []);
+    await evaluate(`document.getElementById('onlineAccountsButton').focus();document.getElementById('onlineAccountsButton').click();true`);
+    await waitFor(() => evaluate(`document.getElementById('onlineAccountsDialog').open && document.getElementById('account-yandex-state').textContent==='Пока не подключён'`), 'account guide and saved-state status');
+    await call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    assert.equal(await evaluate(`document.getElementById('onlineAccountsDialog').open`), false);
     const remote = await evaluate(`window.electronAPI.toggleRemoteServer(true)`);
     assert.equal(remote.success, true);
     const remoteBase = `http://127.0.0.1:${remote.status.port}`;
@@ -188,6 +193,22 @@ async function main() {
     await evaluate(`document.getElementById('settingTrimSilencePadding').value=250;
       document.getElementById('settingTrimSilencePadding').dispatchEvent(new Event('change'));true`);
     await waitFor(() => evaluate(`window.soundMixer.musicPlayerTrack?.silenceBounds?.startSec < ${previousStart}-.1`), 'reanalyzed silence padding');
+    // Cold analysis must finish before the very first play, without a manual cue.
+    await evaluate(`{
+      const m=window.soundMixer;m.stopMusic();
+      m.audioSettings.trimSilenceEnabled=true;m.audioSettings.trimSilenceStart=true;
+      const track=m.decks.B.tracks[1];delete track.silenceBounds;track.startOffset=0;
+      m.waveformCache.clear();m.silenceBoundsCache.clear();
+      const load=m.loadWaveformForTrack.bind(m);
+      m.loadWaveformForTrack=async track=>{await new Promise(resolve=>setTimeout(resolve,250));return load(track)};
+      m.playTrackInDeck('B',1,{forceDirect:true});
+      window.__coldPlayer=m.musicPlayer;
+      window.__playedBeforeAnalysis=m.musicPlayer.playing();
+      m.musicPlayer.once('play',()=>{window.__coldStartSeek=m.musicPlayer.seek()});
+    }true`);
+    assert.equal(await evaluate('window.__playedBeforeAnalysis'), false);
+    await waitFor(() => evaluate(`window.__coldStartSeek > .2 && window.__coldStartSeek < .6`), 'first play skips automatic silence');
+    await evaluate(`delete window.soundMixer.loadWaveformForTrack;true`);
     await evaluate(`window.soundMixer.stopMusic();window.soundMixer.saveStoredDataImmediate();true`);
     const previousNavigation = await evaluate('window.__smokeNavigation');
     await call('Page.reload');

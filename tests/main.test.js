@@ -81,6 +81,14 @@ test('native file selection authorizes only selected audio and restores exact fi
   assert.equal((await handlers.get('get-audio-tracks')({ sender: {} }, [selected])).success, false);
 });
 
+test('online accounts IPC rejects remote or unknown windows before accessing credentials or dialogs', async t => {
+  const { handlers } = await mainFixture(t);
+  for (const channel of ['online-accounts', 'online-accounts-status', 'online-accounts-help']) {
+    const result = await handlers.get(channel)({ sender: {} });
+    assert.equal(result.success, false);
+  }
+});
+
 test('closing saves window bounds and allows renderer beforeunload to flush pending settings', async t => {
   const { api, root } = await mainFixture(t);
   const window = await api.createWindow();

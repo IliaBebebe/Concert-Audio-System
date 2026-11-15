@@ -1,9 +1,10 @@
-const { app, BrowserWindow, ipcMain, dialog, screen, Menu, session, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Menu, session, shell, safeStorage, clipboard } = require('electron');
 const path = require('node:path');
 const { fileURLToPath, pathToFileURL } = require('node:url');
 const fs = require('node:fs/promises');
 const { Worker } = require('node:worker_threads');
 const { OnlineMusic } = require(path.join(__dirname, 'online-music.js'));
+const { OnlineAccounts } = require(path.join(__dirname, 'online-accounts.js'));
 const { CASRemoteServer } = require(path.join(__dirname, 'remote-server.js'));
 const requestedProfile = app.commandLine?.getSwitchValue('user-data-dir');
 if (requestedProfile) app.setPath('userData', path.resolve(requestedProfile));
@@ -28,10 +29,18 @@ const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.ogg', '.flac', '.m4a', '.aac
 
 const appRootPath = path.resolve(__dirname);
 let onlineMusic;
+let onlineAccounts;
+function getOnlineAccounts() {
+  if (!onlineAccounts) onlineAccounts = new OnlineAccounts({
+    file: path.join(app.getPath('userData'), 'online-accounts.bin'), safeStorage, dialog, shell, clipboard
+  });
+  return onlineAccounts;
+}
 function getOnlineMusic() {
   if (!onlineMusic) onlineMusic = new OnlineMusic({
     root: path.join(app.getPath('userData'), 'online-library'),
-    toolsRoot: app.isPackaged ? path.join(process.resourcesPath, 'online-tools') : path.join(__dirname, 'tools')
+    toolsRoot: app.isPackaged ? path.join(process.resourcesPath, 'online-tools') : path.join(__dirname, 'tools'),
+    credentials: source => getOnlineAccounts().credentials(source)
   });
   return onlineMusic;
 }
@@ -56,6 +65,7 @@ function getRemoteServer() {
 }
 app.on('before-quit', () => {
   onlineMusic?.dispose();
+  onlineAccounts?.dispose();
   remoteServer?.stop().catch(() => {});
 });
 const configPath = path.join(app.getPath('userData'), 'config.json');
@@ -961,6 +971,9 @@ ipcMain.handle('get-config', async (event) => {
 });
 
 for (const [channel, action] of Object.entries({
+  'online-accounts': (_event, request) => getOnlineAccounts().manage(mainWindow, request),
+  'online-accounts-status': () => getOnlineAccounts().status(),
+  'online-accounts-help': (_event, topic) => getOnlineAccounts().openHelp(topic),
   'online-search': (_event, request) => getOnlineMusic().search(request),
   'online-search-cancel': () => { getOnlineMusic().cancelSearch(); return true; },
   'online-library': async () => {

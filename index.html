@@ -249,6 +249,7 @@
                         <div class="online-navigation" role="group" aria-label="Раздел музыки">
                             <button type="button" class="online-nav-btn" id="onlineBrowseButton" aria-pressed="true">Поиск</button>
                             <button type="button" class="online-nav-btn" id="onlineSavedButton" aria-pressed="false">Сохранённые</button>
+                            <button type="button" class="online-nav-btn" id="onlineAccountsButton">Аккаунты</button>
                             <button type="button" class="online-folder-btn" id="onlineFolderButton" title="Открыть папку сохранённой музыки" aria-label="Открыть папку сохранённой музыки"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v1M3 7h17a1 1 0 0 1 1 1l-2 11H3a1 1 0 0 1-1-1Z"/></svg></button>
                         </div>
                         <div id="onlineSearchControls">
@@ -767,13 +768,74 @@
         </form>
     </dialog>
 
+    <dialog id="onlineAccountsDialog" class="workspace-dialog online-accounts-dialog" aria-labelledby="onlineAccountsTitle">
+        <div class="accounts-heading">
+            <div><h2 id="onlineAccountsTitle">Подключение музыки</h2>
+            <p>Войдите один раз. CAS сохранит подключение для следующих запусков.</p></div>
+            <form method="dialog"><button type="submit" class="account-text-button">Закрыть</button></form>
+        </div>
+        <div class="accounts-services">
+            <section class="account-service" aria-labelledby="accountYandexTitle">
+                <div class="account-description">
+                    <h3 id="accountYandexTitle">Яндекс Музыка <span>Вход по коду</span></h3>
+                    <p>Откроется Яндекс в браузере. Скопируйте код из CAS, вставьте на странице и подтвердите вход. CAS завершит подключение сам.</p>
+                    <span class="account-state" id="account-yandex-state">Проверяем подключение…</span>
+                </div>
+                <div class="account-actions">
+                    <button type="button" class="online-btn online-primary" id="account-yandex-connect" autofocus>Войти в Яндекс</button>
+                    <button type="button" class="online-btn" id="account-yandex-disconnect" hidden>Отключить Яндекс</button>
+                    <button type="button" class="account-text-button" id="account-yandex-open">Открыть Яндекс Музыку</button>
+                </div>
+            </section>
+            <section class="account-service" aria-labelledby="accountYoutubeTitle">
+                <div class="account-description">
+                    <h3 id="accountYoutubeTitle">YouTube <span>Вход из браузера</span></h3>
+                    <p>Войдите в YouTube, сохраните файл входа через расширение браузера и выберите его здесь. Как получить файл — ниже.</p>
+                    <span class="account-state" id="account-youtube-state">Проверяем подключение…</span>
+                </div>
+                <div class="account-actions">
+                    <button type="button" class="online-btn" id="account-youtube-open">Открыть YouTube</button>
+                    <button type="button" class="online-btn" id="account-youtube-connect">Выбрать cookies.txt</button>
+                    <button type="button" class="account-text-button" id="account-youtube-disconnect" hidden>Отключить YouTube</button>
+                </div>
+            </section>
+            <section class="account-service" aria-labelledby="accountSoundcloudTitle">
+                <div class="account-description">
+                    <h3 id="accountSoundcloudTitle">SoundCloud <span>Вход из браузера</span></h3>
+                    <p>Подключается так же, как YouTube. Для записи с платным доступом нужен аккаунт с доступом к полной версии.</p>
+                    <span class="account-state" id="account-soundcloud-state">Проверяем подключение…</span>
+                </div>
+                <div class="account-actions">
+                    <button type="button" class="online-btn" id="account-soundcloud-open">Открыть SoundCloud</button>
+                    <button type="button" class="online-btn" id="account-soundcloud-connect">Выбрать cookies.txt</button>
+                    <button type="button" class="account-text-button" id="account-soundcloud-disconnect" hidden>Отключить SoundCloud</button>
+                </div>
+            </section>
+        </div>
+        <details class="accounts-instructions" open>
+            <summary>Как получить файл входа для YouTube и SoundCloud</summary>
+            <ol>
+                <li>Установите расширение для своего браузера: <button type="button" class="account-text-button" id="account-help-chrome">Chrome / Edge</button> или <button type="button" class="account-text-button" id="account-help-firefox">Firefox</button>. Оно сохраняет cookies — данные уже выполненного входа.</li>
+                <li>Откройте нужный сервис и войдите в аккаунт. В расширении экспортируйте cookies <strong>текущего сайта</strong> в формате <strong>Netscape</strong>.</li>
+                <li>В CAS нажмите <strong>«Выбрать cookies.txt»</strong> рядом с этим сервисом. Выберите скачанный файл — подключение сохранится.</li>
+            </ol>
+            <p>Если YouTube снова просит войти, обновите файл. Не передавайте его другим людям: он даёт доступ к аккаунту. После подключения исходный файл можно удалить.</p>
+        </details>
+        <p class="accounts-privacy">Пароли вводятся только на сайтах сервисов. CAS хранит данные входа локально в зашифрованном виде. Доступ к записям зависит от подписки, региона и сети.</p>
+        <p id="onlineAccountsStatus" class="accounts-status" role="status" aria-atomic="true"></p>
+        <form method="dialog" class="accounts-footer">
+            <button type="button" class="account-text-button" id="account-help-guide">Полная инструкция и ответы на вопросы</button>
+            <button type="submit" class="online-btn">Готово</button>
+        </form>
+    </dialog>
+
     <!-- Диалог «О программе» -->
     <dialog id="aboutDialog" class="workspace-dialog about-dialog" aria-labelledby="aboutDialogTitle">
         <form method="dialog" class="about-dialog-form">
             <div class="about-dialog-header">
                 <img src="assets/cas-logo-transparent.png" alt="CAS" class="about-logo" draggable="false">
                 <h2 id="aboutDialogTitle">Concert Audio System</h2>
-                <span class="about-version">Версия 1.9.2</span>
+                <span class="about-version">Версия 1.9.3</span>
             </div>
             <p class="about-desc">Профессиональный звуковой микшер для театральных постановок и концертов.</p>
             <div class="about-meta">
